@@ -1,0 +1,48 @@
+# Mavi'oh — normalisation des fins de ligne.
+# Le dépôt est développé sous Windows et déployé sur Ubuntu : les scripts shell et les
+# fichiers de configuration serveur DOIVENT rester en LF, sinon bash échoue avec
+# « $'\r': command not found » et systemd refuse les unités.
+
+* text=auto eol=lf
+
+# Toujours LF, quelle que soit la plateforme
+*.sh              text eol=lf
+*.bash            text eol=lf
+*.conf            text eol=lf
+*.service         text eol=lf
+*.example         text eol=lf
+*.yml             text eol=lf
+*.yaml            text eol=lf
+*.json            text eol=lf
+*.php             text eol=lf
+*.dart            text eol=lf
+*.ts              text eol=lf
+*.tsx             text eol=lf
+*.js              text eol=lf
+*.mjs             text eol=lf
+*.css             text eol=lf
+*.md              text eol=lf
+*.env             text eol=lf
+Dockerfile        text eol=lf
+.gitignore        text eol=lf
+.gitattributes    text eol=lf
+
+# Scripts Windows : CRLF attendu par PowerShell et cmd
+*.ps1             text eol=crlf
+*.bat             text eol=crlf
+*.cmd             text eol=crlf
+
+# Binaires : aucune conversion
+*.png             binary
+*.jpg             binary
+*.jpeg            binary
+*.gif             binary
+*.ico             binary
+*.pdf             binary
+*.ttf             binary
+*.otf             binary
+*.woff            binary
+*.woff2           binary
+*.jar             binary
+*.keystore        binary
+*.apk             binary
