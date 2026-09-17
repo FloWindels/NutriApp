@@ -10,7 +10,8 @@ import { MEAL_TYPE_IN_SENTENCE } from "@/lib/vocab";
 
 export type CoachCardProps = {
   recommendations: Recommendation[];
-  onAction: (action: RecommendationAction, recommendation: Recommendation) => void;
+  /** `key` identifies the chip so the caller can show a loading state on it. */
+  onAction: (action: RecommendationAction, key: string) => void;
   /** `${recommendation.id}-${index}` of the chip currently loading. */
   pendingKey?: string | null;
 };
@@ -115,7 +116,7 @@ export function CoachCard({ recommendations, onAction, pendingKey = null }: Coac
                         <button
                           key={key}
                           type="button"
-                          onClick={() => onAction(action, recommendation)}
+                          onClick={() => onAction(action, key)}
                           disabled={busy}
                           aria-busy={busy || undefined}
                           className="inline-flex h-10 items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:opacity-60"
