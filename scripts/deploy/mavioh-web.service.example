@@ -1,0 +1,31 @@
+# Mavi'oh — site web Next.js.
+# sudo cp scripts/deploy/mavioh-web.service.example /etc/systemd/system/mavioh-web.service
+# sudo systemctl daemon-reload && sudo systemctl enable --now mavioh-web
+
+[Unit]
+Description=Mavi'oh - site web Next.js
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/mavioh/web
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/usr/bin/npm start -- --port 3000
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mavioh-web
+
+# Durcissement
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

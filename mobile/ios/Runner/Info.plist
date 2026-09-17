@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>mavioh</string>
+	<string>Mavi'oh</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>mavioh</string>
+	<string>Mavioh</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -27,11 +27,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Cette app utilise la camera pour prendre une photo de recette.</string>
+	<string>Mavi'oh utilise la caméra pour scanner des codes-barres et photographier tes recettes.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Cette app utilise la galerie pour choisir une photo de recette.</string>
+	<string>Mavi'oh utilise la galerie pour choisir une photo de recette.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Cette app peut enregistrer des images liees aux recettes.</string>
+	<string>Mavi'oh peut enregistrer des images liées aux recettes.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

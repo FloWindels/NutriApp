@@ -1,74 +1,10 @@
-import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { proxyQuery, proxyToLaravel } from "@/lib/laravel-proxy";
 
-const backendBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api";
-
-export async function GET(request: Request) {
-  try {
-    const authorization = request.headers.get("authorization");
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    const response = await fetch(`${backendBaseUrl}/stocks`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        ...(authorization ? { Authorization: authorization } : {}),
-      },
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    const text = await response.text();
-    const data = text ? JSON.parse(text) : {};
-
-    return NextResponse.json(data, { status: response.status });
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      return NextResponse.json(
-        { message: "Le serveur stock est trop lent a repondre. Reessaie dans quelques secondes." },
-        { status: 504 },
-      );
-    }
-
-    return NextResponse.json({ message: "Le serveur stock est indisponible." }, { status: 503 });
-  }
+export async function GET(request: NextRequest) {
+  return proxyToLaravel(request, "/stocks", { method: "GET", label: "stock", query: proxyQuery(request) });
 }
 
-export async function POST(request: Request) {
-  try {
-    const authorization = request.headers.get("authorization");
-    const body = await request.json();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    const response = await fetch(`${backendBaseUrl}/stocks`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...(authorization ? { Authorization: authorization } : {}),
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    const text = await response.text();
-    const data = text ? JSON.parse(text) : {};
-
-    return NextResponse.json(data, { status: response.status });
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      return NextResponse.json(
-        { message: "Le serveur stock est trop lent a repondre. Reessaie dans quelques secondes." },
-        { status: 504 },
-      );
-    }
-
-    return NextResponse.json({ message: "Le serveur stock est indisponible." }, { status: 503 });
-  }
+export async function POST(request: NextRequest) {
+  return proxyToLaravel(request, "/stocks", { method: "POST", label: "stock" });
 }

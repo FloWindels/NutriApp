@@ -1,154 +1,118 @@
-import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../core/api_client.dart';
+import '../core/session.dart';
+import '../models/me.dart';
 
+/// Auth & account endpoints (§1). Passwords are never trimmed.
 class AuthService {
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000/api',
-  );
+  AuthService({ApiClient? client}) : _client = client;
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 8),
-      sendTimeout: const Duration(seconds: 8),
-      receiveTimeout: const Duration(seconds: 12),
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-    ),
-  );
+  final ApiClient? _client;
 
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  ApiClient get _api => _client ?? ApiClient.instance;
 
-  String _extractErrorMessage(dynamic data, String fallback) {
-    if (data is Map) {
-      final message = data['message'];
-      if (message != null && message.toString().trim().isNotEmpty) {
-        return message.toString();
-      }
-
-      final errors = data['errors'];
-      if (errors is Map) {
-        final parts = <String>[];
-        for (final value in errors.values) {
-          if (value is Iterable) {
-            parts.addAll(value.map((item) => item.toString()));
-          } else if (value != null) {
-            parts.add(value.toString());
-          }
-        }
-
-        if (parts.isNotEmpty) {
-          return parts.join(' ');
-        }
-      }
-    }
-
-    return fallback;
+  /// `POST /login` → stores the token and hydrates [Session].
+  Future<AuthResult> login({required String email, required String password}) async {
+    final json = await _api.postJson('/login', body: {
+      'email': email.trim(),
+      'password': password,
+    });
+    final result = AuthResult.fromJson(json);
+    await _api.saveToken(result.token);
+    Session.instance.hydrate(result.user);
+    return result;
   }
 
-  String _networkErrorMessage(DioException e, String fallback) {
-    switch (e.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-        return 'Délai dépassé. Vérifie que le backend est démarré et accessible depuis ton téléphone.';
-      case DioExceptionType.connectionError:
-        return 'Serveur injoignable. Vérifie API_BASE_URL et que téléphone + PC sont sur le même réseau.';
-      case DioExceptionType.badResponse:
-        return _extractErrorMessage(e.response?.data, fallback);
-      default:
-        return _extractErrorMessage(e.response?.data, fallback);
-    }
-  }
-
-  Future<Map<String, dynamic>> login({
-    required String email,
-    required String password,
-  }) async {
-    try {
-      final response = await _dio.post(
-        '/login',
-        data: {
-          'email': email,
-          'password': password,
-        },
-      );
-
-      final token = response.data['token'];
-      final user = Map<String, dynamic>.from(response.data['user']);
-
-      await _storage.write(key: 'token', value: token);
-
-      return {
-        'success': true,
-        'token': token,
-        'user': user,
-      };
-    } on DioException catch (e) {
-      final message = _networkErrorMessage(e, 'Connexion impossible. Vérifie tes identifiants.');
-
-      return {
-        'success': false,
-        'message': message,
-      };
-    } catch (_) {
-      return {
-        'success': false,
-        'message': 'Une erreur inattendue est survenue.',
-      };
-    }
-  }
-
-  Future<Map<String, dynamic>> register({
+  /// `POST /register` → stores the token and hydrates [Session].
+  Future<AuthResult> register({
     required String name,
     required String email,
     required String password,
     required String passwordConfirmation,
   }) async {
-    try {
-      final response = await _dio.post(
-        '/register',
-        data: {
-          'name': name,
-          'email': email,
-          'password': password,
-          'password_confirmation': passwordConfirmation,
-        },
-      );
-
-      final token = response.data['token'];
-      final user = Map<String, dynamic>.from(response.data['user']);
-
-      await _storage.write(key: 'token', value: token);
-
-      return {
-        'success': true,
-        'token': token,
-        'user': user,
-      };
-    } on DioException catch (e) {
-      final message = _networkErrorMessage(e, 'Inscription impossible.');
-
-      return {
-        'success': false,
-        'message': message,
-      };
-    } catch (_) {
-      return {
-        'success': false,
-        'message': 'Une erreur inattendue est survenue.',
-      };
-    }
+    final json = await _api.postJson('/register', body: {
+      'name': name.trim(),
+      'email': email.trim(),
+      'password': password,
+      'password_confirmation': passwordConfirmation,
+    });
+    final result = AuthResult.fromJson(json);
+    await _api.saveToken(result.token);
+    Session.instance.hydrate(result.user);
+    return result;
   }
 
-  Future<String?> getToken() async {
-    return _storage.read(key: 'token');
+  /// `GET /me`.
+  Future<Me> me() async {
+    final json = await _api.getJson('/me');
+    return Me.fromJson(json);
   }
 
-  Future<void> logout() async {
-    await _storage.delete(key: 'token');
+  /// `POST /logout` (failure ignored) → clears token + session → Login.
+  Future<void> logout() => Session.instance.logout();
+
+  /// `POST /forgot-password` → French message (always 200).
+  Future<String> forgotPassword(String email) async {
+    final json = await _api.postJson('/forgot-password', body: {'email': email.trim()});
+    return parseString(json['message']) ?? 'Si un compte existe, un lien de réinitialisation a été envoyé.';
   }
+
+  /// `POST /reset-password`.
+  Future<String> resetPassword({
+    required String email,
+    required String token,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    final json = await _api.postJson('/reset-password', body: {
+      'email': email.trim(),
+      'token': token,
+      'password': password,
+      'password_confirmation': passwordConfirmation,
+    });
+    return parseString(json['message']) ?? 'Mot de passe réinitialisé.';
+  }
+
+  /// `PUT /account {name, email}` → updated user in [Session].
+  Future<Me> updateAccount({required String name, required String email}) async {
+    final json = await _api.putJson('/account', body: {'name': name.trim(), 'email': email.trim()});
+    final data = ApiClient.asMap(json['data']);
+    final current = Session.instance.user;
+    final updated = (current ?? Me.fromJson(data)).copyWith(
+      name: parseString(data['name']) ?? name,
+      email: parseString(data['email']) ?? email,
+    );
+    Session.instance.hydrate(updated);
+    return updated;
+  }
+
+  /// `PUT /account/password`.
+  Future<String> changePassword({
+    required String currentPassword,
+    required String password,
+    required String passwordConfirmation,
+  }) async {
+    final json = await _api.putJson('/account/password', body: {
+      'current_password': currentPassword,
+      'password': password,
+      'password_confirmation': passwordConfirmation,
+    });
+    return parseString(json['message']) ?? 'Mot de passe modifié.';
+  }
+
+  /// `DELETE /account {password}` → clears the local session (caller navigates).
+  Future<String> deleteAccount(String password) async {
+    final json = await _api.deleteJson('/account', body: {'password': password});
+    await _api.clearToken();
+    await Session.instance.expire();
+    return parseString(json['message']) ?? 'Compte supprimé.';
+  }
+
+  /// `GET /account/export` → raw `data`.
+  Future<Map<String, dynamic>> exportAccount() async {
+    final json = await _api.getJson('/account/export');
+    return ApiClient.asMap(json['data']);
+  }
+
+  /// Reads the stored token (null when logged out).
+  Future<String?> getToken() => _api.readToken();
 }

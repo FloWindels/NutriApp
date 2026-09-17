@@ -1,1186 +1,426 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../core/api_client.dart';
+import '../core/formatters.dart';
+import '../core/session.dart';
+import '../models/stock.dart';
+import '../services/household_service.dart';
+import '../services/stock_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/add_to_meal_sheet.dart';
+import '../widgets/app_card.dart';
+import '../widgets/confirm_dialog.dart';
+import '../widgets/empty_state.dart';
+import '../widgets/error_state.dart';
+import '../widgets/expiry_badge.dart';
+import '../widgets/loading_state.dart';
+import '../widgets/macro_pill.dart';
+import '../widgets/status_banner.dart';
+import 'stock/add_stock_sheet.dart';
+import 'stock/stock_item_editor.dart';
+
+/// Alert filter applied on top of the location filter.
+enum StockFilter { tous, bientot, perimes, bas }
+
+/// Invalidates every cache impacted by a stock mutation (§16.1).
+void invalidateStockCaches() {
+  final session = Session.instance;
+  session.invalidate('stock');
+  session.invalidate('stock:depleted');
+  session.invalidate('dashboard');
+  session.invalidate('recommendations');
+  session.invalidatePrefix('meals');
+}
+
+/// Stock (§6 + §16.4). Rendered inside the « Stock » tab: no Scaffold, no AppBar.
 class StockScreen extends StatefulWidget {
-  const StockScreen({super.key});
+  const StockScreen({super.key, this.onNavigate});
+
+  /// Section slug callback provided by [HomeScreen] (« liste-course » shortcut).
+  final ValueChanged<String>? onNavigate;
 
   @override
   State<StockScreen> createState() => _StockScreenState();
 }
 
 class _StockScreenState extends State<StockScreen> {
-  static const _storage = FlutterSecureStorage();
-  static const _baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000/api',
-  );
+  final _service = StockService();
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: _baseUrl,
-      headers: const {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-    ),
-  );
+  StockPayload? _data;
+  bool _loading = true;
+  bool _includeDepleted = false;
+  String? _error;
+  String? _refreshError;
+  String? _householdName;
 
-  final _queryController = TextEditingController();
-  final _newLocationController = TextEditingController();
-  final _quantityController = TextEditingController(text: '1');
-  final _unitController = TextEditingController(text: 'unite');
-  final _expiresAtController = TextEditingController();
+  int? _locationId;
+  StockFilter _filter = StockFilter.tous;
+  int? _expandedId;
 
-  bool _searchLoading = false;
-  bool _enriching = false;
-  bool _saving = false;
-  bool _creatingLocation = false;
-  bool _itemsLoading = true;
-  bool _addFormVisible = false;
-  int? _savingItemId;
-
-  String _errorMessage = '';
-  String _successMessage = '';
-
-  List<_FoodSearchItem> _searchResults = [];
-  _FoodSearchItem? _selectedFood;
-  _OffCandidate? _offCandidate;
-
-  List<_StockItem> _items = [];
-  List<_StockLocation> _locations = [];
-  int? _selectedLocationId;
-  int? _activeLocationId;
-
-  int _requestId = 0;
-
-  final Map<int, _ItemDraft> _drafts = {};
-  final Set<int> _expandedItemIds = <int>{};
-  final Map<String, _FoodSearchItem> _publicEanCache = {};
-  final Map<String, _OffCandidate?> _offCache = {};
-  final ValueNotifier<int> _addSheetRefresh = ValueNotifier<int>(0);
+  String get _cacheKey => _includeDepleted ? 'stock:depleted' : 'stock';
 
   @override
   void initState() {
     super.initState();
-    _loadStock();
-  }
-
-  @override
-  void dispose() {
-    _addSheetRefresh.dispose();
-    _queryController.dispose();
-    _newLocationController.dispose();
-    _quantityController.dispose();
-    _unitController.dispose();
-    _expiresAtController.dispose();
-    super.dispose();
-  }
-
-  String _extractMessage(dynamic data, String fallback) {
-    if (data is Map) {
-      final message = data['message'];
-      if (message != null && message.toString().trim().isNotEmpty) {
-        return message.toString();
-      }
-
-      final errors = data['errors'];
-      if (errors is Map) {
-        final parts = <String>[];
-        for (final value in errors.values) {
-          if (value is Iterable) {
-            parts.addAll(value.map((item) => item.toString()));
-          } else if (value != null) {
-            parts.add(value.toString());
-          }
-        }
-        if (parts.isNotEmpty) {
-          return parts.join(' ');
-        }
-      }
+    final cached = Session.instance.cached(_cacheKey);
+    if (cached != null) {
+      _data = StockPayload.fromJson(cached.data);
+      _loading = false;
+      _resolveHousehold();
+      if (cached.isStale()) _load(silent: true);
+    } else {
+      _load();
     }
-
-    return fallback;
   }
 
-  bool _hasText(Object? value) {
-    if (value == null) return false;
-    final text = value.toString().trim();
-    return text.isNotEmpty && text.toLowerCase() != 'null';
-  }
-
-  bool _isLikelyBarcode(String value) {
-    return RegExp(r'^\d{8,14}$').hasMatch(value);
-  }
-
-  List<String> _barcodeCandidates(String barcode) {
-    final clean = barcode.trim();
-    if (!_isLikelyBarcode(clean)) return [clean];
-
-    final variants = <String>{clean};
-    if (clean.length == 12) {
-      variants.add('0$clean');
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = _data == null;
+        _error = null;
+        _refreshError = null;
+      });
     }
-    if (clean.length == 13 && clean.startsWith('0')) {
-      variants.add(clean.substring(1));
-    }
-
-    return variants.toList();
-  }
-
-  void _notifyAddSheetRefresh() {
-    _addSheetRefresh.value = _addSheetRefresh.value + 1;
-  }
-
-  Future<void> _loadStock() async {
-    setState(() {
-      _itemsLoading = true;
-      _errorMessage = '';
-    });
-
     try {
-      final token = await _storage.read(key: 'token');
-      if (token == null) {
-        throw Exception('Session invalide. Reconnecte-toi.');
-      }
-
-      final response = await _dio.get(
-        '/stocks',
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-      );
-
-      final payload = Map<String, dynamic>.from(response.data as Map);
-      final items = (payload['data'] as List? ?? [])
-          .map((item) => _StockItem.fromJson(Map<String, dynamic>.from(item as Map)))
-          .toList();
-
-      final locations = (payload['locations'] as List? ?? [])
-          .map((item) => _StockLocation.fromJson(Map<String, dynamic>.from(item as Map)))
-          .toList();
-
-      final nextDrafts = <int, _ItemDraft>{};
-      for (final item in items) {
-        nextDrafts[item.id] = _ItemDraft(
-          quantity: item.quantity.toString(),
-          unit: item.unit,
-          expiresAt: item.expiresAt ?? '',
-        );
-      }
-
+      final raw = await _service.raw(includeDepleted: _includeDepleted);
+      if (!mounted) return;
+      Session.instance.put(_cacheKey, raw);
       setState(() {
-        _items = items;
-        _locations = locations;
-        _drafts
-          ..clear()
-          ..addAll(nextDrafts);
-        _expandedItemIds.removeWhere((id) => items.every((item) => item.id != id));
-
-        if (_selectedLocationId == null && locations.isNotEmpty) {
-          _selectedLocationId = locations.first.id;
-        } else if (_selectedLocationId != null && locations.every((loc) => loc.id != _selectedLocationId)) {
-          _selectedLocationId = locations.isNotEmpty ? locations.first.id : null;
-        }
-
-        if (_activeLocationId != null && locations.every((loc) => loc.id != _activeLocationId)) {
-          _activeLocationId = null;
+        _data = StockPayload.fromJson(raw);
+        _loading = false;
+        _error = null;
+        _refreshError = null;
+        if (_locationId != null && !_data!.locations.any((l) => l.id == _locationId)) {
+          _locationId = null;
         }
       });
-    } on DioException catch (e) {
+      _resolveHousehold();
+    } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = _extractMessage(e.response?.data, 'Impossible de charger ton stock.');
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _itemsLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _handleSearch() async {
-    final trimmedQuery = _queryController.text.trim();
-
-    if (trimmedQuery.length < 2) {
-      setState(() {
-        _errorMessage = 'Saisis au moins 2 caracteres pour rechercher.';
-      });
-      return;
-    }
-
-    setState(() {
-      _searchLoading = true;
-      _enriching = false;
-      _errorMessage = '';
-      _successMessage = '';
-      _offCandidate = null;
-    });
-    _notifyAddSheetRefresh();
-
-    try {
-      if (_isLikelyBarcode(trimmedQuery)) {
-        final requestId = _requestId + 1;
-        _requestId = requestId;
-        final barcodeCandidates = _barcodeCandidates(trimmedQuery);
-
-        _FoodSearchItem? localFood;
-
-        for (final code in barcodeCandidates) {
-          if (_publicEanCache[code] != null) {
-            localFood = _publicEanCache[code];
-            break;
-          }
-        }
-
-        if (localFood == null) {
-          final token = await _storage.read(key: 'token');
-
-          for (final code in barcodeCandidates) {
-            try {
-              final response = await _dio.get(
-                '/foods/barcode/${Uri.encodeComponent(code)}',
-                options: Options(
-                  headers: {
-                    if (token != null) 'Authorization': 'Bearer $token',
-                  },
-                ),
-              );
-
-              final payload = Map<String, dynamic>.from(response.data as Map);
-              if (payload['data'] is Map) {
-                final data = Map<String, dynamic>.from(payload['data'] as Map);
-                if (data['id'] != null) {
-                  localFood = _FoodSearchItem(
-                    id: data['id'] as int,
-                    barcode: data['barcode']?.toString() ?? code,
-                    name: data['name']?.toString() ?? 'Aliment',
-                    brand: data['brand']?.toString(),
-                  );
-                  _publicEanCache[trimmedQuery] = localFood;
-                  _publicEanCache[code] = localFood;
-                  break;
-                }
-              }
-            } on DioException catch (e) {
-              if (e.response?.statusCode != 404) {
-                throw Exception(_extractMessage(e.response?.data, 'Recherche locale impossible.'));
-              }
-            }
-          }
-        }
-
-        if (localFood != null) {
-          setState(() {
-            _searchResults = [localFood!];
-            _selectedFood = localFood;
-            _successMessage = 'Aliment trouve dans la base publique.';
-          });
-          _notifyAddSheetRefresh();
-          return;
-        }
-
-        setState(() {
-          _searchResults = [];
-          _selectedFood = null;
-          _errorMessage = 'Produit absent de la base publique. Recherche Open Food Facts en cours...';
-        });
-        _notifyAddSheetRefresh();
-        await _enrichFromOpenFoodFacts(trimmedQuery, requestId);
-        return;
-      }
-
-      final response = await _dio.get(
-        '/foods/search',
-        queryParameters: {'q': trimmedQuery},
-      );
-
-      final payload = Map<String, dynamic>.from(response.data as Map);
-      final results = (payload['data'] as List? ?? [])
-          .map((food) {
-            final item = Map<String, dynamic>.from(food as Map);
-            return _FoodSearchItem(
-              id: item['id'] as int,
-              barcode: item['barcode']?.toString() ?? '',
-              name: item['name']?.toString() ?? 'Aliment',
-              brand: item['brand']?.toString(),
-            );
-          })
-          .toList();
-
-      setState(() {
-        _searchResults = results;
-        _selectedFood = results.isNotEmpty ? results.first : null;
-        if (results.isEmpty) {
-          _errorMessage = 'Aucun aliment trouve.';
-        }
-      });
-      _notifyAddSheetRefresh();
-    } on DioException catch (e) {
-      setState(() {
-        _errorMessage = _extractMessage(e.response?.data, 'Recherche impossible.');
-      });
-      _notifyAddSheetRefresh();
-    } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-      });
-      _notifyAddSheetRefresh();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _searchLoading = false;
-        });
-        _notifyAddSheetRefresh();
-      }
-    }
-  }
-
-  Future<void> _openBarcodeScannerAndSearch() async {
-    final scannedRaw = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.black,
-      builder: (context) {
-        final sheetHeight = (MediaQuery.sizeOf(context).height * 0.78).clamp(420.0, 680.0);
-        return SizedBox(
-          height: sheetHeight,
-          child: const _BarcodeScannerSheet(),
-        );
-      },
-    );
-
-    if (!mounted || scannedRaw == null) {
-      return;
-    }
-
-    final match = RegExp(r'\d{8,14}').firstMatch(scannedRaw.trim());
-    final scannedEan = match?.group(0) ?? '';
-
-    if (!_isLikelyBarcode(scannedEan)) {
-      setState(() {
-        _errorMessage = 'Code scanné invalide. Réessaie avec le code-barres complet.';
-      });
-      _notifyAddSheetRefresh();
-      return;
-    }
-
-    _queryController.value = TextEditingValue(
-      text: scannedEan,
-      selection: TextSelection.collapsed(offset: scannedEan.length),
-    );
-
-    await _handleSearch();
-  }
-
-  Future<void> _enrichFromOpenFoodFacts(String barcode, int requestId) async {
-    setState(() {
-      _enriching = true;
-    });
-
-    try {
-      _OffCandidate? candidate;
-
-      for (final code in _barcodeCandidates(barcode)) {
-        if (_offCache.containsKey(code)) {
-          candidate = _offCache[code];
-          if (candidate != null) break;
-          continue;
-        }
-
-        final response = await _dio.get(
-          'https://world.openfoodfacts.org/api/v2/product/$code.json',
-          options: Options(
-            sendTimeout: const Duration(milliseconds: 3500),
-            receiveTimeout: const Duration(milliseconds: 3500),
-          ),
-        );
-
-        final payload = Map<String, dynamic>.from(response.data as Map);
-        if (payload['status'] == 1 && payload['product'] is Map) {
-          candidate = _OffCandidate.fromProduct(Map<String, dynamic>.from(payload['product'] as Map));
+        _loading = false;
+        if (_data == null) {
+          _error = e.message;
         } else {
-          candidate = null;
+          _refreshError = e.message;
+          if (!silent) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(e.message)));
+          }
         }
-
-        _offCache[code] = candidate;
-        if (candidate != null) {
-          _offCache[barcode] = candidate;
-          break;
-        }
-      }
-
-      if (_requestId != requestId) {
-        return;
-      }
-
-      if (candidate == null) {
-        setState(() {
-          _errorMessage = 'Aucun resultat sur Open Food Facts pour cet EAN.';
-        });
-        _notifyAddSheetRefresh();
-        return;
-      }
-
-      final selection = _FoodSearchItem(
-        id: null,
-        barcode: candidate.barcode.isNotEmpty ? candidate.barcode : barcode,
-        name: candidate.name,
-        brand: _hasText(candidate.brand) ? candidate.brand : null,
-      );
-
-      setState(() {
-        _offCandidate = candidate;
-        _searchResults = [selection];
-        _selectedFood = selection;
-        _errorMessage = '';
-        _successMessage = 'Trouve sur Open Food Facts et ajoute dans Selection.';
       });
-      _notifyAddSheetRefresh();
-    } catch (_) {
-      if (_requestId != requestId) {
-        return;
-      }
-      setState(() {
-        _errorMessage = 'Recherche Open Food Facts impossible pour le moment.';
-      });
-      _notifyAddSheetRefresh();
-    } finally {
-      if (_requestId == requestId && mounted) {
-        setState(() {
-          _enriching = false;
-        });
-        _notifyAddSheetRefresh();
-      }
     }
   }
 
-  Future<void> _handleAddToStock() async {
-    final token = await _storage.read(key: 'token');
-
-    if (token == null || _selectedFood == null) {
-      setState(() {
-        _errorMessage = 'Selectionne un aliment et reconnecte-toi.';
-      });
-      _notifyAddSheetRefresh();
-      return;
-    }
-
-    final parsedQuantity = num.tryParse(_quantityController.text.trim());
-    if (parsedQuantity == null || parsedQuantity <= 0) {
-      setState(() {
-        _errorMessage = 'La quantite doit etre superieure a 0.';
-      });
-      _notifyAddSheetRefresh();
-      return;
-    }
-
-    setState(() {
-      _saving = true;
-      _errorMessage = '';
-      _successMessage = '';
-    });
-    _notifyAddSheetRefresh();
-
+  /// The payload only carries `household_id`; the name comes from `GET /household`.
+  Future<void> _resolveHousehold() async {
+    if (_data?.householdId == null || _householdName != null) return;
     try {
-      await _dio.post(
-        '/stocks/items',
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-        data: {
-          'stock_id': _selectedLocationId,
-          if (_selectedFood!.id != null)
-            'food_id': _selectedFood!.id
-          else ...{
-            'food_name': _selectedFood!.name,
-            'food_barcode': _hasText(_selectedFood!.barcode) ? _selectedFood!.barcode : null,
-            'food_brand': _selectedFood!.brand,
-          },
-          'quantity': parsedQuantity,
-          'unit': _unitController.text.trim().isEmpty ? 'unite' : _unitController.text.trim(),
-          'expires_at': _expiresAtController.text.trim().isEmpty ? null : _expiresAtController.text.trim(),
-        },
-      );
-
-      setState(() {
-        _successMessage = 'Aliment ajoute au stock.';
-        _queryController.clear();
-        _searchResults = [];
-        _offCandidate = null;
-        _selectedFood = null;
-        _quantityController.text = '1';
-        _unitController.text = 'unite';
-        _expiresAtController.clear();
-      });
-      _notifyAddSheetRefresh();
-
-      await _loadStock();
-    } on DioException catch (e) {
-      setState(() {
-        _errorMessage = _extractMessage(e.response?.data, 'Ajout au stock impossible.');
-      });
-      _notifyAddSheetRefresh();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-        });
-        _notifyAddSheetRefresh();
-      }
+      final household = await HouseholdService().get();
+      if (!mounted || household == null) return;
+      setState(() => _householdName = household.name);
+    } on ApiException {
+      // Silent: the banner falls back to a generic label.
     }
   }
 
-  Future<void> _handleCreateLocation() async {
-    final token = await _storage.read(key: 'token');
-    final name = _newLocationController.text.trim();
-
-    if (token == null || name.isEmpty) {
-      setState(() {
-        _errorMessage = 'Saisis un nom de lieu valide.';
-      });
-      return;
-    }
-
+  Future<void> _toggleDepleted(bool value) async {
     setState(() {
-      _creatingLocation = true;
-      _errorMessage = '';
-      _successMessage = '';
+      _includeDepleted = value;
+      _expandedId = null;
+      final cached = Session.instance.cached(_cacheKey);
+      _data = cached == null ? null : StockPayload.fromJson(cached.data);
+      _loading = _data == null;
     });
-
-    try {
-      final response = await _dio.post(
-        '/stocks',
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-        data: {'name': name},
-      );
-
-      final payload = Map<String, dynamic>.from(response.data as Map);
-      if (payload['data'] is! Map) {
-        throw Exception('Creation du lieu impossible.');
-      }
-
-      final created = _StockLocation.fromJson(Map<String, dynamic>.from(payload['data'] as Map));
-
-      setState(() {
-        _locations = [..._locations, created]..sort((a, b) => a.name.compareTo(b.name));
-        _selectedLocationId = created.id;
-        _activeLocationId = created.id;
-        _newLocationController.clear();
-        _successMessage = 'Lieu de stock ajoute.';
-      });
-    } on DioException catch (e) {
-      setState(() {
-        _errorMessage = _extractMessage(e.response?.data, 'Creation du lieu impossible.');
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _creatingLocation = false;
-        });
-      }
-    }
+    await _load(silent: _data != null);
   }
 
-  Future<void> _handleUpdateItem(int itemId) async {
-    final token = await _storage.read(key: 'token');
-    final draft = _drafts[itemId];
-
-    if (token == null || draft == null) {
-      return;
-    }
-
-    final parsedQuantity = num.tryParse(draft.quantity.trim());
-    if (parsedQuantity == null || parsedQuantity <= 0) {
-      setState(() {
-        _errorMessage = 'La quantite doit etre superieure a 0.';
-      });
-      return;
-    }
-
+  void _setFilter(StockFilter filter) {
     setState(() {
-      _savingItemId = itemId;
-      _errorMessage = '';
-      _successMessage = '';
+      _filter = _filter == filter ? StockFilter.tous : filter;
+      _expandedId = null;
     });
-
-    try {
-      await _dio.put(
-        '/stocks/items/$itemId',
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
-        data: {
-          'quantity': parsedQuantity,
-          'unit': draft.unit.trim().isEmpty ? 'unite' : draft.unit.trim(),
-          'expires_at': draft.expiresAt.trim().isEmpty ? null : draft.expiresAt.trim(),
-        },
-      );
-
-      setState(() {
-        _successMessage = 'Element du stock mis a jour.';
-      });
-      await _loadStock();
-    } on DioException catch (e) {
-      setState(() {
-        _errorMessage = _extractMessage(e.response?.data, 'Mise a jour impossible.');
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _savingItemId = null;
-        });
-      }
-    }
   }
 
-  Future<void> _pickItemExpiryDate(int itemId) async {
-    final current = _drafts[itemId];
-    if (current == null) return;
+  List<StockItem> get _visibleItems {
+    final items = _data?.items ?? const <StockItem>[];
+    return items.where((item) {
+      if (_locationId != null && item.stockId != _locationId) return false;
+      switch (_filter) {
+        case StockFilter.tous:
+          return true;
+        case StockFilter.bientot:
+          return item.expiryStatus == 'bientot' || item.expiryStatus == 'aujourdhui';
+        case StockFilter.perimes:
+          return item.expiryStatus == 'perime' || item.expiryStatus == 'ddm_depassee';
+        case StockFilter.bas:
+          return item.isLow || item.isDepleted;
+      }
+    }).toList();
+  }
 
-    final parsed = DateTime.tryParse(current.expiresAt.trim());
-    final now = DateTime.now();
-    final initialDate = parsed ?? now;
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 10),
+  Future<void> _openAddSheet() async {
+    final data = _data;
+    if (data == null) return;
+    final created = await AddStockSheet.show(
+      context,
+      locations: data.locations,
+      initialLocationId: _locationId ?? (data.locations.isNotEmpty ? data.locations.first.id : null),
     );
-
-    if (picked == null) return;
-
-    setState(() {
-      _drafts[itemId] = current.copyWith(expiresAt: picked.toIso8601String().split('T').first);
-    });
-  }
-
-  Future<void> _handleDeleteItem(int itemId) async {
-    final token = await _storage.read(key: 'token');
-    if (token == null) return;
-
-    setState(() {
-      _savingItemId = itemId;
-      _errorMessage = '';
-      _successMessage = '';
-    });
-
-    try {
-      await _dio.delete(
-        '/stocks/items/$itemId',
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
+    if (created == true && mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('Article ajouté au stock.')),
       );
-
-      setState(() {
-        _successMessage = 'Element supprime du stock.';
-      });
-      await _loadStock();
-    } on DioException catch (e) {
-      setState(() {
-        _errorMessage = _extractMessage(e.response?.data, 'Suppression impossible.');
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _savingItemId = null;
-        });
-      }
+      await _load(silent: true);
     }
   }
 
-  List<_StockItem> get _sortedItems {
-    final sorted = [..._items]
-      ..sort((a, b) {
-        if (a.expiresAt == null && b.expiresAt == null) return 0;
-        if (a.expiresAt == null) return 1;
-        if (b.expiresAt == null) return -1;
-        return a.expiresAt!.compareTo(b.expiresAt!);
-      });
-
-    return sorted;
+  Future<void> _consume(StockItem item) async {
+    final result = await AddToMealSheet.show(
+      context,
+      preset: AddToMealPreset.stockItem(item),
+      maxQuantity: item.quantity,
+    );
+    if (result != null && mounted) await _load(silent: true);
   }
 
-  List<_StockItem> get _filteredItems {
-    if (_activeLocationId == null) {
-      return _sortedItems;
+  Future<void> _createLocation() async {
+    final name = await _promptLocationName(title: 'Nouveau lieu');
+    if (name == null || !mounted) return;
+    try {
+      await _service.createLocation(name);
+      invalidateStockCaches();
+      if (!mounted) return;
+      await _load(silent: true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(e.message)));
     }
-
-    return _sortedItems.where((item) => item.stockId == _activeLocationId).toList();
   }
 
-  String get _activeLocationName {
-    if (_activeLocationId == null) return 'Tous';
-    return _locations.firstWhere(
-      (loc) => loc.id == _activeLocationId,
-      orElse: () => const _StockLocation(id: -1, name: 'Lieu'),
-    ).name;
+  Future<void> _renameLocation(StockLocation location) async {
+    final name = await _promptLocationName(title: 'Renommer le lieu', initial: location.name);
+    if (name == null || !mounted) return;
+    try {
+      await _service.renameLocation(location.id, name);
+      invalidateStockCaches();
+      if (!mounted) return;
+      await _load(silent: true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
-  int _getLocationCount(int locationId) {
-    return _items.where((item) => item.stockId == locationId).length;
+  Future<void> _deleteLocation(StockLocation location) async {
+    final confirmed = await ConfirmDialog.show(
+      context,
+      title: 'Supprimer « ${location.name} » ?',
+      message: 'Le lieu doit être vide. Les articles ne sont pas supprimés.',
+      confirmLabel: 'Supprimer',
+      destructive: true,
+      icon: Icons.delete_outline_rounded,
+    );
+    if (!confirmed || !mounted) return;
+    try {
+      await _service.deleteLocation(location.id);
+      invalidateStockCaches();
+      if (!mounted) return;
+      if (_locationId == location.id) _locationId = null;
+      await _load(silent: true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      // 422 « Vide ce lieu avant de le supprimer. » is shown as-is.
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
-  Future<void> _openAddFoodSheet() async {
-    setState(() {
-      _addFormVisible = true;
-      _errorMessage = '';
-      _successMessage = '';
-    });
-
-    await showModalBottomSheet<void>(
+  Future<String?> _promptLocationName({required String title, String? initial}) {
+    final controller = TextEditingController(text: initial ?? '');
+    return showDialog<String>(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final height = (MediaQuery.sizeOf(sheetContext).height * 0.92).clamp(520.0, 900.0);
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 16),
-          child: SizedBox(
-            height: height,
-            child: ValueListenableBuilder<int>(
-              valueListenable: _addSheetRefresh,
-              builder: (context, refreshValue, child) {
-                return SingleChildScrollView(
-                  child: _buildAddPanel(),
-                );
-              },
-            ),
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(labelText: 'Nom du lieu', hintText: 'Frigo, Congélateur, Placard…'),
+          onSubmitted: (value) => Navigator.of(ctx).pop(value.trim().isEmpty ? null : value.trim()),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Annuler')),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              Navigator.of(ctx).pop(value.isEmpty ? null : value);
+            },
+            child: const Text('Enregistrer'),
           ),
-        );
-      },
+        ],
+      ),
     );
+  }
 
-    if (!mounted) return;
-    setState(() {
-      _addFormVisible = false;
-    });
+  Future<void> _locationMenu(StockLocation location) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(location.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+              subtitle: Text('${location.itemsCount} article${location.itemsCount > 1 ? 's' : ''}'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline_rounded),
+              title: const Text('Renommer'),
+              onTap: () => Navigator.of(ctx).pop('rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: MaviohColors.error),
+              title: const Text('Supprimer', style: TextStyle(color: MaviohColors.error)),
+              onTap: () => Navigator.of(ctx).pop('delete'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'rename') {
+      await _renameLocation(location);
+    } else if (action == 'delete') {
+      await _deleteLocation(location);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    if (_loading && _data == null) return const LoadingState(skeleton: true, skeletonCount: 4);
+    if (_error != null && _data == null) return ErrorState(message: _error!, onRetry: _load);
+
+    final data = _data!;
+    final items = _visibleItems;
 
     return Stack(
       children: [
         RefreshIndicator(
-          onRefresh: _loadStock,
+          onRefresh: () => _load(silent: true),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 96),
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
             children: [
-              _buildListPanel(),
+              if (_refreshError != null)
+                StatusBanner.warning(
+                  'Données peut-être obsolètes : $_refreshError',
+                  margin: const EdgeInsets.only(bottom: 12),
+                  onClose: () => setState(() => _refreshError = null),
+                ),
+              if (data.householdId != null)
+                StatusBanner.info(
+                  'Stock partagé avec ${_householdName ?? 'ton foyer'}',
+                  margin: const EdgeInsets.only(bottom: 12),
+                ),
+              _AlertsHeader(
+                alerts: data.alerts,
+                filter: _filter,
+                onFilter: _setFilter,
+                onShopping: widget.onNavigate == null ? null : () => widget.onNavigate!('liste-course'),
+              ),
+              const SizedBox(height: 14),
+              _LocationChips(
+                locations: data.locations,
+                selectedId: _locationId,
+                totalCount: data.items.length,
+                onSelect: (id) => setState(() {
+                  _locationId = _locationId == id ? null : id;
+                  _expandedId = null;
+                }),
+                onLongPress: _locationMenu,
+                onCreate: _createLocation,
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${items.length} article${items.length > 1 ? 's' : ''}',
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: MaviohColors.textTertiary),
+                    ),
+                  ),
+                  const Text('Afficher les épuisés', style: TextStyle(fontSize: 13, color: MaviohColors.muted)),
+                  Switch(value: _includeDepleted, onChanged: _toggleDepleted),
+                ],
+              ),
+              const SizedBox(height: 4),
+              if (items.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 24),
+                  child: EmptyState(
+                    icon: Icons.kitchen_outlined,
+                    title: _filter == StockFilter.tous && _locationId == null
+                        ? 'Ton stock est vide'
+                        : 'Aucun article dans cette sélection',
+                    message: _filter == StockFilter.tous && _locationId == null
+                        ? 'Ajoute ce que tu as dans le frigo, le congélateur ou le placard pour suivre les dates et générer ta liste de courses.'
+                        : 'Change de lieu ou retire le filtre pour voir le reste de ton stock.',
+                    ctaLabel: 'Ajouter un article',
+                    onCta: _openAddSheet,
+                  ),
+                )
+              else
+                for (final item in items)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _StockItemCard(
+                      key: ValueKey('stock-item-${item.id}'),
+                      item: item,
+                      locations: data.locations,
+                      expanded: _expandedId == item.id,
+                      onToggle: () => setState(() => _expandedId = _expandedId == item.id ? null : item.id),
+                      onConsume: () => _consume(item),
+                      onChanged: () {
+                        setState(() => _expandedId = null);
+                        _load(silent: true);
+                      },
+                    ),
+                  ),
             ],
           ),
         ),
         Positioned(
           right: 16,
-          bottom: bottomInset + 18,
-          child: FloatingActionButton(
-            onPressed: _openAddFoodSheet,
-            tooltip: 'Ajouter un aliment',
-            child: const Icon(Icons.add),
+          bottom: 16,
+          child: FloatingActionButton.extended(
+            heroTag: 'stock-add-fab',
+            onPressed: _openAddSheet,
+            tooltip: 'Ajouter un article au stock',
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Ajouter'),
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildAddPanel() {
-    final panelWidth = MediaQuery.sizeOf(context).width;
-    final compactHeader = panelWidth < 420;
+/// Alerts summary: three tappable chips + « Liste de courses » shortcut.
+class _AlertsHeader extends StatelessWidget {
+  const _AlertsHeader({required this.alerts, required this.filter, required this.onFilter, this.onShopping});
 
-    return Container(
-      padding: EdgeInsets.all(compactHeader ? 14 : 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7FEE7),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD9F99D)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x120F172A),
-            blurRadius: 22,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Stock',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Color(0xFF4D7C0F)),
-          ),
-          SizedBox(height: compactHeader ? 2 : 4),
-          Text(
-            'Ajouter des aliments',
-            style: TextStyle(
-              fontSize: compactHeader ? 22 : 24,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF020617),
-              height: 1.1,
-            ),
-          ),
-          SizedBox(height: compactHeader ? 4 : 6),
-          Text(
-            'Recherche un aliment puis ajoute-le dans le lieu de ton choix avec sa date de peremption.',
-            style: TextStyle(
-              color: const Color(0xFF475569),
-              height: 1.35,
-              fontSize: compactHeader ? 14 : 15,
-            ),
-          ),
-          SizedBox(height: compactHeader ? 10 : 12),
-          if (!_addFormVisible)
-            FilledButton.icon(
-              onPressed: () {
-                setState(() {
-                  _addFormVisible = true;
-                  _errorMessage = '';
-                  _successMessage = '';
-                });
-              },
-              icon: const Icon(Icons.add_circle_outline),
-              label: const Text('Ajouter un aliment'),
-            )
-          else ...[
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: _saving
-                    ? null
-                    : () {
-                        Navigator.of(context).pop();
-                      },
-                icon: const Icon(Icons.close),
-                label: const Text('Fermer'),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                const Text('Rechercher un aliment', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF334155))),
-                const SizedBox(height: 10),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isCompact = constraints.maxWidth < 520;
+  final StockAlerts alerts;
+  final StockFilter filter;
+  final ValueChanged<StockFilter> onFilter;
+  final VoidCallback? onShopping;
 
-                    final textField = TextField(
-                      controller: _queryController,
-                      decoration: const InputDecoration(hintText: 'Nom, marque ou EAN'),
-                    );
-
-                    final searchButton = ElevatedButton(
-                      onPressed: _searchLoading ? null : _handleSearch,
-                      child: Text(_searchLoading ? 'Recherche...' : 'Rechercher'),
-                    );
-
-                    final scannerButton = OutlinedButton.icon(
-                      onPressed: _searchLoading ? null : _openBarcodeScannerAndSearch,
-                      icon: const Icon(Icons.qr_code_scanner_rounded),
-                      label: const Text('Scanner'),
-                    );
-
-                    if (isCompact) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          textField,
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              searchButton,
-                              scannerButton,
-                            ],
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Row(
-                      children: [
-                        Expanded(child: textField),
-                        const SizedBox(width: 10),
-                        searchButton,
-                        const SizedBox(width: 8),
-                        scannerButton,
-                      ],
-                    );
-                  },
-                ),
-                if (_enriching)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Verification Open Food Facts en arriere-plan...',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
-                  ),
-                if (_offCandidate != null)
-                  Container(
-                    margin: const EdgeInsets.only(top: 10),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFEFF),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFBAE6FD)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Trouve sur Open Food Facts', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0C4A6E))),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${_offCandidate!.name}${_hasText(_offCandidate!.brand) ? ' · ${_offCandidate!.brand}' : ''} · EAN ${_offCandidate!.barcode}',
-                          style: const TextStyle(color: Color(0xFF075985)),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 10),
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 220),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: _searchResults.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Text('Aucun resultat pour le moment.', style: TextStyle(color: Color(0xFF64748B))),
-                        )
-                      : ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: _searchResults.length,
-                          separatorBuilder: (context, index) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final food = _searchResults[index];
-                            final selected = _selectedFood?.id == food.id && _selectedFood?.barcode == food.barcode;
-
-                            return Material(
-                              color: selected ? const Color(0xFFECFCCB) : Colors.white,
-                              child: InkWell(
-                                onTap: () {
-                                  setState(() => _selectedFood = food);
-                                  _notifyAddSheetRefresh();
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(10),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(food.name, style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${_hasText(food.brand) ? '${food.brand} · ' : ''}EAN: ${food.barcode}',
-                                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Selection', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF64748B))),
-                      const SizedBox(height: 4),
-                      Text(
-                        _selectedFood != null
-                            ? '${_selectedFood!.name} (EAN ${_selectedFood!.barcode})'
-                            : 'Aucun aliment selectionne',
-                        style: const TextStyle(color: Color(0xFF0F172A)),
-                      ),
-                      const SizedBox(height: 10),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final isCompact = constraints.maxWidth < 380;
-                          final firstWidth = isCompact ? constraints.maxWidth : constraints.maxWidth * 0.55;
-                          final secondWidth = isCompact ? constraints.maxWidth : constraints.maxWidth * 0.28;
-
-                          return Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              SizedBox(
-                                width: firstWidth,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Lieu de stock', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                                    const SizedBox(height: 4),
-                                    DropdownButtonFormField<int>(
-                                      initialValue: _selectedLocationId,
-                                      decoration: const InputDecoration(isDense: true),
-                                      items: _locations
-                                          .map(
-                                            (location) => DropdownMenuItem<int>(
-                                              value: location.id,
-                                              child: Text(location.name, overflow: TextOverflow.ellipsis),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (value) {
-                                        setState(() => _selectedLocationId = value);
-                                        _notifyAddSheetRefresh();
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(
-                                width: secondWidth,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Nouveau lieu', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
-                                    const SizedBox(height: 4),
-                                    TextField(
-                                      controller: _newLocationController,
-                                      decoration: const InputDecoration(isDense: true, hintText: 'Ex: Placard'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(
-                                width: isCompact ? constraints.maxWidth : null,
-                                child: Align(
-                                  alignment: isCompact ? Alignment.centerLeft : Alignment.topLeft,
-                                  child: OutlinedButton(
-                                    onPressed: _creatingLocation ? null : _handleCreateLocation,
-                                    child: Text(_creatingLocation ? '...' : 'Ajouter'),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          final fieldWidth = constraints.maxWidth < 420
-                              ? (constraints.maxWidth - 8) / 2
-                              : (constraints.maxWidth - 16) / 3;
-
-                          return Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              SizedBox(
-                                width: fieldWidth,
-                                child: TextField(
-                                  controller: _quantityController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  decoration: const InputDecoration(isDense: true, labelText: 'Quantite'),
-                                ),
-                              ),
-                              SizedBox(
-                                width: fieldWidth,
-                                child: TextField(
-                                  controller: _unitController,
-                                  decoration: const InputDecoration(isDense: true, labelText: 'Unite'),
-                                ),
-                              ),
-                              SizedBox(
-                                width: fieldWidth,
-                                child: TextField(
-                                  controller: _expiresAtController,
-                                  readOnly: true,
-                                  decoration: const InputDecoration(isDense: true, labelText: 'Date de peremption'),
-                                  onTap: () async {
-                                    final now = DateTime.now();
-                                    final picked = await showDatePicker(
-                                      context: context,
-                                      initialDate: now,
-                                      firstDate: DateTime(now.year - 1),
-                                      lastDate: DateTime(now.year + 10),
-                                    );
-                                    if (picked != null) {
-                                      _expiresAtController.text = picked.toIso8601String().split('T').first;
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ElevatedButton(
-                  onPressed: _saving || _selectedFood == null ? null : _handleAddToStock,
-                  child: Text(_saving ? 'Ajout en cours...' : 'Ajouter au stock'),
-                ),
-                if (_errorMessage.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 10),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF1F2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFECDD3)),
-                    ),
-                    child: Text(_errorMessage, style: const TextStyle(color: Color(0xFFBE123C))),
-                  ),
-                if (_successMessage.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 10),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFA7F3D0)),
-                    ),
-                    child: Text(_successMessage, style: const TextStyle(color: Color(0xFF047857))),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildListPanel() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x120F172A),
-            blurRadius: 22,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1188,574 +428,307 @@ class _StockScreenState extends State<StockScreen> {
             children: [
               const Expanded(
                 child: Text(
-                  'Produits dans ton stock',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF020617)),
+                  'Ce qu’il faut surveiller',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: MaviohColors.text),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+              if (onShopping != null)
+                TextButton.icon(
+                  onPressed: onShopping,
+                  icon: const Icon(Icons.shopping_cart_outlined, size: 18),
+                  label: const Text('Liste de courses'),
                 ),
-                child: Text('${_items.length} element(s)', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-              ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _LocationFilterChip(
-                label: 'Tous',
-                selected: _activeLocationId == null,
-                onTap: () => setState(() => _activeLocationId = null),
+              _AlertChip(
+                label: '${alerts.expiringCount} bientôt périmé${alerts.expiringCount > 1 ? 's' : ''}',
+                icon: Icons.timelapse_rounded,
+                tone: MaviohColors.warning,
+                selected: filter == StockFilter.bientot,
+                onTap: () => onFilter(StockFilter.bientot),
               ),
-              ..._locations.map(
-                (location) => _LocationFilterChip(
-                  label: '${location.name} (${_getLocationCount(location.id)})',
-                  selected: _activeLocationId == location.id,
-                  onTap: () => setState(() => _activeLocationId = location.id),
-                ),
+              _AlertChip(
+                label: '${alerts.expiredCount} périmé${alerts.expiredCount > 1 ? 's' : ''}',
+                icon: Icons.dangerous_outlined,
+                tone: MaviohColors.error,
+                selected: filter == StockFilter.perimes,
+                onTap: () => onFilter(StockFilter.perimes),
+              ),
+              _AlertChip(
+                label: '${alerts.lowCount} à racheter',
+                icon: Icons.production_quantity_limits_rounded,
+                tone: MaviohColors.primary,
+                selected: filter == StockFilter.bas,
+                onTap: () => onFilter(StockFilter.bas),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text('Lieu affiche: $_activeLocationName', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-          const SizedBox(height: 12),
-          if (_errorMessage.isNotEmpty)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF1F2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFECDD3)),
-              ),
-              child: Text(_errorMessage, style: const TextStyle(color: Color(0xFFBE123C))),
+          if (alerts.isEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Rien ne périme dans les prochains jours. Continue comme ça !',
+              style: TextStyle(fontSize: 12.5, color: MaviohColors.muted),
             ),
-          if (_successMessage.isNotEmpty)
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFA7F3D0)),
-              ),
-              child: Text(_successMessage, style: const TextStyle(color: Color(0xFF047857))),
-            ),
-          if (_itemsLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 22),
-              child: Text('Chargement du stock...', style: TextStyle(color: Color(0xFF64748B))),
-            )
-          else if (_filteredItems.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: const Text('Aucun aliment dans ce lieu pour le moment.', style: TextStyle(color: Color(0xFF64748B))),
-            )
-          else
-            ..._filteredItems.map(
-              (item) {
-                final draft = _drafts[item.id] ??
-                    _ItemDraft(
-                      quantity: item.quantity.toString(),
-                      unit: item.unit,
-                      expiresAt: item.expiresAt ?? '',
-                    );
+          ],
+        ],
+      ),
+    );
+  }
+}
 
-                final expiry = _expiryLabel(item.daysLeft);
-                final expanded = _expandedItemIds.contains(item.id);
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+class _AlertChip extends StatelessWidget {
+  const _AlertChip({
+    required this.label,
+    required this.icon,
+    required this.tone,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color tone;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: FilterChip(
+        selected: selected,
+        onSelected: (_) => onTap(),
+        avatar: Icon(icon, size: 16, color: selected ? Colors.white : tone),
+        label: Text(label),
+        labelStyle: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 12.5,
+          color: selected ? Colors.white : MaviohColors.textSecondary,
+        ),
+        selectedColor: tone,
+        showCheckmark: false,
+        backgroundColor: MaviohColors.tint(tone, 0.08),
+        side: BorderSide(color: selected ? tone : MaviohColors.border),
+      ),
+    );
+  }
+}
+
+/// Location chips with item counts, « Nouveau lieu », long-press → rename/delete.
+class _LocationChips extends StatelessWidget {
+  const _LocationChips({
+    required this.locations,
+    required this.selectedId,
+    required this.totalCount,
+    required this.onSelect,
+    required this.onLongPress,
+    required this.onCreate,
+  });
+
+  final List<StockLocation> locations;
+  final int? selectedId;
+  final int totalCount;
+  final ValueChanged<int> onSelect;
+  final ValueChanged<StockLocation> onLongPress;
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              selected: selectedId == null,
+              onSelected: (_) {
+                if (selectedId != null) onSelect(selectedId!);
+              },
+              label: Text('Tout ($totalCount)'),
+              labelStyle: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: selectedId == null ? Colors.white : MaviohColors.textSecondary,
+              ),
+              selectedColor: MaviohColors.primary,
+              showCheckmark: false,
+            ),
+          ),
+          for (final location in locations)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onLongPress: () => onLongPress(location),
+                child: ChoiceChip(
+                  selected: selectedId == location.id,
+                  onSelected: (_) => onSelect(location.id),
+                  label: Text('${location.name} (${location.itemsCount})'),
+                  labelStyle: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: selectedId == location.id ? Colors.white : MaviohColors.textSecondary,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: () {
-                          setState(() {
-                            if (expanded) {
-                              _expandedItemIds.remove(item.id);
-                            } else {
-                              _expandedItemIds.add(item.id);
-                            }
-                          });
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item.foodName ?? 'Aliment', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-                                    const SizedBox(height: 2),
-                                    Text('Temps restant: ${expiry.text}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                                    if (expanded) ...[
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${item.foodBrand != null ? '${item.foodBrand} · ' : ''}EAN: ${item.foodBarcode ?? '-'}',
-                                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                                      ),
-                                      Text('Lieu: ${item.stockName ?? 'Frigo'}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: expiry.bg,
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: expiry.border),
-                                ),
-                                child: Text(expiry.text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: expiry.textColor)),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                expanded ? Icons.expand_less : Icons.expand_more,
-                                color: const Color(0xFF64748B),
-                              ),
-                            ],
-                          ),
+                  selectedColor: MaviohColors.primary,
+                  showCheckmark: false,
+                  tooltip: 'Appui long : renommer ou supprimer',
+                ),
+              ),
+            ),
+          ActionChip(
+            onPressed: onCreate,
+            avatar: const Icon(Icons.add_rounded, size: 18, color: MaviohColors.primary),
+            label: const Text('Nouveau lieu'),
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700, color: MaviohColors.primary),
+            backgroundColor: MaviohColors.tint(MaviohColors.lime, 0.16),
+            side: const BorderSide(color: MaviohColors.border),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One stock item, with its inline expandable editor.
+class _StockItemCard extends StatelessWidget {
+  const _StockItemCard({
+    super.key,
+    required this.item,
+    required this.locations,
+    required this.expanded,
+    required this.onToggle,
+    required this.onConsume,
+    required this.onChanged,
+  });
+
+  final StockItem item;
+  final List<StockLocation> locations;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final VoidCallback onConsume;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final food = item.food;
+    final depleted = item.isDepleted;
+    final titleColor = depleted ? MaviohColors.muted : MaviohColors.text;
+
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+      borderColor: expanded ? MaviohColors.primary : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.foodName,
+                      style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800, color: titleColor),
+                    ),
+                    if (item.foodBrand != null && item.foodBrand!.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          item.foodBrand!,
+                          style: const TextStyle(fontSize: 12.5, color: MaviohColors.muted),
                         ),
                       ),
-                      if (expanded) ...[
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                key: ValueKey('q-${item.id}-${draft.quantity}'),
-                                initialValue: draft.quantity,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: const InputDecoration(isDense: true, labelText: 'Quantite'),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _drafts[item.id] = draft.copyWith(quantity: value);
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextFormField(
-                                key: ValueKey('u-${item.id}-${draft.unit}'),
-                                initialValue: draft.unit,
-                                decoration: const InputDecoration(isDense: true, labelText: 'Unite'),
-                                onChanged: (value) {
-                                  setState(() {
-                                    _drafts[item.id] = draft.copyWith(unit: value);
-                                  });
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextFormField(
-                                key: ValueKey('d-${item.id}-${draft.expiresAt}'),
-                                initialValue: draft.expiresAt,
-                                readOnly: true,
-                                decoration: const InputDecoration(
-                                  isDense: true,
-                                  labelText: 'Date peremption',
-                                  hintText: 'YYYY-MM-DD',
-                                ),
-                                onTap: () => _pickItemExpiryDate(item.id),
-                              ),
-                            ),
-                          ],
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          fmtQty(item.quantity, item.unit),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: depleted ? MaviohColors.muted : MaviohColors.textSecondary,
+                          ),
                         ),
-                        const SizedBox(height: 10),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            OutlinedButton(
-                              onPressed: _savingItemId == item.id ? null : () => _handleUpdateItem(item.id),
-                              child: const Text('Mettre a jour'),
-                            ),
-                            OutlinedButton(
-                              onPressed: _savingItemId == item.id ? null : () => _handleDeleteItem(item.id),
-                              style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFB91C1C)),
-                              child: const Text('Supprimer'),
-                            ),
-                          ],
+                        Text(
+                          item.stockName,
+                          style: const TextStyle(fontSize: 12.5, color: MaviohColors.muted),
                         ),
+                        if (depleted) const TonePill(label: 'Épuisé', tone: MaviohColors.slate, icon: Icons.remove_circle_outline),
+                        if (!depleted && item.isLow)
+                          const TonePill(label: 'Stock bas', tone: MaviohColors.amber, icon: Icons.trending_down_rounded),
                       ],
-                    ],
-                  ),
-                );
-              },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  ExpiryBadge(status: item.expiryStatus, daysLeft: item.daysLeft, expiryKind: item.expiryKind),
+                  if (item.expiresAt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        fmtDateFr(item.expiresAt),
+                        style: const TextStyle(fontSize: 11.5, color: MaviohColors.muted),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          if (food != null && food.calories != null) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  '100 g : ${fmtKcal(food.calories)}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: MaviohColors.textTertiary),
+                ),
+                MacroPill.proteins(value: food.proteins, compact: true),
+                MacroPill.carbs(value: food.carbs, compact: true),
+                MacroPill.fat(value: food.fat, compact: true),
+              ],
+            ),
+          ],
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: depleted ? null : onConsume,
+                icon: const Icon(Icons.restaurant_rounded, size: 18),
+                label: const Text('Consommer'),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: onToggle,
+                tooltip: expanded ? 'Fermer la modification' : 'Modifier l’article',
+                icon: Icon(expanded ? Icons.expand_less_rounded : Icons.tune_rounded),
+              ),
+            ],
+          ),
+          if (expanded)
+            StockItemEditor(
+              key: ValueKey('stock-editor-${item.id}'),
+              item: item,
+              locations: locations,
+              onChanged: onChanged,
             ),
         ],
       ),
     );
   }
-
-  _ExpiryVisual _expiryLabel(int? daysLeft) {
-    if (daysLeft == null) {
-      return const _ExpiryVisual(
-        text: 'Sans date',
-        bg: Color(0xFFF8FAFC),
-        border: Color(0xFFE2E8F0),
-        textColor: Color(0xFF334155),
-      );
-    }
-
-    if (daysLeft < 0) {
-      return const _ExpiryVisual(
-        text: 'Perime',
-        bg: Color(0xFFFFF1F2),
-        border: Color(0xFFFECDD3),
-        textColor: Color(0xFFBE123C),
-      );
-    }
-
-    if (daysLeft <= 2) {
-      return _ExpiryVisual(
-        text: '$daysLeft j restant(s)',
-        bg: const Color(0xFFFFFBEB),
-        border: const Color(0xFFFDE68A),
-        textColor: const Color(0xFF92400E),
-      );
-    }
-
-    return _ExpiryVisual(
-      text: '$daysLeft j restants',
-      bg: const Color(0xFFECFDF5),
-      border: const Color(0xFFA7F3D0),
-      textColor: const Color(0xFF047857),
-    );
-  }
-}
-
-class _FoodSearchItem {
-  final int? id;
-  final String barcode;
-  final String name;
-  final String? brand;
-
-  const _FoodSearchItem({
-    required this.id,
-    required this.barcode,
-    required this.name,
-    required this.brand,
-  });
-}
-
-class _OffCandidate {
-  final String barcode;
-  final String name;
-  final String brand;
-  final String imageUrl;
-  final num? calories;
-  final num? fat;
-  final num? carbs;
-  final num? proteins;
-
-  const _OffCandidate({
-    required this.barcode,
-    required this.name,
-    required this.brand,
-    required this.imageUrl,
-    required this.calories,
-    required this.fat,
-    required this.carbs,
-    required this.proteins,
-  });
-
-  factory _OffCandidate.fromProduct(Map<String, dynamic> product) {
-    final nutriments = (product['nutriments'] is Map)
-        ? Map<String, dynamic>.from(product['nutriments'] as Map)
-        : <String, dynamic>{};
-
-    final brands = product['brands']?.toString() ?? '';
-    final firstBrand = brands
-        .split(',')
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toList();
-
-    final localizedNameCandidates = [
-      product['product_name_fr'],
-      product['product_name_en'],
-      product['product_name'],
-      product['generic_name_fr'],
-      product['generic_name_en'],
-      product['generic_name'],
-      product['abbreviated_product_name'],
-    ]
-        .map((value) => value?.toString().trim() ?? '')
-        .where((value) => value.isNotEmpty)
-        .toList();
-
-    return _OffCandidate(
-      barcode: product['code']?.toString() ?? '',
-      name: localizedNameCandidates.isNotEmpty ? localizedNameCandidates.first : 'Produit sans nom',
-      brand: firstBrand.isNotEmpty ? firstBrand.first : '',
-      imageUrl: product['image_front_url']?.toString() ?? product['image_url']?.toString() ?? '',
-      calories: nutriments['energy_kcal_100g'] ?? nutriments['energy_100g'],
-      fat: nutriments['fat_100g'] as num?,
-      carbs: nutriments['carbohydrates_100g'] as num?,
-      proteins: nutriments['proteins_100g'] as num?,
-    );
-  }
-}
-
-class _BarcodeScannerSheet extends StatefulWidget {
-  const _BarcodeScannerSheet();
-
-  @override
-  State<_BarcodeScannerSheet> createState() => _BarcodeScannerSheetState();
-}
-
-class _BarcodeScannerSheetState extends State<_BarcodeScannerSheet> {
-  final MobileScannerController _controller = MobileScannerController(
-    facing: CameraFacing.back,
-    detectionSpeed: DetectionSpeed.noDuplicates,
-    formats: const [
-      BarcodeFormat.ean13,
-      BarcodeFormat.ean8,
-      BarcodeFormat.upcA,
-      BarcodeFormat.upcE,
-      BarcodeFormat.code128,
-    ],
-  );
-
-  bool _handled = false;
-  String? _preview;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onDetect(BarcodeCapture capture) {
-    if (_handled) return;
-
-    for (final barcode in capture.barcodes) {
-      final raw = barcode.rawValue?.trim();
-      if (raw == null || raw.isEmpty) continue;
-
-      final match = RegExp(r'\d{8,14}').firstMatch(raw);
-      if (mounted) {
-        setState(() {
-          _preview = raw;
-        });
-      }
-
-      if (match != null) {
-        _handled = true;
-        Navigator.of(context).pop(match.group(0));
-        return;
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 8, 8),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Scanner un code-barres',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-              ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close, color: Colors.white),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              MobileScanner(
-                controller: _controller,
-                onDetect: _onDetect,
-              ),
-              Align(
-                alignment: Alignment.center,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final frameWidth = (constraints.maxWidth * 0.72).clamp(220.0, 340.0);
-                    final frameHeight = (constraints.maxHeight * 0.2).clamp(96.0, 150.0);
-
-                    return Container(
-                      width: frameWidth,
-                      height: frameHeight,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFF34D399), width: 3),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-          color: const Color(0xFF020617),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Place le code-barres dans le cadre pour lancer la recherche.',
-                style: TextStyle(color: Colors.white70),
-              ),
-              if (_preview != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  'Détection: $_preview',
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StockLocation {
-  final int id;
-  final String name;
-
-  const _StockLocation({required this.id, required this.name});
-
-  factory _StockLocation.fromJson(Map<String, dynamic> json) {
-    return _StockLocation(
-      id: json['id'] as int,
-      name: json['name']?.toString() ?? 'Lieu',
-    );
-  }
-}
-
-class _StockItem {
-  final int id;
-  final int stockId;
-  final String? stockName;
-  final int? foodId;
-  final String? foodName;
-  final String? foodBarcode;
-  final String? foodBrand;
-  final num quantity;
-  final String unit;
-  final String? expiresAt;
-  final int? daysLeft;
-
-  const _StockItem({
-    required this.id,
-    required this.stockId,
-    required this.stockName,
-    required this.foodId,
-    required this.foodName,
-    required this.foodBarcode,
-    required this.foodBrand,
-    required this.quantity,
-    required this.unit,
-    required this.expiresAt,
-    required this.daysLeft,
-  });
-
-  factory _StockItem.fromJson(Map<String, dynamic> json) {
-    return _StockItem(
-      id: json['id'] as int,
-      stockId: json['stock_id'] as int,
-      stockName: json['stock_name']?.toString(),
-      foodId: json['food_id'] as int?,
-      foodName: json['food_name']?.toString(),
-      foodBarcode: json['food_barcode']?.toString(),
-      foodBrand: json['food_brand']?.toString(),
-      quantity: json['quantity'] as num? ?? 1,
-      unit: json['unit']?.toString() ?? 'unite',
-      expiresAt: json['expires_at']?.toString(),
-      daysLeft: json['days_left'] as int?,
-    );
-  }
-}
-
-class _ItemDraft {
-  final String quantity;
-  final String unit;
-  final String expiresAt;
-
-  const _ItemDraft({required this.quantity, required this.unit, required this.expiresAt});
-
-  _ItemDraft copyWith({String? quantity, String? unit, String? expiresAt}) {
-    return _ItemDraft(
-      quantity: quantity ?? this.quantity,
-      unit: unit ?? this.unit,
-      expiresAt: expiresAt ?? this.expiresAt,
-    );
-  }
-}
-
-class _LocationFilterChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _LocationFilterChip({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return ActionChip(
-      label: Text(label),
-      onPressed: onTap,
-      backgroundColor: selected ? const Color(0xFF65A30D) : Colors.white,
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : const Color(0xFF475569),
-        fontWeight: FontWeight.w600,
-      ),
-      side: BorderSide(color: selected ? const Color(0xFF65A30D) : const Color(0xFFE2E8F0)),
-    );
-  }
-}
-
-class _ExpiryVisual {
-  final String text;
-  final Color bg;
-  final Color border;
-  final Color textColor;
-
-  const _ExpiryVisual({
-    required this.text,
-    required this.bg,
-    required this.border,
-    required this.textColor,
-  });
 }

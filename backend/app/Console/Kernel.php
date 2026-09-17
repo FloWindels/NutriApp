@@ -12,7 +12,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // Purge des jetons Sanctum expirés depuis plus de 24 h (expiration : SANCTUM_EXPIRATION).
+        $schedule->command('sanctum:prune-expired --hours=24')->daily();
     }
 
     /**

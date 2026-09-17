@@ -7,6 +7,8 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     *
+     * SQLite : rien à faire, une colonne "string" y accepte déjà un texte illimité.
      */
     public function up(): void
     {
@@ -17,7 +19,9 @@ return new class extends Migration
             return;
         }
 
-        DB::statement('ALTER TABLE recipes MODIFY image_url LONGTEXT NULL');
+        if ($driver === 'mysql' || $driver === 'mariadb') {
+            DB::statement('ALTER TABLE recipes MODIFY image_url LONGTEXT NULL');
+        }
     }
 
     /**
@@ -32,6 +36,8 @@ return new class extends Migration
             return;
         }
 
-        DB::statement('ALTER TABLE recipes MODIFY image_url VARCHAR(255) NULL');
+        if ($driver === 'mysql' || $driver === 'mariadb') {
+            DB::statement('ALTER TABLE recipes MODIFY image_url VARCHAR(255) NULL');
+        }
     }
 };

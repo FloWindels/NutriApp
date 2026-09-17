@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import DashboardShell from "../../../components/dashboard-shell";
-import { getApiErrorMessage } from "../../../lib/api";
+import { getApiErrorMessage } from "@/lib/api";
 
 type ProfileForm = {
   nom: string;
@@ -381,7 +380,7 @@ export default function ProfilPage() {
   }
 
   return (
-    <DashboardShell>
+    <>
       <section className="mx-auto max-w-6xl rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)] sm:p-7">
         <div className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Calculateur nutritionnel</h1>
@@ -441,7 +440,7 @@ export default function ProfilPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Niveau d'activite</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Niveau d’activité</label>
                 <select value={form.niveauActivite} onChange={(e) => setField("niveauActivite", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
                   <option value="">Selectionner</option>
                   <option value="sedentaire">Sedentaire</option>
@@ -503,7 +502,7 @@ export default function ProfilPage() {
 
             {!calculation ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                Clique sur "Calculer" pour obtenir ton plan.
+                Clique sur « Calculer » pour obtenir ton plan.
               </div>
             ) : (
               <div className="mt-4 space-y-4">
@@ -565,11 +564,11 @@ export default function ProfilPage() {
           <h2 className="text-sm font-semibold text-emerald-900">Section explicative</h2>
           <p className="mt-2 text-sm leading-6 text-emerald-900/90">
             Le calculateur utilise Mifflin-St Jeor pour estimer le metabolisme de base, applique ton niveau
-            d'activite pour les calories de maintien, puis ajuste selon la variation de poids et le delai.
+            d’activité pour les calories de maintien, puis ajuste selon la variation de poids et le délai.
             Des limites de securite evitent les objectifs trop agressifs ou dangereux.
           </p>
         </section>
       </section>
-    </DashboardShell>
+    </>
   );
 }

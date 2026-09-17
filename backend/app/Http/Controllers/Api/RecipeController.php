@@ -3,223 +3,224 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Recipes\EstimateRecipeRequest;
+use App\Http\Requests\Recipes\IndexRecipesRequest;
+use App\Http\Requests\Recipes\StoreRecipeRequest;
+use App\Http\Requests\Recipes\UpdateRecipeRequest;
+use App\Http\Resources\RecipeResource;
 use App\Models\Recipe;
+use App\Models\User;
+use App\Services\Foods\FoodCatalog;
+use App\Services\Recipes\RecipeIngredients;
+use App\Services\Recipes\RecipeNutritionEstimator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
+/**
+ * Recettes (brief §5) : liste filtrée et paginée, détail, création/édition/suppression,
+ * estimation nutritionnelle depuis les ingrédients.
+ */
 class RecipeController extends Controller
 {
-    private function toPayload(Recipe $recipe, ?int $viewerId = null): array
+    /** Le contrat legacy renvoyait jusqu'à 100 recettes : la valeur par défaut et le plafond le conservent. */
+    public const INDEX_DEFAULT_PER_PAGE = 100;
+
+    public const INDEX_MAX_PER_PAGE = 100;
+
+    public const FORBIDDEN_DELETE_MESSAGE = 'Seul le createur peut supprimer cette recette.';
+
+    /**
+     * GET /recipes?q=&mine=1&tag=&meal_type=&max_calories=&page=&per_page=
+     * Réponse : {data:[RecipeResource], meta:{current_page,last_page,per_page,total}}.
+     * `max_calories` s'applique aux calories par portion.
+     */
+    public function index(IndexRecipesRequest $request): JsonResponse
     {
-        $isOwner = $viewerId !== null && (int) $recipe->created_by_user_id === $viewerId;
-        $ingredients = collect($recipe->ingredients ?? [])->map(function ($ingredient) {
-            if (!is_array($ingredient)) {
-                return null;
-            }
+        $viewer = $request->user('sanctum');
+        $validated = $request->validated();
 
-            $name = trim((string) ($ingredient['name'] ?? ''));
+        $perPage = min(max((int) $request->integer('per_page', self::INDEX_DEFAULT_PER_PAGE), 1), self::INDEX_MAX_PER_PAGE);
+        $page = max((int) $request->integer('page', 1), 1);
 
-            if ($name === '') {
-                return null;
-            }
+        $query = $this->visibleTo($viewer);
 
-            $amount = $ingredient['amount'] ?? null;
-            $ean = isset($ingredient['ean']) ? trim((string) $ingredient['ean']) : null;
-            if ($ean === '') {
-                $ean = null;
-            }
-
-            return [
-                'name' => $name,
-                'ean' => $ean,
-                'amount' => $amount === null || $amount === '' ? null : (float) $amount,
-                'unit' => isset($ingredient['unit']) && trim((string) $ingredient['unit']) !== '' ? trim((string) $ingredient['unit']) : null,
-            ];
-        })->filter()->values();
-
-        return [
-            'id' => $recipe->id,
-            'title' => $recipe->title,
-            'description' => $recipe->description,
-            'prep_time_minutes' => $recipe->prep_time_minutes,
-            'calories' => $recipe->calories,
-            'image_url' => $recipe->image_url,
-            'ingredients' => $ingredients,
-            'ingredients_count' => $ingredients->count(),
-            'is_public' => $recipe->is_public,
-            'created_by_user_id' => $recipe->created_by_user_id,
-            'is_owner' => $isOwner,
-            'created_at' => $recipe->created_at?->toISOString(),
-            'updated_at' => $recipe->updated_at?->toISOString(),
-        ];
-    }
-
-    private function normalizeIngredients(mixed $ingredients): array
-    {
-        if (!is_array($ingredients)) {
-            return [];
+        if ($viewer !== null && $request->boolean('mine')) {
+            $query->where('created_by_user_id', $viewer->id);
         }
 
-        return collect($ingredients)
-            ->filter(fn ($ingredient) => is_array($ingredient))
-            ->map(function (array $ingredient) {
-                $name = trim((string) ($ingredient['name'] ?? ''));
-
-                if ($name === '') {
-                    return null;
-                }
-
-                $amount = $ingredient['amount'] ?? null;
-                $ean = isset($ingredient['ean']) ? trim((string) $ingredient['ean']) : null;
-                if ($ean === '') {
-                    $ean = null;
-                }
-
-                return [
-                    'name' => $name,
-                    'ean' => $ean,
-                    'amount' => $amount === null || $amount === '' ? null : (float) $amount,
-                    'unit' => isset($ingredient['unit']) && trim((string) $ingredient['unit']) !== '' ? trim((string) $ingredient['unit']) : null,
-                ];
-            })
-            ->filter()
-            ->values()
-            ->all();
-    }
-
-    private function validateRecipe(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'prep_time_minutes' => ['nullable', 'integer', 'min:1', 'max:600'],
-            'calories' => ['required', 'numeric', 'min:0', 'max:10000'],
-            'image_url' => ['nullable', 'string', 'max:500000'],
-            'ingredients' => ['nullable', 'array'],
-            'ingredients.*.name' => ['nullable', 'string', 'max:255'],
-            'ingredients.*.ean' => ['nullable', 'string', 'max:32'],
-            'ingredients.*.amount' => ['nullable', 'numeric', 'min:0', 'max:1000'],
-            'ingredients.*.unit' => ['nullable', 'string', 'max:64'],
-            'is_public' => ['nullable', 'boolean'],
-        ]);
-
-        $validator->after(function ($validator) use ($request) {
-            if (!$request->boolean('is_public')) {
-                return;
-            }
-
-            if (!$request->filled('image_url')) {
-                $validator->errors()->add('image_url', "Une photo de l'assiette est requise pour publier une recette publique.");
-            }
-
-            $imageUrl = (string) $request->input('image_url', '');
-
-            if ($imageUrl !== '' && !str_starts_with($imageUrl, 'data:image/') && !filter_var($imageUrl, FILTER_VALIDATE_URL)) {
-                $validator->errors()->add('image_url', 'La photo doit etre une image importee ou une URL valide.');
-            }
-
-            if (!$request->filled('prep_time_minutes')) {
-                $validator->errors()->add('prep_time_minutes', 'Le temps de preparation est requis pour publier une recette publique.');
-            }
-
-            $ingredients = $this->normalizeIngredients($request->input('ingredients', []));
-
-            if (count($ingredients) === 0) {
-                $validator->errors()->add('ingredients', 'Une recette publique doit contenir au moins un aliment.');
-            }
-        });
-
-        return $validator->validate();
-    }
-
-    public function index(Request $request): JsonResponse
-    {
-        $viewerId = $request->user('sanctum')?->id;
-
-        $query = Recipe::query()->orderByDesc('updated_at');
-
-        if ($viewerId !== null) {
-            $query->where(function ($builder) use ($viewerId) {
-                $builder->where('is_public', true)
-                    ->orWhere('created_by_user_id', $viewerId);
+        $term = FoodCatalog::term($validated['q'] ?? null);
+        if ($term !== '') {
+            $like = FoodCatalog::likePattern($term);
+            $query->where(function (Builder $builder) use ($like) {
+                $builder->whereRaw("LOWER(title) LIKE ? ESCAPE '\\'", [$like])
+                    ->orWhereRaw("LOWER(COALESCE(description, '')) LIKE ? ESCAPE '\\'", [$like]);
             });
-        } else {
-            $query->where('is_public', true);
         }
 
-        $recipes = $query->limit(100)->get();
+        if (! empty($validated['tag'])) {
+            $query->whereJsonContains('tags', $validated['tag']);
+        }
+
+        if (! empty($validated['meal_type'])) {
+            $query->whereJsonContains('meal_types', $validated['meal_type']);
+        }
+
+        if (isset($validated['max_calories']) && $validated['max_calories'] !== '') {
+            $query->whereRaw(
+                // CAST : sur SQLite un paramètre lié est du texte et « nombre <= texte » serait toujours vrai.
+                '(calories / CASE WHEN servings > 0 THEN servings ELSE 1 END) <= CAST(? AS REAL)',
+                [(float) $validated['max_calories']]
+            );
+        }
+
+        $total = (clone $query)->toBase()->getCountForPagination();
+
+        $recipes = $query->orderByDesc('updated_at')->orderByDesc('id')->forPage($page, $perPage)->get();
 
         return response()->json([
-            'data' => $recipes->map(fn (Recipe $recipe) => $this->toPayload($recipe, $viewerId))->values(),
+            'data' => RecipeResource::collectionForViewer($recipes, $viewer),
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => max(1, (int) ceil($total / $perPage)),
+                'per_page' => $perPage,
+                'total' => $total,
+            ],
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    /**
+     * GET /recipes/{recipe} — visible si publique ou à soi (sinon 404 « Introuvable. »).
+     */
+    public function show(Request $request, int $recipe): JsonResponse
     {
-        $validated = $this->validateRecipe($request);
-        $ingredients = $this->normalizeIngredients($validated['ingredients'] ?? []);
+        $viewer = $request->user();
+
+        $model = $this->visibleTo($viewer)->whereKey($recipe)->firstOrFail();
+
+        return response()->json(['data' => RecipeResource::forViewer($model, $viewer)]);
+    }
+
+    /**
+     * POST /recipes → 201 {message, data}.
+     */
+    public function store(StoreRecipeRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validated();
 
         $recipe = Recipe::create([
-            'created_by_user_id' => $request->user()->id,
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'prep_time_minutes' => $validated['prep_time_minutes'] ?? null,
-            'calories' => $validated['calories'],
-            'image_url' => $validated['image_url'] ?? null,
-            'ingredients' => $ingredients,
-            'is_public' => $request->boolean('is_public'),
+            'created_by_user_id' => $user->id,
+            ...$this->attributesFrom($validated, $request),
         ]);
 
         return response()->json([
-            'message' => $recipe->is_public ? 'Recette publiee.' : 'Recette enregistree en prive.',
-            'data' => $this->toPayload($recipe, $request->user()->id),
+            'message' => $recipe->is_public ? 'Recette publiée.' : 'Recette enregistrée en privé.',
+            'data' => RecipeResource::forViewer($recipe, $user),
         ], 201);
     }
 
-    public function update(Request $request, Recipe $recipe): JsonResponse
+    /**
+     * PUT /recipes/{recipe} → {message, data} (403 legacy si pas le créateur).
+     */
+    public function update(UpdateRecipeRequest $request, Recipe $recipe): JsonResponse
     {
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $validated = $request->validated();
 
-        if ((int) $recipe->created_by_user_id !== $userId) {
-            return response()->json([
-                'message' => 'Seul le createur peut modifier cette recette.',
-            ], 403);
-        }
-
-        $validated = $this->validateRecipe($request);
-        $ingredients = $this->normalizeIngredients($validated['ingredients'] ?? []);
-
-        $recipe->update([
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'prep_time_minutes' => $validated['prep_time_minutes'] ?? null,
-            'calories' => $validated['calories'],
-            'image_url' => $validated['image_url'] ?? null,
-            'ingredients' => $ingredients,
-            'is_public' => $request->boolean('is_public'),
-        ]);
+        $recipe->update($this->attributesFrom($validated, $request));
 
         return response()->json([
-            'message' => $recipe->is_public ? 'Recette mise a jour.' : 'Recette privee mise a jour.',
-            'data' => $this->toPayload($recipe->fresh(), $userId),
+            'message' => $recipe->is_public ? 'Recette mise à jour.' : 'Recette privée mise à jour.',
+            'data' => RecipeResource::forViewer($recipe->refresh(), $user),
         ]);
     }
 
+    /**
+     * DELETE /recipes/{recipe} → {message} (403 legacy si pas le créateur).
+     */
     public function destroy(Request $request, Recipe $recipe): JsonResponse
     {
-        $userId = $request->user()->id;
-
-        if ((int) $recipe->created_by_user_id !== $userId) {
-            return response()->json([
-                'message' => 'Seul le createur peut supprimer cette recette.',
-            ], 403);
+        if ($recipe->created_by_user_id !== (int) $request->user()->id) {
+            return response()->json(['message' => self::FORBIDDEN_DELETE_MESSAGE], 403);
         }
 
         $recipe->delete();
 
+        return response()->json(['message' => 'Recette supprimée.']);
+    }
+
+    /**
+     * POST /recipes/estimate {ingredients:[{name, ean, amount, unit}], servings?}
+     * → {data:{calories, proteins, carbs, fat, resolved_count, total_count, is_estimate:true, details:[…]}}.
+     */
+    public function estimate(EstimateRecipeRequest $request, RecipeNutritionEstimator $estimator): JsonResponse
+    {
+        $validated = $request->validated();
+        $servings = isset($validated['servings']) && $validated['servings'] !== '' ? (float) $validated['servings'] : null;
+
         return response()->json([
-            'message' => 'Recette supprimee.',
+            'data' => $estimator->estimate($validated['ingredients'], $servings),
         ]);
+    }
+
+    // ------------------------------------------------------------------
+
+    /**
+     * Recettes visibles : publiques + celles du lecteur.
+     *
+     * @return Builder<Recipe>
+     */
+    private function visibleTo(?User $viewer): Builder
+    {
+        $query = Recipe::query();
+
+        if ($viewer === null) {
+            return $query->where('is_public', true);
+        }
+
+        return $query->where(function (Builder $builder) use ($viewer) {
+            $builder->where('is_public', true)->orWhere('created_by_user_id', $viewer->id);
+        });
+    }
+
+    /**
+     * Colonnes de `recipes` à partir d'une requête validée (création et édition).
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function attributesFrom(array $validated, Request $request): array
+    {
+        $attributes = [
+            'title' => $validated['title'],
+            'description' => $validated['description'] ?? null,
+            'prep_time_minutes' => $validated['prep_time_minutes'] ?? null,
+            'calories' => $validated['calories'],
+            'image_url' => $validated['image_url'] ?? null,
+            'ingredients' => RecipeIngredients::normalize($validated['ingredients'] ?? []),
+            'is_public' => $request->boolean('is_public'),
+        ];
+
+        // Champs §5 : appliqués seulement s'ils sont présents (compatibilité avec les clients legacy).
+        if (array_key_exists('servings', $validated)) {
+            $attributes['servings'] = $validated['servings'] === null ? 1 : (float) $validated['servings'];
+        }
+        foreach (['proteins', 'carbs', 'fat'] as $macro) {
+            if (array_key_exists($macro, $validated)) {
+                $attributes[$macro] = $validated[$macro] === null ? null : (float) $validated[$macro];
+            }
+        }
+        if (array_key_exists('tags', $validated)) {
+            $attributes['tags'] = array_values(array_unique($validated['tags'] ?? []));
+        }
+        if (array_key_exists('meal_types', $validated)) {
+            $attributes['meal_types'] = array_values(array_unique($validated['meal_types'] ?? []));
+        }
+        if (array_key_exists('is_estimate', $validated)) {
+            $attributes['is_estimate'] = (bool) $validated['is_estimate'];
+        }
+
+        return $attributes;
     }
 }

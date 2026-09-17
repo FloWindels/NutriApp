@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mavi'oh — site web client
 
-## Getting Started
+Interface web de Mavi'oh, pensée pour l'ordinateur. Next.js 16 (App Router), React 19, TypeScript,
+Tailwind CSS v4, TanStack Query, React Hook Form et Zod.
 
-First, run the development server:
+Voir le [README du dépôt](../README.md) pour la vue d'ensemble et `docs/API.md` pour l'API.
+
+## Lancer le site
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local   # puis ajuster API_URL si besoin
+npm ci
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Le backend Laravel doit tourner en parallèle (`cd ../backend && php artisan serve`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Compte de démonstration : `demo@mavioh.app` / `Demo1234!`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Variables d'environnement
 
-## Learn More
+| Variable | Rôle |
+|---|---|
+| `API_URL` | URL de l'API lue côté serveur par les route handlers `src/app/api/**` |
+| `NEXT_PUBLIC_API_URL` | même URL, utilisée comme repli |
+| `NEXT_ALLOWED_DEV_ORIGINS` | origines supplémentaires acceptées par le serveur de développement |
 
-To learn more about Next.js, take a look at the following resources:
+## Architecture
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Le navigateur n'appelle jamais Laravel directement : chaque requête passe par un route handler Next
+sous `src/app/api/**` qui relaie l'appel avec le jeton porteur, applique un délai d'attente et
+normalise les erreurs. Cela évite toute configuration CORS et garde une seule origine.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Dossier | Contenu |
+|---|---|
+| `src/app/api/` | relais vers l'API Laravel (un fichier par endpoint) |
+| `src/app/dashboard/` | pages du produit, une par section |
+| `src/components/ui/` | bibliothèque de composants (cartes, champs, modales, sélecteurs) |
+| `src/lib/` | client HTTP navigateur, session, types, formats, libellés, clés de cache |
+| `src/hooks/` | hooks de données partagés |
 
-## Deploy on Vercel
+## Qualité
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npx tsc --noEmit
+npm run build
+```

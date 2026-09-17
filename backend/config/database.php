@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'mysql'),
+    'default' => env('DB_CONNECTION', 'sqlite'),
 
     /*
     |--------------------------------------------------------------------------
@@ -38,7 +38,22 @@ return [
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DATABASE_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            // Un chemin relatif dans DB_DATABASE (ex. database/database.sqlite) est résolu
+            // depuis la racine du projet : sinon il dépend du répertoire courant du processus
+            // et « php artisan serve » ne trouve plus le fichier.
+            'database' => (static function (): string {
+                $path = env('DB_DATABASE', database_path('database.sqlite'));
+
+                if ($path === ':memory:' || $path === '' || $path === null) {
+                    return ':memory:';
+                }
+
+                $isAbsolute = str_starts_with($path, '/')
+                    || str_starts_with($path, '\\')
+                    || preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1;
+
+                return $isAbsolute ? $path : base_path($path);
+            })(),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
         ],

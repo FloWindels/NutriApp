@@ -3,98 +3,132 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Foods\SearchFoodsRequest;
+use App\Http\Requests\Foods\StoreFoodRequest;
+use App\Http\Requests\Foods\UpdateFoodRequest;
+use App\Http\Resources\FoodResource;
 use App\Models\Food;
+use App\Services\Foods\FoodCatalog;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
+/**
+ * Aliments : recherche locale + Open Food Facts, code-barres, création/édition, favoris (brief §3.2).
+ */
 class FoodController extends Controller
 {
-    private function toPayload(Food $food, ?int $viewerId = null): array
-    {
-        $isOwner = $viewerId !== null && (int) $food->created_by_user_id === $viewerId;
+    public const SEARCH_DEFAULT_PER_PAGE = 20;
 
-        return [
-            'id' => $food->id,
-            'barcode' => $food->barcode,
-            'name' => $food->name,
-            'brand' => $food->brand,
-            'image_url' => $food->image_url,
-            'calories' => $food->calories,
-            'fat' => $food->fat,
-            'carbs' => $food->carbs,
-            'proteins' => $food->proteins,
-            'source_type' => $food->source_type,
-            'created_by_user_id' => $food->created_by_user_id,
-            'is_owner' => $isOwner,
-            'created_at' => $food->created_at?->toISOString(),
-            'updated_at' => $food->updated_at?->toISOString(),
-        ];
+    public const MAX_PER_PAGE = 50;
+
+    public function __construct(private readonly FoodCatalog $catalog)
+    {
     }
 
-    public function search(Request $request): JsonResponse
+    /**
+     * GET /foods/search?q=&barcode=&page=&per_page=&off=1 (public, throttle 30/min).
+     * Réponse : {data:[FoodResource], meta:{current_page,last_page,per_page,total,off_queried}}.
+     */
+    public function search(SearchFoodsRequest $request): JsonResponse
     {
-        $viewerId = $request->user('sanctum')?->id;
+        $viewer = $request->user('sanctum');
+        $validated = $request->validated();
 
-        $validated = $request->validate([
-            'barcode' => ['nullable', 'string', 'max:32'],
-            'q' => ['nullable', 'string', 'max:255'],
-        ]);
+        $term = FoodCatalog::term($validated['q'] ?? null);
+        $barcode = $validated['barcode'] ?? null;
 
-        $query = Food::query();
+        $perPage = min(max((int) $request->integer('per_page', self::SEARCH_DEFAULT_PER_PAGE), 1), self::MAX_PER_PAGE);
+        $page = max((int) $request->integer('page', 1), 1);
 
-        if (!empty($validated['barcode'])) {
-            $query->where('barcode', $validated['barcode']);
+        $query = $this->catalog->searchQuery($term, $barcode);
+        $total = (clone $query)->toBase()->getCountForPagination();
+
+        $offQueried = false;
+        if (FoodCatalog::shouldQueryOff($request->boolean('off'), $viewer !== null, $total, $term)) {
+            $offQueried = $this->catalog->importSearchResults($term);
+
+            if ($offQueried) {
+                $query = $this->catalog->searchQuery($term, $barcode);
+                $total = (clone $query)->toBase()->getCountForPagination();
+            }
         }
 
-        if (!empty($validated['q'])) {
-            $search = trim($validated['q']);
-            $query->where(function ($builder) use ($search) {
-                $builder->where('name', 'like', '%' . $search . '%')
-                    ->orWhere('brand', 'like', '%' . $search . '%')
-                    ->orWhere('barcode', 'like', '%' . $search . '%');
-            });
-        }
-
-        $foods = $query->orderByDesc('updated_at')->limit(20)->get();
+        $foods = $query->forPage($page, $perPage)->get();
 
         return response()->json([
-            'data' => $foods->map(fn (Food $food) => $this->toPayload($food, $viewerId))->values(),
+            'data' => FoodResource::collectionForViewer($foods, $viewer),
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => max(1, (int) ceil($total / $perPage)),
+                'per_page' => $perPage,
+                'total' => $total,
+                'off_queried' => $offQueried,
+            ],
         ]);
     }
 
+    /**
+     * GET /foods/barcode/{barcode} (public, throttle 30/min).
+     * Local (rafraîchi si fiche OFF > 90 jours) sinon import Open Food Facts.
+     */
     public function showByBarcode(Request $request, string $barcode): JsonResponse
     {
-        $viewerId = $request->user('sanctum')?->id;
-        $food = Food::where('barcode', $barcode)->first();
+        $viewer = $request->user('sanctum');
+        $code = trim($barcode);
 
-        if (!$food) {
-            return response()->json([
-                'message' => 'Produit introuvable dans la base publique.',
-            ], 404);
+        $food = $this->catalog->findLocalByBarcode($code);
+
+        if ($food !== null) {
+            $food = $this->catalog->refreshFromOff($food);
+
+            return response()->json(['data' => FoodResource::forViewer($food, $viewer)]);
         }
 
-        return response()->json([
-            'data' => $this->toPayload($food, $viewerId),
-        ]);
+        // Une valeur non numérique ne peut pas exister chez OFF : inutile de l'interroger.
+        $product = ctype_digit($code) ? $this->catalog->fetchFromOff($code) : null;
+
+        if ($product === null) {
+            return response()->json(['message' => 'Produit introuvable, même sur Open Food Facts.'], 404);
+        }
+
+        $food = $this->catalog->createFromOff($product, $code);
+
+        return response()->json(['data' => FoodResource::forViewer($food, $viewer)]);
     }
 
-    public function store(Request $request): JsonResponse
+    /**
+     * GET /foods/{food} (auth).
+     */
+    public function show(Request $request, Food $food): JsonResponse
     {
-        $validated = $request->validate([
-            'barcode' => ['required', 'string', 'max:32', 'unique:food,barcode'],
-            'name' => ['required', 'string', 'max:255'],
-            'brand' => ['nullable', 'string', 'max:255'],
-            'image_url' => ['nullable', 'string', 'max:2048'],
-            'calories' => ['nullable', 'numeric', 'min:0', 'max:10000'],
-            'fat' => ['nullable', 'numeric', 'min:0', 'max:1000'],
-            'carbs' => ['nullable', 'numeric', 'min:0', 'max:2000'],
-            'proteins' => ['nullable', 'numeric', 'min:0', 'max:1000'],
-            'source_type' => ['nullable', Rule::in(['manual', 'open_food_facts'])],
-        ]);
+        return response()->json(['data' => FoodResource::forViewer($food, $request->user())]);
+    }
 
-        $food = Food::create([
-            'barcode' => $validated['barcode'],
+    /**
+     * POST /foods (auth) — 201 {message, data} ; code-barres déjà connu → 200 avec l'existant.
+     */
+    public function store(StoreFoodRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validated();
+
+        $barcode = isset($validated['barcode']) && trim((string) $validated['barcode']) !== ''
+            ? trim((string) $validated['barcode'])
+            : null;
+
+        if ($barcode !== null) {
+            $existing = Food::query()->where('barcode', $barcode)->first();
+            if ($existing !== null) {
+                return $this->alreadyPresent($existing, $request);
+            }
+        }
+
+        $sourceType = $validated['source_type'] ?? 'manual';
+        $isOff = $sourceType === 'open_food_facts';
+
+        $attributes = [
+            'barcode' => $barcode,
             'name' => $validated['name'],
             'brand' => $validated['brand'] ?? null,
             'image_url' => $validated['image_url'] ?? null,
@@ -102,39 +136,51 @@ class FoodController extends Controller
             'fat' => $validated['fat'] ?? null,
             'carbs' => $validated['carbs'] ?? null,
             'proteins' => $validated['proteins'] ?? null,
-            'source_type' => $validated['source_type'] ?? 'manual',
-            'created_by_user_id' => $request->user()->id,
-        ]);
+            'fiber' => $validated['fiber'] ?? null,
+            'sugar' => $validated['sugar'] ?? null,
+            'salt' => $validated['salt'] ?? null,
+            'serving_size_g' => $validated['serving_size_g'] ?? null,
+            'serving_label' => $validated['serving_label'] ?? null,
+            'category' => $validated['category'] ?? null,
+            'per_unit' => $validated['per_unit'] ?? '100g',
+            'density_g_per_ml' => $validated['density_g_per_ml'] ?? null,
+            'source_type' => $sourceType,
+            'source_fetched_at' => $isOff ? now() : null,
+            'off_last_checked_at' => $isOff ? now() : null,
+            'is_verified' => false,
+            'created_by_user_id' => $user->id,
+        ];
+
+        try {
+            $food = Food::create($attributes);
+        } catch (UniqueConstraintViolationException) {
+            // Course sur le code-barres : quelqu'un vient de l'ajouter.
+            $existing = Food::query()->where('barcode', $barcode)->firstOrFail();
+
+            return $this->alreadyPresent($existing, $request);
+        }
 
         return response()->json([
-            'message' => 'Produit ajoute a la base publique.',
-            'data' => $this->toPayload($food, $request->user()->id),
+            'message' => 'Produit ajouté à la base publique.',
+            'data' => FoodResource::forViewer($food, $user),
         ], 201);
     }
 
-    public function update(Request $request, Food $food): JsonResponse
+    /**
+     * PUT /foods/{food} (auth) — créateur, ou fiche OFF jamais reprise. L'édition rend
+     * l'aliment manuel, vérifié et attribué à l'éditeur.
+     */
+    public function update(UpdateFoodRequest $request, Food $food): JsonResponse
     {
-        $userId = $request->user()->id;
+        $user = $request->user();
+        $validated = $request->validated();
 
-        if ((int) $food->created_by_user_id !== $userId) {
-            return response()->json([
-                'message' => 'Seul le createur peut modifier cet aliment.',
-            ], 403);
-        }
+        $barcode = isset($validated['barcode']) && trim((string) $validated['barcode']) !== ''
+            ? trim((string) $validated['barcode'])
+            : null;
 
-        $validated = $request->validate([
-            'barcode' => ['required', 'string', 'max:32', Rule::unique('food', 'barcode')->ignore($food->id)],
-            'name' => ['required', 'string', 'max:255'],
-            'brand' => ['nullable', 'string', 'max:255'],
-            'image_url' => ['nullable', 'string', 'max:2048'],
-            'calories' => ['nullable', 'numeric', 'min:0', 'max:10000'],
-            'fat' => ['nullable', 'numeric', 'min:0', 'max:1000'],
-            'carbs' => ['nullable', 'numeric', 'min:0', 'max:2000'],
-            'proteins' => ['nullable', 'numeric', 'min:0', 'max:1000'],
-        ]);
-
-        $food->update([
-            'barcode' => $validated['barcode'],
+        $food->fill([
+            'barcode' => $barcode,
             'name' => $validated['name'],
             'brand' => $validated['brand'] ?? null,
             'image_url' => $validated['image_url'] ?? null,
@@ -142,11 +188,73 @@ class FoodController extends Controller
             'fat' => $validated['fat'] ?? null,
             'carbs' => $validated['carbs'] ?? null,
             'proteins' => $validated['proteins'] ?? null,
-        ]);
+            'fiber' => $validated['fiber'] ?? $food->fiber,
+            'sugar' => $validated['sugar'] ?? $food->sugar,
+            'salt' => $validated['salt'] ?? $food->salt,
+            'serving_size_g' => $validated['serving_size_g'] ?? $food->serving_size_g,
+            'serving_label' => $validated['serving_label'] ?? $food->serving_label,
+            'category' => $validated['category'] ?? $food->category,
+            'per_unit' => $validated['per_unit'] ?? $food->per_unit ?? '100g',
+            'density_g_per_ml' => $validated['density_g_per_ml'] ?? $food->density_g_per_ml,
+            'source_type' => 'manual',
+            'is_verified' => true,
+            'created_by_user_id' => $user->id,
+        ])->save();
 
         return response()->json([
-            'message' => 'Produit mis a jour.',
-            'data' => $this->toPayload($food->fresh(), $userId),
+            'message' => 'Produit mis à jour.',
+            'data' => FoodResource::forViewer($food->refresh(), $user),
         ]);
+    }
+
+    /**
+     * GET /foods/favorites (auth) — favoris du lecteur, les plus récents d'abord.
+     */
+    public function favorites(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $foods = $user->favoriteFoods()
+            ->orderByDesc('food_favorites.created_at')
+            ->orderByDesc('food.id')
+            ->get();
+
+        return response()->json([
+            'data' => FoodResource::collectionForViewer($foods, $user),
+        ]);
+    }
+
+    /**
+     * POST /foods/{food}/favorite (auth) — 201 si ajouté, 200 s'il l'était déjà.
+     */
+    public function favorite(Request $request, Food $food): JsonResponse
+    {
+        $user = $request->user();
+
+        $result = $user->favoriteFoods()->syncWithoutDetaching([$food->id]);
+        $created = in_array($food->id, $result['attached'] ?? [], false);
+
+        return response()->json([
+            'message' => $created ? 'Ajouté aux favoris.' : 'Déjà dans tes favoris.',
+            'data' => FoodResource::forViewer($food, $user),
+        ], $created ? 201 : 200);
+    }
+
+    /**
+     * DELETE /foods/{food}/favorite (auth).
+     */
+    public function unfavorite(Request $request, Food $food): JsonResponse
+    {
+        $request->user()->favoriteFoods()->detach($food->id);
+
+        return response()->json(['message' => 'Retiré des favoris.']);
+    }
+
+    private function alreadyPresent(Food $existing, Request $request): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Produit déjà présent dans la base.',
+            'data' => FoodResource::forViewer($existing, $request->user()),
+        ], 200);
     }
 }

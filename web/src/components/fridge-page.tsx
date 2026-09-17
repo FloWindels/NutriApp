@@ -617,7 +617,7 @@ export default function FridgePage() {
                 {offCandidate.brand ? ` · ${offCandidate.brand}` : ""}
                 {` · EAN ${offCandidate.barcode}`}
               </p>
-              <p className="mt-2 text-xs text-cyan-800">Cet aliment est deja charge dans Selection. Clique simplement sur "Ajouter au frigo".</p>
+              <p className="mt-2 text-xs text-cyan-800">Cet aliment est deja charge dans Selection. Clique simplement sur « Ajouter au frigo ».</p>
             </div>
           ) : null}
 

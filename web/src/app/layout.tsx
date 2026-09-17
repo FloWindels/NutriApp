@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "suit mavioh",
-  description: "Application de suivi nutritionnel",
+  title: {
+    default: "Mavi’oh",
+    template: "%s · Mavi’oh",
+  },
+  description: "Mavi’oh — ton coach nutrition et sport, au quotidien.",
+  applicationName: "Mavi’oh",
   icons: {
     icon: "/favicon.png",
     shortcut: "/favicon.png",
@@ -34,7 +39,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

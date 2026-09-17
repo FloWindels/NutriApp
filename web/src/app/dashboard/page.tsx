@@ -3,22 +3,21 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import DashboardShell from "../../components/dashboard-shell";
 
 const recipeSlides = [
   {
     id: "recipe-1",
     title: "Bowl saumon avocat",
     description:
-      "Riche en proteines et en bons lipides, ideal pour un repas complet apres une matinee active.",
+      "Riche en protéines et en bons lipides, idéal pour un repas complet après une matinée active.",
     image: "/recipes/recipe-1.jpg",
     kcal: "620 kcal",
   },
   {
     id: "recipe-2",
-    title: "Salade mediterraneenne",
+    title: "Salade méditerranéenne",
     description:
-      "Assiette legere et equilibree avec legumes croquants, source de fibres et glucides moderees.",
+      "Assiette légère et équilibrée avec legumes croquants, source de fibres et glucides modérées.",
     image: "/recipes/recipe-2.jpg",
     kcal: "540 kcal",
   },
@@ -37,13 +36,13 @@ export default function DashboardPage() {
   }
 
   return (
-    <DashboardShell>
+    <>
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.06)] sm:p-6">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-900">Vue nutrition</p>
             <span className="rounded-full border border-lime-200 bg-lime-50 px-3 py-1 text-xs font-medium text-lime-700">
-              Aujourd'hui
+              Aujourd’hui
             </span>
           </div>
 
@@ -184,6 +183,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </section>
-    </DashboardShell>
+    </>
   );
 }

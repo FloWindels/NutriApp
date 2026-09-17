@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+
+import '../core/api_client.dart';
+import '../core/session.dart';
+import '../core/strings.dart';
+import '../models/me.dart';
 import '../services/auth_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/status_banner.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 
+/// Inscription.
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -16,48 +24,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _passwordConfirmationController = TextEditingController();
-
   final AuthService _authService = AuthService();
 
   bool _isLoading = false;
+  bool _obscure = true;
   String? _errorMessage;
+  Map<String, String> _fieldErrors = {};
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    final result = await _authService.register(
-      name: _nameController.text.trim(),
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-      passwordConfirmation: _passwordConfirmationController.text.trim(),
-    );
-
-    if (!mounted) return;
-
-    if (result['success'] == true) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => HomeScreen(
-            userName: result['user']['name'] ?? 'Utilisateur',
-          ),
-        ),
-        (route) => false,
-      );
-    } else {
-      setState(() {
-        _errorMessage = result['message'];
-      });
-    }
-
-    setState(() {
-      _isLoading = false;
-    });
-  }
+  static final RegExp _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
   @override
   void dispose() {
@@ -66,6 +40,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     _passwordConfirmationController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _errorMessage = null;
+      _fieldErrors = {};
+    });
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+    try {
+      // Passwords are never trimmed.
+      final result = await _authService.register(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        passwordConfirmation: _passwordConfirmationController.text,
+      );
+      if (!mounted) return;
+      await _routeAfterAuth(result.user);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _fieldErrors = {for (final entry in e.fieldErrors.entries) entry.key: entry.value.first};
+        _errorMessage = _fieldErrors.isEmpty ? e.message : null;
+      });
+    }
+  }
+
+  /// New accounts have no profile yet → Plus › Profil with the banner.
+  Future<void> _routeAfterAuth(Me user) async {
+    Me me = user;
+    try {
+      me = await Session.instance.refreshMe();
+    } on ApiException {
+      // Keep the register payload (has_profile defaults to false).
+    }
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => me.hasProfile ? const HomeScreen() : const HomeScreen(initialTab: 4, initialPlusSlug: 'profil'),
+      ),
+      (route) => false,
+    );
   }
 
   @override
@@ -98,150 +117,136 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     borderRadius: BorderRadius.circular(isCompact ? 22 : 28),
                     border: Border.all(color: Colors.white, width: 1.2),
                     boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x1A0F172A),
-                        blurRadius: 28,
-                        offset: Offset(0, 16),
-                      ),
+                      BoxShadow(color: Color(0x1A0F172A), blurRadius: 28, offset: Offset(0, 16)),
                     ],
                   ),
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(cardPadding, 24, cardPadding, 20),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Center(
-                            child: Container(
-                              width: logoSize,
-                              height: logoSize,
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF0FDF4),
-                                borderRadius: BorderRadius.circular(isCompact ? 18 : 22),
-                              ),
-                              child: Image.asset('assets/images/logoMoh.png', fit: BoxFit.contain),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            'Créer ton espace Mavioh',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: titleSize,
-                              height: 1.2,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Un compte pour gérer ton stock et profiter d’un suivi simple et rapide.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Color(0xFF64748B)),
-                          ),
-                          const SizedBox(height: 24),
-                          TextFormField(
-                            controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Nom',
-                              prefixIcon: Icon(Icons.badge_outlined),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Entre ton nom';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: Icon(Icons.mail_outline),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Entre ton email';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Mot de passe',
-                              prefixIcon: Icon(Icons.lock_outline),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Entre un mot de passe';
-                              }
-                              if (value.trim().length < 8) {
-                                return 'Minimum 8 caractères';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          TextFormField(
-                            controller: _passwordConfirmationController,
-                            obscureText: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Confirmation du mot de passe',
-                              prefixIcon: Icon(Icons.verified_user_outlined),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Confirme ton mot de passe';
-                              }
-                              if (value.trim() != _passwordController.text.trim()) {
-                                return 'Les mots de passe ne correspondent pas';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
-                          if (_errorMessage != null)
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              margin: const EdgeInsets.only(bottom: 14),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.red.shade100),
-                              ),
-                              child: Text(
-                                _errorMessage!,
-                                style: const TextStyle(color: Color(0xFFB91C1C)),
-                              ),
-                            ),
-                          ElevatedButton(
-                            onPressed: _isLoading ? null : _submit,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 15),
-                            ),
-                            child: Text(
-                              _isLoading ? 'Création...' : 'Créer mon compte',
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pushReplacement(
-                                MaterialPageRoute(
-                                  builder: (_) => const LoginScreen(),
+                    child: AutofillGroup(
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Center(
+                              child: Container(
+                                width: logoSize,
+                                height: logoSize,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF0FDF4),
+                                  borderRadius: BorderRadius.circular(isCompact ? 18 : 22),
                                 ),
-                              );
-                            },
-                            child: const Text('Déjà un compte ? Se connecter'),
-                          ),
-                        ],
+                                child: Image.asset('assets/images/logoMoh.png', fit: BoxFit.contain),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              'Créer ton espace ${AppStrings.brand}',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: titleSize, height: 1.2, fontWeight: FontWeight.w700, color: MaviohColors.text),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Un compte pour suivre tes repas, ton stock et tes séances, simplement.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: MaviohColors.muted),
+                            ),
+                            const SizedBox(height: 24),
+                            TextFormField(
+                              controller: _nameController,
+                              textCapitalization: TextCapitalization.words,
+                              autofillHints: const [AutofillHints.name],
+                              textInputAction: TextInputAction.next,
+                              decoration: InputDecoration(
+                                labelText: 'Nom',
+                                prefixIcon: const Icon(Icons.badge_outlined),
+                                errorText: _fieldErrors['name'],
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) return 'Entre ton nom';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _emailController,
+                              keyboardType: TextInputType.emailAddress,
+                              autocorrect: false,
+                              autofillHints: const [AutofillHints.email],
+                              textInputAction: TextInputAction.next,
+                              decoration: InputDecoration(
+                                labelText: 'Email',
+                                prefixIcon: const Icon(Icons.mail_outline),
+                                errorText: _fieldErrors['email'],
+                              ),
+                              validator: (value) {
+                                final text = value?.trim() ?? '';
+                                if (text.isEmpty) return 'Entre ton email';
+                                if (!_emailRegex.hasMatch(text)) return 'Adresse email invalide';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _passwordController,
+                              obscureText: _obscure,
+                              autofillHints: const [AutofillHints.newPassword],
+                              textInputAction: TextInputAction.next,
+                              decoration: InputDecoration(
+                                labelText: 'Mot de passe',
+                                helperText: '8 caractères minimum',
+                                prefixIcon: const Icon(Icons.lock_outline),
+                                errorText: _fieldErrors['password'],
+                                suffixIcon: IconButton(
+                                  tooltip: _obscure ? 'Afficher le mot de passe' : 'Masquer le mot de passe',
+                                  onPressed: () => setState(() => _obscure = !_obscure),
+                                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) return 'Entre un mot de passe';
+                                if (value.length < 8) return 'Minimum 8 caractères';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _passwordConfirmationController,
+                              obscureText: _obscure,
+                              autofillHints: const [AutofillHints.newPassword],
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) => _isLoading ? null : _submit(),
+                              decoration: InputDecoration(
+                                labelText: 'Confirmation du mot de passe',
+                                prefixIcon: const Icon(Icons.verified_user_outlined),
+                                errorText: _fieldErrors['password_confirmation'],
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) return 'Confirme ton mot de passe';
+                                if (value != _passwordController.text) return 'Les mots de passe ne correspondent pas';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                            if (_errorMessage != null)
+                              StatusBanner.error(_errorMessage!, margin: const EdgeInsets.only(bottom: 14)),
+                            ElevatedButton(
+                              onPressed: _isLoading ? null : _submit,
+                              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 15)),
+                              child: Text(_isLoading ? 'Création…' : 'Créer mon compte'),
+                            ),
+                            const SizedBox(height: 10),
+                            TextButton(
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => Navigator.of(context).pushReplacement(
+                                        MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+                                      ),
+                              child: const Text('Déjà un compte ? Se connecter'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

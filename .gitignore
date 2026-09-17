@@ -1,0 +1,34 @@
+# Mavi'oh — exclusions communes au dépôt.
+# Les exclusions spécifiques restent dans backend/.gitignore, web/.gitignore et mobile/.gitignore.
+
+# Environnements et secrets
+.env
+.env.*
+!.env.example
+
+# Dépendances et artefacts de build
+node_modules/
+vendor/
+.next/
+out/
+build/
+dist/
+
+# Bases de données locales
+*.sqlite
+*.sqlite-journal
+*.sqlite3
+
+# Journaux et caches
+*.log
+.phpunit.result.cache
+.phpunit.cache/
+coverage/
+
+# Éditeurs et systèmes
+.idea/
+.fleet/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
