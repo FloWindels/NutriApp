@@ -1,5 +1,5 @@
-import FridgePage from "@/components/fridge-page";
+import StockPage from "@/components/stock/stock-page";
 
-export default function StockPage() {
-  return <FridgePage />;
+export default function StockRoute() {
+  return <StockPage />;
 }

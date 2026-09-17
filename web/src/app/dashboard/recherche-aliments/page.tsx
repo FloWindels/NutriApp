@@ -1,5 +1,5 @@
-import FoodEanSearch from "@/components/food-ean-search";
+import FoodSearchPage from "@/components/foods/food-search-page";
 
 export default function RechercheAlimentsPage() {
-  return <FoodEanSearch />;
+  return <FoodSearchPage />;
 }
