@@ -1,5 +1,5 @@
-import RecipePage from "@/components/recipe-page";
+import RecipesPage from "@/components/recipes/recipes-page";
 
-export default function RecipesPage() {
-  return <RecipePage />;
+export default function RecettesRoute() {
+  return <RecipesPage />;
 }

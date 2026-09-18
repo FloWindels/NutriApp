@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatKcal, formatNumber } from "@/lib/format";
 import type { ExpiryKind, Portion, StockItem, StockItemUpdateInput, StockLocation } from "@/lib/types/api";
@@ -64,9 +64,16 @@ export function StockItemRow({
 }: StockItemRowProps) {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(item));
 
-  useEffect(() => {
+  // Réinitialisation du brouillon à l'ouverture du tiroir, ou quand l'article change sous nos
+  // pieds (rafraîchissement de la liste). Ajustement pendant le rendu plutôt que dans un effet :
+  // React recalcule immédiatement sans passe de rendu supplémentaire.
+  // https://react.dev/learn/you-might-not-need-an-effect
+  const syncKey = `${editing ? "1" : "0"}:${item.id}:${item.updated_at}`;
+  const [lastSyncKey, setLastSyncKey] = useState(syncKey);
+  if (syncKey !== lastSyncKey) {
+    setLastSyncKey(syncKey);
     if (editing) setDraft(draftFrom(item));
-  }, [editing, item]);
+  }
 
   const pickerFood = item.food
     ? {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, getErrorMessage, isApiError } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
@@ -56,20 +56,6 @@ export function AddStockItemDialog({ open, onClose, locations, defaultStockId }:
 
   const barcode = isBarcode(debouncedTerm) ? debouncedTerm : null;
   const searchEnabled = open && !selection && !barcode && debouncedTerm.length >= 2;
-
-  useEffect(() => {
-    if (!open) return;
-    setTerm("");
-    setSelection(null);
-    setManualOpen(false);
-    setNewLocationOpen(false);
-    setNewLocationName("");
-    setValue({ quantity: 1, unit: "piece" });
-    setExpiresAt("");
-    setExpiryKind("dlc");
-    setError(null);
-    setStockId(defaultStockId);
-  }, [open, defaultStockId]);
 
   const searchQuery = useQuery({
     queryKey: queryKeys.foods.search({ q: debouncedTerm, scope: "stock" }),

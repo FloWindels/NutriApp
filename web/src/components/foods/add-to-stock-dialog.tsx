@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, getErrorMessage } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
@@ -39,18 +39,8 @@ export function AddToStockDialog({ open, onClose, food }: AddToStockDialogProps)
   });
 
   const locations = stocksQuery.data?.locations ?? [];
-
-  useEffect(() => {
-    if (!open) return;
-    setError(null);
-    setExpiresAt("");
-    setExpiryKind("dlc");
-    setValue({ quantity: 1, unit: "piece" });
-  }, [open, food]);
-
-  useEffect(() => {
-    if (stockId === null && locations.length > 0) setStockId(locations[0].id);
-  }, [locations, stockId]);
+  /** Premier lieu par défaut tant que l’utilisateur n’a pas choisi. */
+  const effectiveStockId = stockId ?? locations[0]?.id ?? null;
 
   const mutation = useMutation({
     mutationFn: (input: StockItemInput) => apiPost<DataEnvelope<StockItem>>("/stocks/items", input),
@@ -63,13 +53,13 @@ export function AddToStockDialog({ open, onClose, food }: AddToStockDialogProps)
   });
 
   function handleSubmit() {
-    if (!food || stockId === null) {
+    if (!food || effectiveStockId === null) {
       setError("Choisis d’abord un lieu de stockage.");
       return;
     }
     setError(null);
     mutation.mutate({
-      stock_id: stockId,
+      stock_id: effectiveStockId,
       food_id: food.id,
       food_name: food.name,
       quantity: value.quantity,
@@ -117,7 +107,7 @@ export function AddToStockDialog({ open, onClose, food }: AddToStockDialogProps)
         <div className="space-y-4">
           <SelectField
             label="Lieu"
-            value={stockId ?? ""}
+            value={effectiveStockId ?? ""}
             onChange={(event) => setStockId(Number(event.target.value))}
             hint={locations.length === 0 ? "Crée d’abord un lieu depuis la page Stock." : undefined}
           >
