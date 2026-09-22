@@ -105,6 +105,10 @@ TXT;
     {
         $userPrompt = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n\n".self::CLOSING_SENTENCE;
 
+        // Une génération dépasse couramment la limite PHP par défaut de 30 s : sans ce
+        // relèvement, la requête meurt en erreur fatale au lieu de retomber sur les règles.
+        LlmExecutionTime::allow((int) config('services.anthropic.timeout', 90));
+
         try {
             $message = $this->client()->messages->create(
                 maxTokens: (int) config('services.anthropic.max_tokens', 8000),

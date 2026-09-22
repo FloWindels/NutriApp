@@ -232,3 +232,53 @@ export function describeSets(row: {
   if (row.distance_km) parts.push(`${String(row.distance_km).replace(".", ",")} km`);
   return parts.join(" · ");
 }
+
+/* ------------------------------------------------------------------ */
+/* Query hooks                                                          */
+/* ------------------------------------------------------------------ */
+
+/** Catalogue (public sports + the user's own), debounced by the caller. */
+export function useSports(params: { q?: string; category?: string } = {}) {
+  return useQuery({
+    queryKey: queryKeys.sport.sports(params),
+    queryFn: async () => (await sportApi.sports(params.q, params.category)).data,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useSportSummary(date?: string) {
+  return useQuery({
+    queryKey: queryKeys.sport.summary(date),
+    queryFn: async () => (await sportApi.summary(date)).data,
+  });
+}
+
+export function useSportCalendar(from: string, to: string) {
+  return useQuery({
+    queryKey: queryKeys.sport.calendar({ from, to }),
+    queryFn: async () => (await sportApi.calendar(from, to)).data,
+  });
+}
+
+export function useSportSessions(params: SessionSearchParams) {
+  return useQuery({
+    queryKey: queryKeys.sport.sessions(params),
+    queryFn: async () => (await sportApi.sessions(params)).data,
+  });
+}
+
+export function useSportSession(id: number | string) {
+  return useQuery({
+    queryKey: queryKeys.sport.session(id),
+    queryFn: async () => (await sportApi.session(id)).data,
+  });
+}
+
+/** `GET /profile` — used to prefill the generation form. */
+export function useSportProfile() {
+  return useQuery({
+    queryKey: queryKeys.profile,
+    queryFn: () => sportApi.profile(),
+    staleTime: 5 * 60 * 1000,
+  });
+}

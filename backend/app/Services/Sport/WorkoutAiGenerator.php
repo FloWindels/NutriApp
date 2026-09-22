@@ -12,6 +12,7 @@ use App\Models\SportPlan;
 use App\Models\User;
 use App\Models\UserSetting;
 use App\Support\Clock;
+use App\Support\LlmProvider;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -39,7 +40,7 @@ class WorkoutAiGenerator
 
     public function iaConfigured(): bool
     {
-        return filled(config('services.anthropic.api_key'));
+        return LlmProvider::isConfigured();
     }
 
     /**
@@ -60,7 +61,7 @@ class WorkoutAiGenerator
 
     public function llmModel(): ?string
     {
-        return $this->iaConfigured() ? (string) config('services.anthropic.model') : null;
+        return LlmProvider::modelName();
     }
 
     /**

@@ -22,10 +22,18 @@ export function useDebouncedValue<T>(value: T, delay = 350): T {
   return debounced;
 }
 
+/**
+ * Minimal shape the picker needs: a plan edited from the planner only carries
+ * `{id, title, per_serving}` (see `MealPlan.recipe`), never the whole recipe.
+ */
+export type RecipeOption = Pick<Recipe, "id" | "title" | "per_serving"> & {
+  is_estimate?: boolean;
+};
+
 export type RecipePickerProps = {
   /** Currently selected recipe (controlled). */
-  value: Recipe | null;
-  onChange: (recipe: Recipe | null) => void;
+  value: RecipeOption | null;
+  onChange: (recipe: RecipeOption | null) => void;
   label?: string;
   hint?: string;
   error?: string;

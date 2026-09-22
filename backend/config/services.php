@@ -57,6 +57,22 @@ return [
     |
     */
 
+    // Choix du fournisseur de coach IA : auto (defaut), anthropic, ollama ou none.
+    // En auto, Anthropic l'emporte si une cle est configuree, sinon Ollama s'il est active.
+    'llm' => [
+        'provider' => env('LLM_PROVIDER', 'auto'),
+    ],
+
+    // Coach IA local via Ollama : aucune donnee ne quitte la machine, aucun cout par appel.
+    'ollama' => [
+        'enabled' => filter_var(env('OLLAMA_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+        'base_url' => env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
+        'model' => env('OLLAMA_MODEL', 'llama3.2'),
+        'timeout' => (int) env('OLLAMA_TIMEOUT', 180),
+        'temperature' => (float) env('OLLAMA_TEMPERATURE', 0.3),
+        'num_ctx' => (int) env('OLLAMA_NUM_CTX', 8192),
+    ],
+
     'anthropic' => [
         'api_key' => env('ANTHROPIC_API_KEY'),
         'model' => env('ANTHROPIC_MODEL', 'claude-opus-5'),
