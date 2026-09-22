@@ -90,9 +90,16 @@ SANCTUM_EXPIRATION=43200
 OFF_BASE_URL=https://world.openfoodfacts.org
 OFF_USER_AGENT="Mavioh/1.0 (ton-email@exemple.fr)"
 
-# Coach sportif IA : laisser vide désactive l'IA, les séances restent générées par les règles.
+# Coach sportif IA : laisser tout vide désactive l'IA, les séances restent générées par les règles.
+LLM_PROVIDER=auto
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-opus-5
+
+# Variante gratuite : modèle exécuté sur le serveur, aucune donnée ne sort de la machine.
+# Prérequis : `curl -fsSL https://ollama.com/install.sh | sh` puis `ollama pull llama3.2`.
+OLLAMA_ENABLED=false
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3.2
 
 MAIL_MAILER=log
 ```
@@ -196,6 +203,37 @@ sudo bash scripts/deploy/update.sh
 
 Le script fait `git pull`, réinstalle les dépendances, applique les migrations, reconstruit le site
 et redémarre les services. Les migrations sont additives : aucune donnée n'est perdue.
+
+---
+
+## 7 bis. Coach sportif IA en local (facultatif)
+
+Mavi'oh sait générer les séances avec un modèle exécuté sur ton propre serveur, sans clé d'API ni
+coût par appel. Un petit modèle suffit : `llama3.2` répond en quelques secondes et respecte les
+contraintes (matériel, focus, zones douloureuses).
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.2
+sudo systemctl enable --now ollama
+```
+
+Puis, dans `backend/.env` :
+
+```dotenv
+OLLAMA_ENABLED=true
+OLLAMA_MODEL=llama3.2
+```
+
+Enfin `php artisan config:cache` et un redémarrage de PHP-FPM.
+
+Compte 4 Go de mémoire vive pour ce modèle. Sans GPU, la génération prend une dizaine de secondes ;
+le module reste utilisable puisque l'interface affiche une progression et laisse annuler. En cas de
+panne d'Ollama, les règles Mavi'oh prennent le relais automatiquement.
+
+**Attention à la durée d'exécution PHP** : `max_execution_time` doit rester au-dessus du délai des
+appels au modèle. Mavi'oh relève la limite lui-même pendant l'appel, mais si tu passes par un
+proxy, vérifie aussi `fastcgi_read_timeout` côté Nginx (120 s dans la configuration fournie).
 
 ---
 

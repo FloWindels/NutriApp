@@ -120,8 +120,33 @@ fractionné ou un effort continu avec durées et allures plutôt qu'une liste d'
 
 ## 6. Coach sportif par IA
 
-Quand une clé `ANTHROPIC_API_KEY` est configurée et que l'utilisateur laisse l'option active, la
-séance est proposée par Claude, qui reçoit un contexte **anonymisé** (aucun nom ni e-mail) :
+Deux fournisseurs sont pris en charge, au choix via `LLM_PROVIDER` :
+
+| Valeur | Effet |
+|---|---|
+| `auto` (défaut) | Anthropic si `ANTHROPIC_API_KEY` est renseignée, sinon Ollama s'il est activé, sinon les règles |
+| `anthropic` | API Claude |
+| `ollama` | modèle exécuté en local, aucune donnée ne quitte la machine, aucun coût par appel |
+| `none` | IA désactivée, seules les règles Mavi'oh s'appliquent |
+
+Pour Ollama il suffit d'un service en fonctionnement et d'un modèle installé :
+
+```bash
+ollama pull llama3.2
+```
+
+puis, dans `backend/.env` : `OLLAMA_ENABLED=true` et `OLLAMA_MODEL=llama3.2`.
+
+Mesures faites sur une machine de développement avec le catalogue d'exercices filtré par
+matériel, comme en production :
+
+| Modèle | Temps de réponse | Séance conforme |
+|---|---|---|
+| llama3.2 (3 milliards de paramètres) | 3 à 10 s | oui, zones douloureuses respectées |
+| qwen3-coder (30 milliards) | 87 s | oui |
+
+Le petit modèle suffit et reste bien plus confortable à l'usage. Quel que soit le fournisseur,
+le modèle reçoit un contexte **anonymisé** (aucun nom ni e-mail) :
 
 - profil : âge, sexe, poids, taille, IMC, niveau d'activité, objectif, calories cibles, régime,
   profil mineur, situation particulière ;
@@ -135,7 +160,8 @@ Le modèle répond selon un schéma JSON strict. La réponse est ensuite **véri
 structure et durées contrôlées, exercices rattachés au catalogue, exercices contre-indiqués retirés
 avec un avertissement, calories recalculées si elles sont absentes ou aberrantes.
 
-**Repli systématique.** Clé absente, quota dépassé, panne réseau, refus du modèle ou JSON illisible :
+**Repli systématique.** Fournisseur non configuré, service arrêté, quota dépassé, panne réseau,
+refus du modèle ou JSON illisible :
 la séance est produite par les règles, avec le message « Génération IA indisponible : séance proposée
 par les règles Mavi'oh. » L'IA n'est jamais indispensable au fonctionnement du produit.
 

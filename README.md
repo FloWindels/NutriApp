@@ -50,8 +50,10 @@ Le cahier des charges d'origine est `Cahier_des_charges_NutriApp_v1.0.pdf`.
 - Les calories brûlées viennent s'ajouter au budget du jour, avec un coefficient réglable.
 - Génération de séances personnalisées : objectif, niveau, temps disponible, lieu (maison, extérieur,
   salle publique ou privée), matériel, zones du corps à éviter et notes libres.
-- Coach IA optionnel (Claude) qui reçoit le contexte de la personne et propose la séance ; en son
-  absence ou en cas d'erreur, les règles Mavi'oh prennent le relais automatiquement.
+- Coach IA optionnel qui reçoit le contexte de la personne et propose la séance : au choix
+  l'API Claude, ou un modèle exécuté en local avec Ollama (aucune donnée ne quitte la machine,
+  aucun coût par appel). En son absence ou en cas d'erreur, les règles Mavi'oh prennent le
+  relais automatiquement.
 
 ---
 
@@ -119,8 +121,10 @@ Les variables importantes de `backend/.env` :
 | `FRONTEND_URL` | base des liens de réinitialisation de mot de passe |
 | `SANCTUM_EXPIRATION` | durée de vie des jetons en minutes (43200 = 30 jours) |
 | `OFF_BASE_URL`, `OFF_USER_AGENT` | accès à Open Food Facts |
-| `ANTHROPIC_API_KEY` | active le coach sportif IA ; vide, les séances sont générées par les règles |
-| `ANTHROPIC_MODEL` | modèle utilisé, par défaut `claude-opus-5` |
+| `LLM_PROVIDER` | coach IA : `auto`, `anthropic`, `ollama` ou `none` |
+| `ANTHROPIC_API_KEY` | active le coach IA via l'API Claude |
+| `OLLAMA_ENABLED` | active le coach IA en local via Ollama, sans clé ni coût |
+| `OLLAMA_MODEL` | modèle local, par défaut `llama3.2` |
 
 Côté web, `API_URL` et `NEXT_PUBLIC_API_URL` pointent vers l'API. Côté mobile, l'URL est passée au
 build avec `--dart-define=API_BASE_URL=...`.
