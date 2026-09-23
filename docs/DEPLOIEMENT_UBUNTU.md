@@ -308,15 +308,25 @@ proxy, vérifie aussi `fastcgi_read_timeout` côté Nginx (120 s dans la configu
 
 ## 8. Sauvegardes
 
+Le script `scripts/deploy/backup.sh` écrit une archive compressée et supprime celles de plus de
+quatorze jours :
+
 ```bash
-sudo -u postgres pg_dump mavioh | gzip > /var/backups/mavioh-$(date +%F).sql.gz
+sudo bash scripts/deploy/backup.sh
 ```
 
-Ajoute cette ligne au cron root pour une sauvegarde quotidienne, et pense à copier l'archive hors du
-serveur. Restauration :
+Pour une sauvegarde quotidienne à 3 h :
 
 ```bash
-gunzip -c /var/backups/mavioh-2026-09-16.sql.gz | sudo -u postgres psql mavioh
+sudo cp scripts/deploy/backup.sh /usr/local/bin/mavioh-backup && sudo chmod +x /usr/local/bin/mavioh-backup
+echo '0 3 * * * root /usr/local/bin/mavioh-backup' | sudo tee /etc/cron.d/mavioh-backup
+```
+
+Les archives restent sur le serveur : copie-les ailleurs, sinon elles disparaîtront avec lui.
+Restauration :
+
+```bash
+gunzip -c /var/backups/mavioh/mavioh-2026-09-23-0300.sql.gz | sudo -u postgres psql mavioh
 ```
 
 ---
