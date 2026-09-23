@@ -51,6 +51,16 @@ explication :
 Une autre version peut être imposée :
 `sudo PHP_VERSION=8.2 bash scripts/deploy/setup-ubuntu.sh`.
 
+Tout ce guide suppose que le dépôt se trouve dans `/var/www/mavioh`. Un clone fait ailleurs — dans
+ton dossier personnel par exemple — se déplace sans dommage, et c'est préférable : sur Ubuntu,
+`/home/<utilisateur>` est en 750, donc `www-data` ne peut pas y lire les fichiers servis par Nginx.
+
+```bash
+sudo mv ~/Documents/NutriApp /var/www/mavioh
+sudo chown -R "$USER":www-data /var/www/mavioh
+cd /var/www/mavioh
+```
+
 Vérifie ensuite :
 
 ```bash
@@ -307,3 +317,5 @@ La première commande doit renvoyer le catalogue des portions, la seconde un jet
 | Séances IA absentes | `ANTHROPIC_API_KEY` vide : c'est le comportement prévu, les règles prennent le relais |
 | `nginx : command not found` après l'installation | le script a été interrompu avant : relance `sudo bash scripts/deploy/setup-ubuntu.sh`, il est idempotent |
 | `php8.3-gd` refuse de s'installer | normal sur Ubuntu 22.04, sans effet sur Mavi'oh : poursuis le déploiement |
+| `Deprecation Notice: Using ${var}` pendant `composer install` | c'est le Composer du paquet Ubuntu (2.2.6) : installe l'officiel, `curl -sS https://getcomposer.org/installer \| sudo php -- --install-dir=/usr/local/bin --filename=composer` |
+| `Could not open input file: artisan` | tu n'es pas dans `backend/` : `cd /var/www/mavioh/backend` |
