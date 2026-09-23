@@ -78,6 +78,8 @@ export const messages = {
     "Arrête l’exercice en cas de douleur ou de malaise. Programme indicatif, ne remplace pas un coach ni un avis médical.",
   nutritionDisclaimer:
     "Estimation calculée à partir de ton profil. Ce n’est pas une mesure clinique ni un avis médical.",
+  plateDisclaimer:
+    "Estimation à partir de ta photo : les quantités sont approximatives. Vérifie et corrige chaque ligne avant d’enregistrer. Ce n’est pas une mesure clinique ni un avis médical.",
 } as const;
 
 export type Messages = typeof messages;

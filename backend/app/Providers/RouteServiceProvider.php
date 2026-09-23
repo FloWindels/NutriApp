@@ -32,6 +32,11 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(120)->by($request->user()?->id ?: $request->ip());
         });
 
+        // Reconnaissance de photo d'assiette : appel long et coûteux, plafond dédié.
+        RateLimiter::for('vision', function (Request $request) {
+            return Limit::perMinute(6)->by($request->user()?->id ?: $request->ip());
+        });
+
         $this->routes(function () {
             Route::middleware('api')
                 ->prefix('api')

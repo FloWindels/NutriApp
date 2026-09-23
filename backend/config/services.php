@@ -71,6 +71,10 @@ return [
         'timeout' => (int) env('OLLAMA_TIMEOUT', 180),
         'temperature' => (float) env('OLLAMA_TEMPERATURE', 0.3),
         'num_ctx' => (int) env('OLLAMA_NUM_CTX', 8192),
+        // Reconnaissance de photo d'assiette : exige un modele multimodal (llava, moondream).
+        // Vide = pas de vision locale, la saisie reste manuelle.
+        'vision_model' => env('OLLAMA_VISION_MODEL', ''),
+        'vision_timeout' => (int) env('OLLAMA_VISION_TIMEOUT', 180),
     ],
 
     'anthropic' => [
@@ -79,6 +83,8 @@ return [
         'effort' => env('ANTHROPIC_EFFORT', 'medium'),
         'max_tokens' => (int) env('ANTHROPIC_MAX_TOKENS', 8000),
         'timeout' => (int) env('ANTHROPIC_TIMEOUT', 90),
+        'vision_timeout' => (int) env('ANTHROPIC_VISION_TIMEOUT', 60),
+        'vision_max_tokens' => (int) env('ANTHROPIC_VISION_MAX_TOKENS', 2000),
     ],
 
 ];

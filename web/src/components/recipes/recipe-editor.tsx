@@ -1,5 +1,6 @@
 "use client";
 
+import { MAX_IMAGE_BYTES, dataUriBytes, resizeImage } from "@/lib/image-resize";
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -80,10 +81,6 @@ const TOP_LEVEL_FIELDS: (keyof FormValues)[] = [
 const TAGS = Object.keys(RECIPE_TAG_LABELS) as RecipeTag[];
 const UNITS = ["g", "ml", "piece", "cas", "cac", "tranche", "portion", "poignee"];
 
-const MAX_IMAGE_BYTES = 350 * 1024;
-const MAX_IMAGE_SIDE = 1200;
-const IMAGE_QUALITY = 0.75;
-
 function newUid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return `ing-${Math.random().toString(36).slice(2)}-${Date.now()}`;
@@ -91,27 +88,6 @@ function newUid(): string {
 
 function emptyIngredient() {
   return { uid: newUid(), name: "", ean: "", amount: "", unit: "g" };
-}
-
-function dataUriBytes(dataUri: string): number {
-  const base64 = dataUri.split(",")[1] ?? "";
-  return Math.ceil((base64.length * 3) / 4);
-}
-
-/** Redimensionne la photo côté client : 1200 px maximum, qualité 0,75. */
-async function resizeImage(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Impossible de préparer l’image.");
-  context.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-  return canvas.toDataURL("image/jpeg", IMAGE_QUALITY);
 }
 
 function defaultsFor(recipe: Recipe | null | undefined): FormValues {

@@ -34,6 +34,41 @@ class LlmProvider
         };
     }
 
+    /**
+     * Fournisseur capable de LIRE UNE IMAGE. Prérequis distincts du texte : un Ollama en
+     * llama3.2 génère très bien une séance mais ne voit pas une photo.
+     */
+    public static function visionCurrent(): string
+    {
+        $configured = (string) config('services.llm.provider', 'auto');
+
+        return match ($configured) {
+            self::ANTHROPIC => self::anthropicReady() ? self::ANTHROPIC : self::NONE,
+            self::OLLAMA => self::ollamaVisionReady() ? self::OLLAMA : self::NONE,
+            self::NONE => self::NONE,
+            default => match (true) {
+                self::anthropicReady() => self::ANTHROPIC,
+                self::ollamaVisionReady() => self::OLLAMA,
+                default => self::NONE,
+            },
+        };
+    }
+
+    public static function visionConfigured(): bool
+    {
+        return self::visionCurrent() !== self::NONE;
+    }
+
+    /** Nom du modèle de vision à afficher, null quand la reconnaissance est indisponible. */
+    public static function visionModelName(): ?string
+    {
+        return match (self::visionCurrent()) {
+            self::ANTHROPIC => (string) config('services.anthropic.model'),
+            self::OLLAMA => (string) config('services.ollama.vision_model'),
+            default => null,
+        };
+    }
+
     public static function isConfigured(): bool
     {
         return self::current() !== self::NONE;
@@ -52,6 +87,13 @@ class LlmProvider
     private static function anthropicReady(): bool
     {
         return filled(config('services.anthropic.api_key'));
+    }
+
+    private static function ollamaVisionReady(): bool
+    {
+        return (bool) config('services.ollama.enabled')
+            && filled(config('services.ollama.base_url'))
+            && filled(config('services.ollama.vision_model'));
     }
 
     private static function ollamaReady(): bool

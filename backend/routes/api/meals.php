@@ -16,6 +16,10 @@ Route::post('/meals', [MealController::class, 'store']);
 Route::post('/meals/copy', [MealController::class, 'copy']);
 Route::get('/meals/history', [MealController::class, 'history']);
 Route::get('/meals/frequent', [MealController::class, 'frequent']);
+Route::get('/meals/photo-capability', [MealController::class, 'photoCapability']);
+
+// Reconnaissance de photo : un appel coûte cher, le plafond global de 120/min ne protège de rien.
+Route::post('/meals/analyze-photo', [MealController::class, 'analyzePhoto'])->middleware('throttle:vision');
 
 Route::put('/meals/{meal}', [MealController::class, 'update'])->whereNumber('meal');
 Route::delete('/meals/{meal}', [MealController::class, 'destroy'])->whereNumber('meal');

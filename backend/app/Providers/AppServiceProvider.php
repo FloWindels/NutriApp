@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use App\Contracts\LlmVisionClient;
 use App\Contracts\LlmWorkoutClient;
+use App\Services\Llm\AnthropicVisionClient;
 use App\Services\Llm\AnthropicWorkoutClient;
+use App\Services\Llm\NullVisionClient;
 use App\Services\Llm\NullWorkoutClient;
+use App\Services\Llm\OllamaVisionClient;
 use App\Services\Llm\OllamaWorkoutClient;
 use App\Support\LlmProvider;
 use Illuminate\Database\Eloquent\Model;
@@ -25,6 +29,15 @@ class AppServiceProvider extends ServiceProvider
                 LlmProvider::ANTHROPIC => $app->make(AnthropicWorkoutClient::class),
                 LlmProvider::OLLAMA => $app->make(OllamaWorkoutClient::class),
                 default => $app->make(NullWorkoutClient::class),
+            };
+        });
+
+        // La vision a ses propres prérequis : un modèle multimodal, pas seulement un LLM.
+        $this->app->bind(LlmVisionClient::class, function ($app) {
+            return match (LlmProvider::visionCurrent()) {
+                LlmProvider::ANTHROPIC => $app->make(AnthropicVisionClient::class),
+                LlmProvider::OLLAMA => $app->make(OllamaVisionClient::class),
+                default => $app->make(NullVisionClient::class),
             };
         });
     }

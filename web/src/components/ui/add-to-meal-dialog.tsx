@@ -1,5 +1,6 @@
 "use client";
 
+import { PlatePhotoPanel } from "@/components/ui/plate-photo-panel";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiDelete, apiGet, apiPost, apiPut, getErrorMessage, isApiError } from "@/lib/api-client";
@@ -64,7 +65,7 @@ export type AddToMealDialogProps = {
   onAdded?: (result: AddToMealResult) => void;
 };
 
-type Tab = "aliments" | "frequents" | "recettes" | "personnalise";
+type Tab = "aliments" | "frequents" | "recettes" | "personnalise" | "photo";
 
 type Selection =
   | { kind: "food"; food: Food }
@@ -313,8 +314,22 @@ export function AddToMealDialog({
           tab={tab}
           onTab={(next) => {
             setTab(next);
+            // L'onglet Photo ne pose aucune sélection : il gère lui-même son enregistrement.
             setSelection(next === "personnalise" ? { kind: "custom" } : null);
           }}
+          photoPanel={
+            <PlatePhotoPanel
+              date={effectiveDate}
+              type={type}
+              onAdded={(response) => {
+                const item = response.data.items.at(-1) ?? null;
+                invalidateMealFamilies();
+                successToast(item, response.data.id);
+                onAdded?.({ day: response.day, item, mealId: response.data.id });
+                onClose();
+              }}
+            />
+          }
           query={query}
           onQuery={setQuery}
           onPickFood={(food) => select({ kind: "food", food })}
@@ -425,6 +440,7 @@ type SearchStepProps = {
   busy: boolean;
   customPanel: ReactNode;
   createFoodPanel: ReactNode;
+  photoPanel: ReactNode;
 };
 
 const TABS: { key: Tab; label: string }[] = [
@@ -432,6 +448,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "frequents", label: "Fréquents" },
   { key: "recettes", label: "Recettes" },
   { key: "personnalise", label: "Personnalisé" },
+  { key: "photo", label: "Photo" },
 ];
 
 function SearchStep({
@@ -446,6 +463,7 @@ function SearchStep({
   busy,
   customPanel,
   createFoodPanel,
+  photoPanel,
 }: SearchStepProps) {
   return (
     <div className="space-y-3">
@@ -473,6 +491,8 @@ function SearchStep({
         createFoodPanel
       ) : tab === "personnalise" ? (
         customPanel
+      ) : tab === "photo" ? (
+        photoPanel
       ) : tab === "frequents" ? (
         <FrequentList onPick={onPickFrequent} busy={busy} />
       ) : tab === "recettes" ? (

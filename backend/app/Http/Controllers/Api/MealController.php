@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Exceptions\LlmUnavailableException;
+use App\Http\Requests\Meals\AnalyzePlateRequest;
 use App\Http\Requests\Meals\CopyMealsRequest;
 use App\Http\Requests\Meals\MealHistoryRequest;
 use App\Http\Requests\Meals\StoreMealItemRequest;
@@ -15,10 +17,12 @@ use App\Models\Meal;
 use App\Models\MealItem;
 use App\Models\User;
 use App\Services\MealCalculator;
+use App\Services\Meals\PlateRecognitionService;
 use App\Services\Meals\MealCopyService;
 use App\Services\Meals\MealDayService;
 use App\Services\Meals\MealHistoryService;
 use App\Services\MealService;
+use App\Support\LlmProvider;
 use App\Support\Clock;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -228,6 +232,46 @@ class MealController extends Controller
     public function frequent(Request $request): JsonResponse
     {
         return $this->json(['data' => $this->history->frequent($request->user())]);
+    }
+
+    /**
+     * GET /meals/photo-capability → {data: {disponible, llm_model}}.
+     *
+     * Permet à l'interface de ne proposer la photo que si un modèle sait réellement lire une
+     * image, plutôt que de laisser l'utilisateur photographier son assiette pour rien.
+     */
+    public function photoCapability(): JsonResponse
+    {
+        return $this->json(['data' => [
+            'disponible' => LlmProvider::visionConfigured(),
+            'llm_model' => LlmProvider::visionModelName(),
+        ]]);
+    }
+
+    /**
+     * POST /meals/analyze-photo → {data: {aliments, description, confiance_globale, …}}.
+     *
+     * N'ÉCRIT RIEN : la reconnaissance ne fait que proposer. L'utilisateur vérifie et corrige
+     * les lignes, puis c'est POST /meals qui enregistre. Quand aucune reconnaissance n'est
+     * possible, la réponse reste un 200 avec une liste vide : le repli attendu ici n'est pas
+     * une autre IA, c'est la saisie manuelle déjà présente à l'écran.
+     */
+    public function analyzePhoto(AnalyzePlateRequest $request, PlateRecognitionService $recognition): JsonResponse
+    {
+        try {
+            $data = $recognition->analyze($request->user(), $request->base64(), $request->mediaType());
+        } catch (LlmUnavailableException $e) {
+            return $this->json(['data' => [
+                'aliments' => [],
+                'description' => '',
+                'confiance_globale' => 0.0,
+                'avertissements' => [$e->getMessage()],
+                'source' => 'indisponible',
+                'llm_model' => null,
+            ]]);
+        }
+
+        return $this->json(['data' => $data]);
     }
 
     // ------------------------------------------------------------------------------------

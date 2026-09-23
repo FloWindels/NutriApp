@@ -97,7 +97,7 @@ mesurée ou approchée, comme le demandait le cahier des charges.
 | Sujet | Raison |
 |---|---|
 | Restaurants et carte | dépend d'une source de données et d'une géolocalisation à choisir |
-| OCR d'étiquette, saisie vocale, photo d'assiette | phases ultérieures du cahier des charges |
+| OCR d'étiquette, saisie vocale | phases ultérieures du cahier des charges |
 | Notifications système (push) | les notifications sont pour l'instant internes à l'application |
 | Espace d'administration `/admin` | périmètre et droits non définis |
 | Mode hors ligne en écriture | demanderait une file de synchronisation et une résolution de conflits |

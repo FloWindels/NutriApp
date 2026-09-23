@@ -777,6 +777,43 @@ export type MealCreateInput = {
   items?: MealItemInput[];
 };
 
+/** Reconnaissance d’une photo d’assiette (POST /meals/analyze-photo). */
+export type PlateLine = {
+  nom: string;
+  marque: string | null;
+  quantite: number;
+  unite: "g" | "ml" | "piece" | "portion";
+  confiance: number;
+  /** Fiche du catalogue rattachée : les macros viennent de là, jamais du modèle. */
+  food: {
+    id: number;
+    name: string;
+    brand: string | null;
+    per_unit: PerUnit;
+    calories: number | null;
+    proteins: number | null;
+    carbs: number | null;
+    fat: number | null;
+    is_verified: boolean;
+  } | null;
+  /** Valeurs proposées par le modèle, uniquement quand aucune fiche ne correspond. */
+  valeurs_proposees: {
+    calories: number | null;
+    proteines: number | null;
+    glucides: number | null;
+    lipides: number | null;
+  } | null;
+};
+
+export type PlateAnalysis = {
+  aliments: PlateLine[];
+  description: string;
+  confiance_globale: number;
+  avertissements: string[];
+  source: "ia" | "indisponible";
+  llm_model: string | null;
+};
+
 export type MealCreateResponse = {
   message: string;
   data: Meal;

@@ -30,6 +30,8 @@ Le cahier des charges d'origine est `Cahier_des_charges_NutriApp_v1.0.pdf`.
   des estimations.
 - Journal des repas par jour et par type, totaux et restants, historique, repas fréquents, copie du
   repas de la veille.
+- Photo d'assiette : un modèle multimodal identifie les aliments visibles, le serveur les rattache
+  au catalogue, et rien n'est enregistré avant que l'utilisateur ait vérifié et corrigé chaque ligne.
 - Recettes avec photo, portions, macros et estimation depuis les ingrédients.
 - Stock frigo / congélateur / placard : péremptions, alertes, consommation qui décrémente le stock et
   alimente la liste de courses.
@@ -125,6 +127,7 @@ Les variables importantes de `backend/.env` :
 | `ANTHROPIC_API_KEY` | active le coach IA via l'API Claude |
 | `OLLAMA_ENABLED` | active le coach IA en local via Ollama, sans clé ni coût |
 | `OLLAMA_MODEL` | modèle local, par défaut `llama3.2` |
+| `OLLAMA_VISION_MODEL` | modèle multimodal pour la photo d'assiette (`llava`) ; vide = photo désactivée |
 
 Côté web, `API_URL` et `NEXT_PUBLIC_API_URL` pointent vers l'API. Côté mobile, l'URL est passée au
 build avec `--dart-define=API_BASE_URL=...`.
@@ -157,7 +160,7 @@ cd mobile && flutter analyze && flutter test
 
 ## Hors périmètre de la version 1
 
-Carte des restaurants, OCR des étiquettes, saisie vocale, reconnaissance de photo d'assiette,
+Carte des restaurants, OCR des étiquettes, saisie vocale,
 notifications push système, espace d'administration `/admin`, mode hors ligne en écriture et thème
 sombre sur mobile. Ces sujets sont cadrés dans le cahier des charges pour des versions ultérieures.
 
