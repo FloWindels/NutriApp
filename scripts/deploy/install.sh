@@ -169,9 +169,10 @@ CRON_LINE="* * * * * cd ${ROOT_DIR}/backend && /usr/bin/php artisan schedule:run
 log "Vérifications"
 sleep 3
 API_CHECK="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/api/portions || echo 000)"
-WEB_CHECK="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/ || echo 000)"
+# « / » redirige vers « /login » (307) : on suit la redirection avant de juger.
+WEB_CHECK="$(curl -sL -o /dev/null -w '%{http_code}' http://127.0.0.1/ || echo 000)"
 echo "  API  /api/portions -> ${API_CHECK}"
-echo "  Site /             -> ${WEB_CHECK}"
+echo "  Site /  (-> /login) -> ${WEB_CHECK}"
 
 echo
 if [[ "$API_CHECK" == "200" && "$WEB_CHECK" == "200" ]]; then
