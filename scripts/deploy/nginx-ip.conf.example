@@ -5,6 +5,7 @@
 #
 #   port 80   : le site Next.js, y compris ses routes /api/** qui relaient vers Laravel
 #   port 8080 : l'API Laravel elle-même, pour l'application mobile
+#               (install.sh en choisit un autre si celui-ci est déjà pris)
 #
 # Le découpage est imposé par l'architecture du site : le navigateur n'appelle jamais Laravel
 # directement, il appelle les gestionnaires de routes Next sous /api/**, qui transmettent côté

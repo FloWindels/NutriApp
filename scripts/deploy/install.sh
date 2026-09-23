@@ -8,6 +8,8 @@
 #   DB_PASSWORD   mot de passe PostgreSQL ; généré et affiché s'il n'est pas fourni
 #   WEB_DOMAIN    domaine du site   (ex. mavioh.exemple.fr) ; sinon l'IP du serveur en HTTP
 #   API_DOMAIN    domaine de l'API  (ex. api.mavioh.exemple.fr)
+#   WEB_PORT      port interne du site Next   ; sinon le premier libre à partir de 3000
+#   API_PORT      port public de l'API Laravel ; sinon le premier libre à partir de 8080
 #   FRESH=1       vide la base et rejoue toutes les migrations (DONNÉES PERDUES)
 set -euo pipefail
 
@@ -28,6 +30,30 @@ die() { echo -e "[mavioh] ERREUR : $*" >&2; exit 1; }
 
 as_user() { sudo -u "$RUN_USER" -H "$@"; }
 
+# Un port est disponible s'il n'est écouté par personne, ou seulement par le service de
+# Mavi'oh lui-même — sans quoi une seconde exécution croirait ses propres ports occupés.
+port_available() {                       # $1 = port, $2 = processus toléré (facultatif)
+  command -v ss >/dev/null 2>&1 || return 0
+  local owner
+  owner="$(ss -ltnpH 2>/dev/null | awk -v p=":$1\$" '$4 ~ p {print $NF}' | head -1)"
+  [[ -z "$owner" ]] && return 0
+  [[ -n "${2:-}" && "$owner" == *"$2"* ]] && return 0
+  return 1
+}
+
+pick_port() {                            # $1 = port imposé ou vide, $2 = processus toléré, $3.. = candidats
+  local forced="$1" owned="$2"; shift 2
+  if [[ -n "$forced" ]]; then
+    port_available "$forced" "$owned" || die "Le port $forced est déjà utilisé par autre chose."
+    echo "$forced"; return
+  fi
+  local candidate
+  for candidate in "$@"; do
+    if port_available "$candidate" "$owned"; then echo "$candidate"; return; fi
+  done
+  die "Aucun port libre parmi : $*. Fixe-le toi-même (WEB_PORT=… ou API_PORT=…)."
+}
+
 # --- Vérifications préalables -----------------------------------------------
 for cmd in php composer node npm psql nginx systemctl python3 curl; do
   command -v "$cmd" >/dev/null 2>&1 || die "$cmd est absent. Lance d'abord scripts/deploy/setup-ubuntu.sh."
@@ -38,6 +64,11 @@ done
 PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
 FPM_SOCKET="/run/php/php${PHP_VERSION}-fpm.sock"
 [[ -S "$FPM_SOCKET" ]] || warn "Socket PHP-FPM $FPM_SOCKET absent ; il apparaîtra au démarrage du service."
+
+# Le site Next écoute en local ; seul Nginx est exposé. On libère le port avant de sonder,
+# sinon le service en cours passerait pour un occupant étranger.
+systemctl stop mavioh-web >/dev/null 2>&1 || true
+WEB_PORT="$(pick_port "${WEB_PORT:-}" node 3000 3001 3100 4000 4100)"
 
 # API_BASE   : adresse de Laravel utilisée côté serveur par les route handlers Next.
 # MOBILE_API : adresse de Laravel joignable depuis un téléphone, pour le build Flutter.
@@ -52,13 +83,14 @@ if [[ -n "$WEB_DOMAIN" ]]; then
 else
   PUBLIC_IP="$(hostname -I | awk '{print $1}')"
   [[ -n "$PUBLIC_IP" ]] || die "Impossible de déterminer l'adresse IP du serveur."
-  API_PORT="8080"
+  API_PORT="$(pick_port "${API_PORT:-}" nginx 8080 8090 8880 9080 9090)"
   APP_URL="http://${PUBLIC_IP}:${API_PORT}"
   FRONT_URL="http://${PUBLIC_IP}"
   API_BASE="http://127.0.0.1:${API_PORT}/api"
   MOBILE_API="http://${PUBLIC_IP}:${API_PORT}/api"
   log "Aucun domaine fourni : site sur http://${PUBLIC_IP}, API Laravel sur le port ${API_PORT}."
 fi
+log "Ports retenus : site ${WEB_PORT} (interne)${API_PORT:+, API ${API_PORT} (public)}"
 
 if [[ -z "${DB_PASSWORD:-}" ]]; then
   DB_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)"
@@ -146,7 +178,9 @@ chown -R www-data:www-data "$ROOT_DIR/web/.next"
 
 # --- 4. Service systemd -----------------------------------------------------
 log "Service mavioh-web"
-sed "s#^WorkingDirectory=.*#WorkingDirectory=${ROOT_DIR}/web#" \
+sed -e "s#^WorkingDirectory=.*#WorkingDirectory=${ROOT_DIR}/web#" \
+    -e "s#^Environment=PORT=.*#Environment=PORT=${WEB_PORT}#" \
+    -e "s#--port [0-9]\+#--port ${WEB_PORT}#" \
   "$ROOT_DIR/scripts/deploy/mavioh-web.service.example" > /etc/systemd/system/mavioh-web.service
 systemctl daemon-reload
 systemctl enable mavioh-web >/dev/null 2>&1 || true
@@ -159,14 +193,27 @@ if [[ -n "$WEB_DOMAIN" ]]; then
       -e "s#mavioh\.mondomaine\.fr#${WEB_DOMAIN}#g" \
       -e "s#/var/www/mavioh#${ROOT_DIR}#g" \
       -e "s#php8\.3-fpm\.sock#php${PHP_VERSION}-fpm.sock#g" \
+      -e "s#127\.0\.0\.1:3000#127.0.0.1:${WEB_PORT}#g" \
       "$ROOT_DIR/scripts/deploy/nginx.conf.example" > /etc/nginx/sites-available/mavioh
 else
   sed -e "s#/var/www/mavioh#${ROOT_DIR}#g" \
       -e "s#php8\.3-fpm\.sock#php${PHP_VERSION}-fpm.sock#g" \
+      -e "s#127\.0\.0\.1:3000#127.0.0.1:${WEB_PORT}#g" \
+      -e "s#listen 8080;#listen ${API_PORT};#" \
+      -e "s#listen \[::\]:8080;#listen [::]:${API_PORT};#" \
       "$ROOT_DIR/scripts/deploy/nginx-ip.conf.example" > /etc/nginx/sites-available/mavioh
 fi
 ln -sf /etc/nginx/sites-available/mavioh /etc/nginx/sites-enabled/mavioh
 rm -f /etc/nginx/sites-enabled/default
+# Un autre site peut déjà être le serveur par défaut : deux le seraient, Nginx refuserait.
+for site in /etc/nginx/sites-enabled/*; do
+  [[ -e "$site" && "$(basename "$site")" != "mavioh" ]] || continue
+  if grep -q 'default_server' "$site"; then
+    warn "$(basename "$site") est déjà le serveur Nginx par défaut ; Mavi'oh ne le sera pas."
+    sed -i 's/ default_server//g' /etc/nginx/sites-available/mavioh
+    break
+  fi
+done
 nginx -t
 systemctl reload nginx
 systemctl restart "php${PHP_VERSION}-fpm" || true

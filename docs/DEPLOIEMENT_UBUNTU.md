@@ -93,6 +93,11 @@ Il reste alors à demander les certificats : `sudo certbot --nginx -d mavioh.exe
 Autres variables : `DB_PASSWORD` pour imposer le mot de passe, `FRESH=1` pour vider la base et
 rejouer toutes les migrations — **toutes les données sont perdues**.
 
+Les ports sont choisis automatiquement si les habituels sont déjà pris par un autre service :
+le site cherche à partir de 3000, l'API à partir de 8080. `WEB_PORT` et `API_PORT` permettent de
+les imposer ; le script refuse alors un port occupé plutôt que d'en changer sans le dire. Les
+ports retenus sont annoncés au début et rappelés à la fin, avec la commande de build de l'APK.
+
 ## 3. Base de données PostgreSQL
 
 ```bash
