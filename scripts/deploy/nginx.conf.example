@@ -66,19 +66,11 @@ server {
 }
 
 # --- Variante : un seul domaine --------------------------------------------
-# Pour servir l'API sous https://mavioh.mondomaine.fr/api, ajouter dans le bloc
-# du site web, AVANT le "location /" :
+# Le navigateur n'appelle jamais Laravel directement : il appelle les gestionnaires de
+# routes Next sous /api/**, qui relaient côté serveur. Router /api vers Laravel dans le
+# bloc du site couperait donc le site de son propre relais.
 #
-#   location /api/ {
-#       root /var/www/mavioh/backend/public;
-#       try_files $uri /index.php?$query_string;
-#   }
-#   location ~ ^/index\.php$ {
-#       root /var/www/mavioh/backend/public;
-#       fastcgi_pass unix:/run/php/php8.3-fpm.sock;
-#       fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-#       fastcgi_read_timeout 120s;
-#       include fastcgi_params;
-#   }
-#
-# Dans ce cas, API_URL et NEXT_PUBLIC_API_URL valent https://mavioh.mondomaine.fr/api.
+# Avec un seul domaine, sers plutôt Laravel sur un port distinct : reprends le bloc « API »
+# ci-dessus en remplaçant « listen 80 » par « listen 8443 ssl », garde le même certificat,
+# et pointe API_URL sur http://127.0.0.1:8080/api (appel interne, jamais exposé).
+# L'application mobile, elle, vise https://mavioh.mondomaine.fr:8443/api.

@@ -244,10 +244,23 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Adapte alors les URL : `APP_URL` et `FRONTEND_URL` dans `backend/.env`, `API_URL` et
-`NEXT_PUBLIC_API_URL` dans `web/.env.local` (suivies de `npm run build`). Ce mode convient au
-réseau local et aux essais, pas à une mise en ligne publique : les mots de passe et les jetons
-circulent en clair.
+Cette configuration sert le site sur le port 80 et l'API Laravel sur le port 8080. Le découpage
+n'est pas arbitraire : **le navigateur n'appelle jamais Laravel directement**. Il appelle les
+gestionnaires de routes Next sous `/api/**`, qui relaient côté serveur (`web/src/lib/laravel-proxy.ts`).
+Router `/api` vers Laravel dans le bloc du site couperait donc le site de son propre relais — la
+connexion échouerait alors que l'API répond parfaitement.
+
+Les URL correspondantes, que `install.sh` écrit automatiquement :
+
+| Fichier | Variable | Valeur |
+|---|---|---|
+| `backend/.env` | `APP_URL` | `http://<ip>:8080` |
+| `backend/.env` | `FRONTEND_URL` | `http://<ip>` |
+| `web/.env.local` | `API_URL` | `http://127.0.0.1:8080/api` (appel interne) |
+| build Flutter | `API_BASE_URL` | `http://<ip>:8080/api` |
+
+Ce mode convient au réseau local et aux essais, pas à une mise en ligne publique : les mots de
+passe et les jetons circulent en clair.
 
 ### Pare-feu
 
@@ -368,6 +381,7 @@ La première commande doit renvoyer le catalogue des portions, la seconde un jet
 | 500 sur toutes les routes API | `tail -50 backend/storage/logs/laravel-*.log`, droits sur `storage/` |
 | 502 depuis Nginx | PHP-FPM ou le service `mavioh-web` est arrêté (`systemctl status`) |
 | Le site web ne joint pas l'API | `API_URL` dans `web/.env.local`, puis `npm run build` et redémarrage du service |
+| Le site tourne sans fin, alors que l'API répond | Nginx route `/api` vers Laravel au lieu du site : le navigateur passe par les routes `/api/**` de Next, qui relaient ensuite vers Laravel |
 | Le téléphone ne joint pas l'API | HTTPS valide et `API_BASE_URL` passé au build Flutter |
 | Séances IA absentes | `ANTHROPIC_API_KEY` vide : c'est le comportement prévu, les règles prennent le relais |
 | `nginx : command not found` après l'installation | le script a été interrompu avant : relance `sudo bash scripts/deploy/setup-ubuntu.sh`, il est idempotent |

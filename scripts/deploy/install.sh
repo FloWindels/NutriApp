@@ -39,18 +39,25 @@ PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
 FPM_SOCKET="/run/php/php${PHP_VERSION}-fpm.sock"
 [[ -S "$FPM_SOCKET" ]] || warn "Socket PHP-FPM $FPM_SOCKET absent ; il apparaîtra au démarrage du service."
 
+# API_BASE   : adresse de Laravel utilisée côté serveur par les route handlers Next.
+# MOBILE_API : adresse de Laravel joignable depuis un téléphone, pour le build Flutter.
+# Le navigateur, lui, n'appelle jamais Laravel : il passe par /api/** du site Next.
 if [[ -n "$WEB_DOMAIN" ]]; then
   API_DOMAIN="${API_DOMAIN:-$WEB_DOMAIN}"
   APP_URL="https://${API_DOMAIN}"
   FRONT_URL="https://${WEB_DOMAIN}"
   API_BASE="https://${API_DOMAIN}/api"
+  MOBILE_API="$API_BASE"
+  API_PORT=""
 else
   PUBLIC_IP="$(hostname -I | awk '{print $1}')"
   [[ -n "$PUBLIC_IP" ]] || die "Impossible de déterminer l'adresse IP du serveur."
-  APP_URL="http://${PUBLIC_IP}"
+  API_PORT="8080"
+  APP_URL="http://${PUBLIC_IP}:${API_PORT}"
   FRONT_URL="http://${PUBLIC_IP}"
-  API_BASE="http://${PUBLIC_IP}/api"
-  log "Aucun domaine fourni : le site sera servi en HTTP sur ${PUBLIC_IP}, l'API sous /api."
+  API_BASE="http://127.0.0.1:${API_PORT}/api"
+  MOBILE_API="http://${PUBLIC_IP}:${API_PORT}/api"
+  log "Aucun domaine fourni : site sur http://${PUBLIC_IP}, API Laravel sur le port ${API_PORT}."
 fi
 
 if [[ -z "${DB_PASSWORD:-}" ]]; then
@@ -127,7 +134,7 @@ chown -R www-data:www-data "$ROOT_DIR/backend/storage" "$ROOT_DIR/backend/bootst
 # --- 3. Site Next.js --------------------------------------------------------
 log "Web : configuration et construction"
 cd "$ROOT_DIR/web"
-printf 'API_URL=%s\nNEXT_PUBLIC_API_URL=%s\n' "$API_BASE" "$API_BASE" > .env.local
+printf 'API_URL=%s\nNEXT_PUBLIC_API_URL=%s\n' "$API_BASE" "$MOBILE_API" > .env.local
 as_user npm ci
 as_user npm run build
 chown -R www-data:www-data "$ROOT_DIR/web/.next"
@@ -168,14 +175,22 @@ CRON_LINE="* * * * * cd ${ROOT_DIR}/backend && /usr/bin/php artisan schedule:run
 # --- 7. Vérifications -------------------------------------------------------
 log "Vérifications"
 sleep 3
-API_CHECK="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/api/portions || echo 000)"
+if [[ -n "$API_PORT" ]]; then
+  API_CHECK="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${API_PORT}/api/portions" || echo 000)"
+else
+  API_CHECK="$(curl -s -o /dev/null -w '%{http_code}' "${API_BASE}/portions" || echo 000)"
+fi
 # « / » redirige vers « /login » (307) : on suit la redirection avant de juger.
 WEB_CHECK="$(curl -sL -o /dev/null -w '%{http_code}' http://127.0.0.1/ || echo 000)"
-echo "  API  /api/portions -> ${API_CHECK}"
-echo "  Site /  (-> /login) -> ${WEB_CHECK}"
+# Le relais du site vers Laravel : sans jeton, Laravel doit répondre 401 — preuve que la
+# chaîne navigateur -> Next -> Laravel est complète.
+BFF_CHECK="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/api/auth/me || echo 000)"
+echo "  API Laravel   /api/portions  -> ${API_CHECK}   (attendu 200)"
+echo "  Site          /  -> /login   -> ${WEB_CHECK}   (attendu 200)"
+echo "  Relais du site /api/auth/me  -> ${BFF_CHECK}   (attendu 401)"
 
 echo
-if [[ "$API_CHECK" == "200" && "$WEB_CHECK" == "200" ]]; then
+if [[ "$API_CHECK" == "200" && "$WEB_CHECK" == "200" && "$BFF_CHECK" == "401" ]]; then
   echo "[mavioh] Installation terminée. Ouvre ${FRONT_URL}"
 else
   warn "Une des deux vérifications a échoué. Pistes :"
@@ -189,6 +204,10 @@ if [[ "${GENERATED_PASSWORD:-}" == "oui" ]]; then
   echo "  Mot de passe PostgreSQL généré : ${DB_PASSWORD}"
   echo "  (déjà inscrit dans backend/.env ; note-le pour tes sauvegardes)"
 fi
+echo "  Site : ${FRONT_URL}"
+echo "  APK  : flutter build apk --release --dart-define=API_BASE_URL=${MOBILE_API}"
 if [[ -n "$WEB_DOMAIN" ]]; then
   echo "  HTTPS : sudo certbot --nginx -d ${WEB_DOMAIN} -d ${API_DOMAIN}"
+else
+  echo "  Le port ${API_PORT} ne sert qu'à l'application mobile ; laisse-le fermé si tu ne l'utilises pas."
 fi
