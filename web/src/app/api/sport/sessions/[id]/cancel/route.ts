@@ -1,9 +1,3 @@
-import type { NextRequest } from "next/server";
-import { proxyToLaravel } from "@/lib/laravel-proxy";
+import { proxyParamRoute } from "@/lib/laravel-proxy";
 
-type Ctx = { params: Promise<{ id: string }> };
-
-export async function POST(request: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  return proxyToLaravel(request, `/sport/sessions/${encodeURIComponent(id)}/cancel`, { method: "POST", label: "sport" });
-}
+export const POST = proxyParamRoute<{ id: string }>(({ id }) => `/sport/sessions/${id}/cancel`, { label: "sport" });

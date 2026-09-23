@@ -1,6 +1,3 @@
-import type { NextRequest } from "next/server";
-import { proxyToLaravel } from "@/lib/laravel-proxy";
+import { proxyRoute } from "@/lib/laravel-proxy";
 
-export async function PUT(request: NextRequest) {
-  return proxyToLaravel(request, "/household/members/me", { method: "PUT", label: "du foyer" });
-}
+export const PUT = proxyRoute("/household/members/me", { label: "du foyer" });

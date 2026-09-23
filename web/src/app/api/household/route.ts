@@ -1,18 +1,6 @@
-import type { NextRequest } from "next/server";
-import { proxyToLaravel } from "@/lib/laravel-proxy";
+import { proxyRoute } from "@/lib/laravel-proxy";
 
-export async function GET(request: NextRequest) {
-  return proxyToLaravel(request, "/household", { method: "GET", label: "du foyer" });
-}
-
-export async function POST(request: NextRequest) {
-  return proxyToLaravel(request, "/household", { method: "POST", label: "du foyer" });
-}
-
-export async function PUT(request: NextRequest) {
-  return proxyToLaravel(request, "/household", { method: "PUT", label: "du foyer" });
-}
-
-export async function DELETE(request: NextRequest) {
-  return proxyToLaravel(request, "/household", { method: "DELETE", label: "du foyer" });
-}
+export const GET = proxyRoute("/household", { label: "du foyer" });
+export const POST = proxyRoute("/household", { label: "du foyer" });
+export const PUT = proxyRoute("/household", { label: "du foyer" });
+export const DELETE = proxyRoute("/household", { label: "du foyer" });

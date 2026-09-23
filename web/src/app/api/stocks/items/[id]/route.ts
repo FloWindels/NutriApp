@@ -1,14 +1,4 @@
-import type { NextRequest } from "next/server";
-import { proxyToLaravel } from "@/lib/laravel-proxy";
+import { proxyParamRoute } from "@/lib/laravel-proxy";
 
-type Ctx = { params: Promise<{ id: string }> };
-
-export async function PUT(request: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  return proxyToLaravel(request, `/stocks/items/${encodeURIComponent(id)}`, { method: "PUT", label: "stock" });
-}
-
-export async function DELETE(request: NextRequest, { params }: Ctx) {
-  const { id } = await params;
-  return proxyToLaravel(request, `/stocks/items/${encodeURIComponent(id)}`, { method: "DELETE", label: "stock" });
-}
+export const PUT = proxyParamRoute<{ id: string }>(({ id }) => `/stocks/items/${id}`, { label: "stock" });
+export const DELETE = proxyParamRoute<{ id: string }>(({ id }) => `/stocks/items/${id}`, { label: "stock" });

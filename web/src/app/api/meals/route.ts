@@ -1,10 +1,4 @@
-import type { NextRequest } from "next/server";
-import { proxyQuery, proxyToLaravel } from "@/lib/laravel-proxy";
+import { proxyRoute } from "@/lib/laravel-proxy";
 
-export async function GET(request: NextRequest) {
-  return proxyToLaravel(request, "/meals", { method: "GET", label: "repas", query: proxyQuery(request) });
-}
-
-export async function POST(request: NextRequest) {
-  return proxyToLaravel(request, "/meals", { method: "POST", label: "repas" });
-}
+export const GET = proxyRoute("/meals", { label: "repas", forwardQuery: true });
+export const POST = proxyRoute("/meals", { label: "repas" });

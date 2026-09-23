@@ -144,3 +144,51 @@ export async function proxyToLaravel(
     clearTimeout(timeoutId);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Fabriques de route handlers                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Les quatre-vingts route handlers du site sont des passe-plats : même import, même corps,
+ * seul le chemin Laravel change. Ces deux fabriques rendent le handler directement exportable.
+ *
+ * Le chemin reste écrit en clair dans chaque fichier, jamais dans une table centrale : une
+ * faute de frappe doit rester visible à l'endroit où elle est commise.
+ *
+ *   export const GET = proxyRoute("/dashboard", { label: "du tableau de bord", forwardQuery: true });
+ *   export const PUT = proxyParamRoute(({ id }) => `/foods/${id}`, { label: "aliments" });
+ */
+
+export type RouteOptions = Omit<ProxyOptions, "query"> & {
+  /** Recopie la chaîne de requête entrante vers Laravel. */
+  forwardQuery?: boolean;
+};
+
+function withQuery(request: NextRequest, options: RouteOptions): ProxyOptions {
+  const { forwardQuery, ...rest } = options;
+  return forwardQuery ? { ...rest, query: proxyQuery(request) } : rest;
+}
+
+/** Chemin fixe. */
+export function proxyRoute(path: string, options: RouteOptions = {}) {
+  return (request: NextRequest) => proxyToLaravel(request, path, withQuery(request, options));
+}
+
+/**
+ * Chemin construit à partir des segments dynamiques, déjà échappés — l'appelant n'a donc
+ * jamais à penser à `encodeURIComponent`, oubli facile et silencieux.
+ */
+export function proxyParamRoute<P extends Record<string, string>>(
+  buildPath: (params: P) => string,
+  options: RouteOptions = {},
+) {
+  return async (request: NextRequest, context: { params: Promise<P> }) => {
+    const params = await context.params;
+    const escaped = Object.fromEntries(
+      Object.entries(params).map(([key, value]) => [key, encodeURIComponent(String(value))]),
+    ) as P;
+
+    return proxyToLaravel(request, buildPath(escaped), withQuery(request, options));
+  };
+}

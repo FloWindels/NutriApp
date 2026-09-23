@@ -1,6 +1,3 @@
-import type { NextRequest } from "next/server";
-import { proxyToLaravel } from "@/lib/laravel-proxy";
+import { proxyRoute } from "@/lib/laravel-proxy";
 
-export async function POST(request: NextRequest) {
-  return proxyToLaravel(request, "/forgot-password", { method: "POST", label: "d’authentification" });
-}
+export const POST = proxyRoute("/forgot-password", { label: "d’authentification" });

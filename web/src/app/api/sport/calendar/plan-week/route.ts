@@ -1,6 +1,3 @@
-import type { NextRequest } from "next/server";
-import { proxyToLaravel } from "@/lib/laravel-proxy";
+import { proxyRoute } from "@/lib/laravel-proxy";
 
-export async function POST(request: NextRequest) {
-  return proxyToLaravel(request, "/sport/calendar/plan-week", { method: "POST", label: "sport", timeoutMs: 120000 });
-}
+export const POST = proxyRoute("/sport/calendar/plan-week", { label: "sport", timeoutMs: 120000 });
