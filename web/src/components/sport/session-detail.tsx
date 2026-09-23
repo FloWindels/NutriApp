@@ -23,7 +23,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { Pill } from "@/components/ui/pill";
-import { SectionHeader } from "@/components/ui/section-header";
+import { SectionHeader, Overline } from "@/components/ui/section-header";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { getErrorMessage } from "@/lib/api-client";
@@ -248,9 +248,9 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
 
       {BLOCK_ORDER.filter((key) => blocks[key]?.length).map((key) => (
         <Card key={key} padding="md">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <Overline className="mb-3">
             {BLOCK_LABELS[key]}
-          </p>
+          </Overline>
           <ul className="space-y-2">
             {blocks[key]!.map((exercise) => (
               <ExerciseRow

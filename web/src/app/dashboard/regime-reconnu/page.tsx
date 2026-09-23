@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Modal } from "@/components/ui/modal";
 import { Pill } from "@/components/ui/pill";
-import { SectionHeader } from "@/components/ui/section-header";
+import { SectionHeader, Overline } from "@/components/ui/section-header";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { apiGet, getErrorMessage } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -98,9 +98,9 @@ export default function DietPage() {
       {diet ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card padding="md">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <Overline className="mb-2">
               Principes
-            </p>
+            </Overline>
             <ul className="space-y-1.5 text-sm text-slate-700">
               {diet.principes.map((line) => (
                 <li key={line} className="flex gap-2">
@@ -113,9 +113,9 @@ export default function DietPage() {
             </ul>
             {diet.conseils.length > 0 ? (
               <>
-                <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <Overline className="mb-2 mt-4">
                   Conseils
-                </p>
+                </Overline>
                 <ul className="space-y-1.5 text-sm text-slate-600">
                   {diet.conseils.map((line) => (
                     <li key={line}>{line}</li>
@@ -128,9 +128,9 @@ export default function DietPage() {
           <Card padding="md">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <Overline className="mb-2">
                   À privilégier
-                </p>
+                </Overline>
                 <div className="flex flex-wrap gap-1.5">
                   {diet.aliments_conseilles.map((item) => (
                     <Pill key={item} tone="emerald">
@@ -140,9 +140,9 @@ export default function DietPage() {
                 </div>
               </div>
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <Overline className="mb-2">
                   À limiter
-                </p>
+                </Overline>
                 <div className="flex flex-wrap gap-1.5">
                   {diet.aliments_a_limiter.map((item) => (
                     <Pill key={item} tone="amber">
@@ -222,9 +222,9 @@ export default function DietPage() {
 
               {evaluation.ecarts.length > 0 ? (
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  <Overline className="mb-2">
                     Écarts relevés
-                  </p>
+                  </Overline>
                   <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
                     {evaluation.ecarts.map((ecart, index) => (
                       <li key={`${ecart.date}-${index}`} className="px-4 py-2.5 text-sm">
@@ -248,9 +248,9 @@ export default function DietPage() {
 
               {evaluation.regimes_proches.length > 0 ? (
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  <Overline className="mb-2">
                     Ton alimentation ressemble aussi à
-                  </p>
+                  </Overline>
                   <div className="flex flex-wrap gap-2">
                     {evaluation.regimes_proches.map((proche) => (
                       <ProcheChip key={proche.key} nom={proche.nom} score={proche.score_pct} raisons={proche.raisons} />
@@ -264,9 +264,9 @@ export default function DietPage() {
       ) : null}
 
       <Card padding="md">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <Overline className="mb-3">
           Tous les régimes pris en charge
-        </p>
+        </Overline>
         {catalogQuery.isPending ? <SkeletonCard /> : null}
         {catalogQuery.isError ? (
           <ErrorState
@@ -348,9 +348,9 @@ function DietDetailModal({ diet, onClose }: { diet: DietSummary | null; onClose:
           ) : null}
 
           <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <Overline className="mb-1.5">
               Principes
-            </p>
+            </Overline>
             <ul className="space-y-1 text-slate-700">
               {diet.principes.map((line) => (
                 <li key={line}>— {line}</li>
@@ -361,9 +361,9 @@ function DietDetailModal({ diet, onClose }: { diet: DietSummary | null; onClose:
           {full ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <Overline className="mb-1.5">
                   À privilégier
-                </p>
+                </Overline>
                 <div className="flex flex-wrap gap-1.5">
                   {full.aliments_conseilles.map((item) => (
                     <Pill key={item} tone="emerald">
@@ -373,9 +373,9 @@ function DietDetailModal({ diet, onClose }: { diet: DietSummary | null; onClose:
                 </div>
               </div>
               <div>
-                <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <Overline className="mb-1.5">
                   À limiter
-                </p>
+                </Overline>
                 <div className="flex flex-wrap gap-1.5">
                   {full.aliments_a_limiter.map((item) => (
                     <Pill key={item} tone="amber">
@@ -389,9 +389,9 @@ function DietDetailModal({ diet, onClose }: { diet: DietSummary | null; onClose:
 
           {full && full.conseils.length > 0 ? (
             <div>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              <Overline className="mb-1.5">
                 Conseils
-              </p>
+              </Overline>
               <ul className="space-y-1 text-slate-600">
                 {full.conseils.map((line) => (
                   <li key={line}>{line}</li>

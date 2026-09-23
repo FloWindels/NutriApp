@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field, SelectField } from "@/components/ui/field";
-import { SectionHeader } from "@/components/ui/section-header";
+import { SectionHeader, Overline } from "@/components/ui/section-header";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { apiDelete, apiGet, apiPost, apiPut, getErrorMessage } from "@/lib/api-client";
@@ -223,9 +223,9 @@ export default function ShoppingListPage() {
 
       {pending.length > 0 ? (
         <Card padding="md">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <Overline className="mb-2">
             À acheter
-          </p>
+          </Overline>
           <ul className="space-y-2">
             {pending.map((item) => (
               <ShoppingRow
@@ -242,9 +242,9 @@ export default function ShoppingListPage() {
 
       {checked.length > 0 ? (
         <Card padding="md">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <Overline className="mb-2">
             Déjà pris
-          </p>
+          </Overline>
           <ul className="space-y-2">
             {checked.map((item) => (
               <ShoppingRow

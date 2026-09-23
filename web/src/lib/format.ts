@@ -22,6 +22,15 @@ export function toNumber(value: unknown, fallback = 0): number {
 }
 
 /** `formatNumber(1234.5)` → « 1 234,5 » */
+/**
+ * Valeur d’un champ numérique éditable : entier tel quel, décimal à deux chiffres avec la
+ * virgule française, vide quand il n’y a rien à afficher.
+ */
+export function formatDecimalInput(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "";
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2))).replace(".", ",");
+}
+
 export function formatNumber(value: unknown, decimals: 0 | 1 | 2 = 1): string {
   const n = toNumber(value);
   if (decimals === 0) return intFormatter.format(Math.round(n));

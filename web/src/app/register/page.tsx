@@ -10,7 +10,7 @@ import { AuthShell } from "@/components/auth-shell";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
-import { apiPost, getErrorMessage, isApiError } from "@/lib/api-client";
+import { applyFieldErrors, apiPost, getErrorMessage, isApiError } from "@/lib/api-client";
 import { BRAND, messages } from "@/lib/messages";
 import { setSession } from "@/lib/session";
 import type { AuthResponse, RegisterInput } from "@/lib/types/api";
@@ -54,15 +54,9 @@ export default function RegisterPage() {
       router.replace("/dashboard");
     } catch (error) {
       if (isApiError(error) && error.isValidation) {
-        let mapped = false;
-        for (const field of FIELDS) {
-          const message = error.fieldError(field);
-          if (message) {
-            setError(field, { message });
-            mapped = true;
-          }
+        if (!applyFieldErrors(error, setError, FIELDS)) {
+          setGlobalError(error.message || messages.registerFailed);
         }
-        if (!mapped) setGlobalError(error.message || messages.registerFailed);
         return;
       }
       setGlobalError(getErrorMessage(error, messages.registerFailed));

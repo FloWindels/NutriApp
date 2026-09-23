@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
-import { formatGrams, formatKcal, formatNumber, parseDecimal, roundToStep } from "@/lib/format";
+import { formatGrams, formatKcal, formatNumber, parseDecimal, roundToStep, formatDecimalInput } from "@/lib/format";
 import type { Portion, RecipePerServing, Unit } from "@/lib/types/api";
 import {
   normalizeUnit,
@@ -43,10 +43,7 @@ const VISIBLE_UNITS = 4;
 const QUICK_MASS = [50, 100, 150, 200];
 const QUICK_PORTIONS = [0.5, 1, 2];
 
-function toInputText(value: number): string {
-  if (!Number.isFinite(value)) return "";
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2))).replace(".", ",");
-}
+const toInputText = formatDecimalInput;
 
 /**
  * Web version of the mobile `QuantityUnitPicker` (brief §16.1): unit chips, −/+ stepper,

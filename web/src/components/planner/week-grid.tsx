@@ -1,5 +1,6 @@
 "use client";
 
+import { Overline } from "@/components/ui/section-header";
 import { PlanTile } from "@/components/planner/plan-tile";
 import { cn } from "@/lib/cn";
 import { capitalize, formatDay, formatKcal, todayIso } from "@/lib/format";
@@ -166,9 +167,9 @@ export function WeekGrid({ planner, onAdd, onLog, onEdit, onDelete }: WeekGridPr
                 const plans = day.slots?.[mealType] ?? [];
                 return (
                   <div key={`${day.date}-${mealType}`}>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    <Overline className="mb-2">
                       {labelFor(MEAL_TYPE_LABELS, mealType)}
-                    </p>
+                    </Overline>
                     <div className="space-y-2">
                       {plans.map((plan) => (
                         <PlanTile key={plan.id} plan={plan} onLog={onLog} onEdit={onEdit} onDelete={onDelete} />

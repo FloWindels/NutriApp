@@ -10,7 +10,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Pill } from "@/components/ui/pill";
-import { SectionHeader } from "@/components/ui/section-header";
+import { SectionHeader, Overline } from "@/components/ui/section-header";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useMe } from "@/hooks/use-me";
@@ -321,9 +321,9 @@ function HouseholdView({
       ) : null}
 
       <Card padding="md">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <Overline className="mb-3">
           Membres
-        </p>
+        </Overline>
         <ul className="divide-y divide-slate-100">
           {household.members.map((member) => (
             <li key={member.user_id} className="flex flex-wrap items-center gap-3 py-3">

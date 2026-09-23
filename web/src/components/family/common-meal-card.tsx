@@ -1,5 +1,6 @@
 "use client";
 
+import { Overline } from "@/components/ui/section-header";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Banner } from "@/components/ui/banner";
@@ -159,9 +160,9 @@ export function CommonMealCard({ household, onCreated, onSuccess }: CommonMealCa
 
       {preview ? (
         <div className="mt-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <Overline className="mb-2">
             {preview.recipe.title}
-          </p>
+          </Overline>
           <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
             {preview.members.map((member) => {
               const value = portions[String(member.user_id)] ?? member.portions;

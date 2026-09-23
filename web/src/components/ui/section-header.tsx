@@ -54,3 +54,27 @@ export function SectionHeader({
 }
 
 export default SectionHeader;
+
+/**
+ * Intertitre discret au-dessus d'un bloc (« Nutrition », « Cette semaine »).
+ *
+ * Écrit vingt et une fois à l'identique dans les pages, à la marge près : celle-ci reste à
+ * l'appelant via `className`, puisque c'est la seule chose qui variait réellement.
+ * `as` existe parce que quatre de ces intertitres sont des `h3` ou des `th` — changer leur
+ * balise casserait la hiérarchie des titres ou le tableau du planificateur.
+ */
+export function Overline({
+  as: Tag = "p",
+  className,
+  children,
+}: {
+  as?: "p" | "h2" | "h3" | "h4" | "th" | "span";
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tag className={cn("text-xs font-semibold uppercase tracking-[0.14em] text-slate-500", className)}>
+      {children}
+    </Tag>
+  );
+}

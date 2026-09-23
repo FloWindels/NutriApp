@@ -1,5 +1,6 @@
 "use client";
 
+import { Overline } from "@/components/ui/section-header";
 import { useMemo, useState } from "react";
 import { SessionRow } from "@/components/sport/shared";
 import { useSportSessions } from "@/components/sport/sport-api";
@@ -77,9 +78,9 @@ export function SessionsTab() {
 
       {groups.map(([date, sessions]) => (
         <Card key={date} padding="md">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+          <Overline className="mb-2">
             {formatRelativeDay(date)}
-          </p>
+          </Overline>
           <ul className="space-y-2">
             {sessions.map((session) => (
               <li key={session.id}>

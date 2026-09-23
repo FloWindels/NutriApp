@@ -10,7 +10,7 @@ import { AuthShell } from "@/components/auth-shell";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
-import { apiPost, getErrorMessage, isApiError } from "@/lib/api-client";
+import { applyFieldErrors, apiPost, getErrorMessage, isApiError } from "@/lib/api-client";
 import { messages } from "@/lib/messages";
 import { setSession } from "@/lib/session";
 import type { AuthResponse } from "@/lib/types/api";
@@ -56,15 +56,9 @@ function LoginForm() {
       router.replace("/dashboard");
     } catch (error) {
       if (isApiError(error) && error.isValidation) {
-        let mapped = false;
-        for (const field of ["email", "password"] as const) {
-          const message = error.fieldError(field);
-          if (message) {
-            setError(field, { message });
-            mapped = true;
-          }
+        if (!applyFieldErrors(error, setError, ["email", "password"] as const)) {
+          setGlobalError(error.message || messages.loginFailed);
         }
-        if (!mapped) setGlobalError(error.message || messages.loginFailed);
         return;
       }
       setGlobalError(getErrorMessage(error, messages.loginFailed));

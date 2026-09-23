@@ -1,3 +1,4 @@
+import { formatDecimalInput } from "@/lib/format";
 import { z } from "zod";
 import { parseDecimal } from "@/lib/format";
 
@@ -28,10 +29,7 @@ export function numOrNull(value: string | null | undefined): number | null {
 }
 
 /** Number → text for a controlled input (comma decimal separator, no trailing zeros). */
-export function toText(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "";
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2))).replace(".", ",");
-}
+export const toText = formatDecimalInput;
 
 /** Empty string → null (optional text fields). */
 export function textOrNull(value: string | null | undefined): string | null {

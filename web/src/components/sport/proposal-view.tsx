@@ -1,5 +1,6 @@
 "use client";
 
+import { Overline } from "@/components/ui/section-header";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -175,9 +176,9 @@ export function ProposalView({
 
         {proposal.explication.length > 0 ? (
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <Overline>
               Pourquoi cette séance
-            </p>
+            </Overline>
             <ul className="mt-2 list-disc space-y-1 pl-4 text-sm leading-6 text-slate-600">
               {proposal.explication.map((line) => (
                 <li key={line}>{line}</li>

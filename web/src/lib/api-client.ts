@@ -197,3 +197,30 @@ export const apiPut = <T>(path: string, json?: unknown, init?: ApiFetchInit) =>
   apiFetch<T>(path, { ...init, method: "PUT", json: json ?? {} });
 export const apiDelete = <T>(path: string, json?: unknown, init?: ApiFetchInit) =>
   apiFetch<T>(path, { ...init, method: "DELETE", ...(json !== undefined ? { json } : {}) });
+
+/**
+ * Reporte les erreurs de validation du serveur sur les champs d'un formulaire.
+ *
+ * Renvoie `true` dès qu'au moins un champ a reçu son message : l'appelant sait alors qu'il n'a
+ * pas besoin d'afficher une bannière globale. Cette boucle était recopiée à l'identique dans
+ * une douzaine de formulaires.
+ */
+export function applyFieldErrors<F extends string>(
+  error: unknown,
+  setError: (field: F, options: { message: string }) => void,
+  fields: readonly F[],
+): boolean {
+  if (!isApiError(error)) return false;
+
+  let applied = false;
+
+  for (const field of fields) {
+    const message = error.fieldError(field);
+    if (message) {
+      setError(field, { message });
+      applied = true;
+    }
+  }
+
+  return applied;
+}
