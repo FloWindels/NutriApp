@@ -190,6 +190,10 @@ export default function ProfilPage() {
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  // Le serveur exige l'accord santé à la première sauvegarde seulement ; ensuite il est acquis.
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [consentError, setConsentError] = useState("");
 
   const weeklyGaugePercent = useMemo(() => {
     if (!calculation) {
@@ -227,6 +231,7 @@ export default function ProfilPage() {
           return;
         }
 
+        setConsentGiven(Boolean(data.consentement_sante));
         setForm({
           nom: data.nom ?? "",
           sexe: data.sexe ?? "",
@@ -318,11 +323,17 @@ export default function ProfilPage() {
   async function handleSave() {
     setErrorMessage("");
     setSuccessMessage("");
+    setConsentError("");
 
     const errors = validateForm(form);
     setValidationErrors(errors);
 
     if (errors.length > 0) {
+      return;
+    }
+
+    if (!consentGiven && !consentChecked) {
+      setConsentError("Ton accord est nécessaire pour calculer des objectifs à partir de tes données de santé.");
       return;
     }
 
@@ -353,6 +364,7 @@ export default function ProfilPage() {
         proteines_cibles: computed.proteinsGrams,
         glucides_cibles: computed.carbsGrams,
         lipides_cibles: computed.fatsGrams,
+        ...(consentGiven ? {} : { consentement_sante: true }),
       };
 
       const response = await fetch("/api/profile", {
@@ -371,6 +383,7 @@ export default function ProfilPage() {
       }
 
       setCalculation(computed);
+      setConsentGiven(true);
       setSuccessMessage("Profil et calcul nutritionnel enregistres avec succes.");
     } catch (error: unknown) {
       setErrorMessage(getApiErrorMessage(error, "Impossible d'enregistrer le profil."));
@@ -480,6 +493,28 @@ export default function ProfilPage() {
                 {getFieldError("regimeAlimentaire") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("regimeAlimentaire")}</p> : null}
               </div>
             </div>
+
+            {!loading && !consentGiven ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <label className="flex items-start gap-3 text-sm text-amber-900">
+                  <input
+                    type="checkbox"
+                    checked={consentChecked}
+                    onChange={(e) => {
+                      setConsentChecked(e.target.checked);
+                      if (e.target.checked) setConsentError("");
+                    }}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 accent-emerald-700"
+                  />
+                  <span>
+                    J’autorise Mavi’oh à utiliser mon âge, mon sexe, ma taille et mon poids pour calculer
+                    mes objectifs nutritionnels. Ces données restent sur ce serveur ; tu peux les
+                    exporter ou supprimer ton compte depuis les paramètres.
+                  </span>
+                </label>
+                {consentError ? <p className="mt-2 text-xs text-rose-600">{consentError}</p> : null}
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={handleCalculate} className="rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-800">
