@@ -204,6 +204,27 @@ sudo certbot --nginx -d mavioh.mondomaine.fr -d api.mavioh.mondomaine.fr
 
 Certbot ajoute les certificats et la redirection HTTP vers HTTPS. Le renouvellement est automatique.
 
+### Sans nom de domaine
+
+`mavioh.mondomaine.fr` est un exemple : remplace-le partout par un domaine que tu possèdes, dont
+l'enregistrement `A` pointe vers l'IP publique du serveur. Sans cela, Certbot échoue avec
+`NXDOMAIN` — Let's Encrypt vérifie le domaine depuis Internet avant d'émettre le certificat.
+
+Tant qu'aucun domaine n'est prêt, sers l'application en HTTP sur l'adresse IP, site sur `/` et API
+sous `/api` :
+
+```bash
+sudo cp scripts/deploy/nginx-ip.conf.example /etc/nginx/sites-available/mavioh
+sudo ln -sf /etc/nginx/sites-available/mavioh /etc/nginx/sites-enabled/mavioh
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Adapte alors les URL : `APP_URL` et `FRONTEND_URL` dans `backend/.env`, `API_URL` et
+`NEXT_PUBLIC_API_URL` dans `web/.env.local` (suivies de `npm run build`). Ce mode convient au
+réseau local et aux essais, pas à une mise en ligne publique : les mots de passe et les jetons
+circulent en clair.
+
 ### Pare-feu
 
 ```bash

@@ -1,0 +1,65 @@
+# Mavi'oh — configuration Nginx sans nom de domaine.
+#
+# À utiliser tant qu'aucun domaine ne pointe vers le serveur : tout est servi en HTTP sur
+# l'adresse IP de la machine, le site sur « / » et l'API sous « /api ». Aucun certificat
+# n'est possible dans ce mode ; réserve-le à un usage en réseau local ou à des essais.
+#
+#   sudo cp scripts/deploy/nginx-ip.conf.example /etc/nginx/sites-available/mavioh
+#   sudo ln -sf /etc/nginx/sites-available/mavioh /etc/nginx/sites-enabled/mavioh
+#   sudo rm -f /etc/nginx/sites-enabled/default
+#   sudo nginx -t && sudo systemctl reload nginx
+#
+# Puis, dans backend/.env :   APP_URL=http://<ip>        FRONTEND_URL=http://<ip>
+# et dans web/.env.local :    API_URL=http://<ip>/api    NEXT_PUBLIC_API_URL=http://<ip>/api
+# (reconstruire le site après modification : npm run build && sudo systemctl restart mavioh-web)
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    client_max_body_size 12M;          # photos de recettes en base64
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # --- API Laravel --------------------------------------------------------
+    location /api/ {
+        root /var/www/mavioh/backend/public;
+        try_files $uri /index.php?$query_string;
+    }
+
+    location = /index.php {
+        root /var/www/mavioh/backend/public;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_read_timeout 120s;      # la génération IA d'une séance peut durer ~60 s
+        include fastcgi_params;
+    }
+
+    location /storage/ {
+        root /var/www/mavioh/backend/public;
+        try_files $uri =404;
+    }
+
+    # --- Site web Next.js ---------------------------------------------------
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 130s;        # les appels IA transitent par les route handlers Next
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+
+    access_log /var/log/nginx/mavioh.access.log;
+    error_log  /var/log/nginx/mavioh.error.log;
+}
