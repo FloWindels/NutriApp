@@ -69,6 +69,30 @@ php -v && composer --version && node -v && psql --version && nginx -v
 
 ---
 
+## 2 bis. Installation en une commande
+
+Les sections 3 à 6 détaillent chaque étape. Si tu veux simplement que tout soit installé, le script
+`scripts/deploy/install.sh` les enchaîne : base PostgreSQL, `.env` de production, dépendances,
+migrations et catalogue, construction du site, service systemd, Nginx, tâche planifiée, puis
+vérification que l'API et le site répondent. Il est idempotent.
+
+```bash
+cd /var/www/mavioh
+sudo bash scripts/deploy/install.sh
+```
+
+Sans variable, il sert l'application en HTTP sur l'adresse IP du serveur et génère un mot de passe
+PostgreSQL qu'il affiche en fin d'exécution. Avec un domaine :
+
+```bash
+sudo WEB_DOMAIN=mavioh.exemple.fr API_DOMAIN=api.mavioh.exemple.fr bash scripts/deploy/install.sh
+```
+
+Il reste alors à demander les certificats : `sudo certbot --nginx -d mavioh.exemple.fr -d api.mavioh.exemple.fr`.
+
+Autres variables : `DB_PASSWORD` pour imposer le mot de passe, `FRESH=1` pour vider la base et
+rejouer toutes les migrations — **toutes les données sont perdues**.
+
 ## 3. Base de données PostgreSQL
 
 ```bash
@@ -340,3 +364,24 @@ La première commande doit renvoyer le catalogue des portions, la seconde un jet
 | `php8.3-gd` refuse de s'installer | normal sur Ubuntu 22.04, sans effet sur Mavi'oh : poursuis le déploiement |
 | `Deprecation Notice: Using ${var}` pendant `composer install` | c'est le Composer du paquet Ubuntu (2.2.6) : installe l'officiel, `curl -sS https://getcomposer.org/installer \| sudo php -- --install-dir=/usr/local/bin --filename=composer` |
 | `Could not open input file: artisan` | tu n'es pas dans `backend/` : `cd /var/www/mavioh/backend` |
+
+---
+
+## 11. Repartir de zéro
+
+Pour reprendre une installation ratée sans traîner d'état intermédiaire. **Ces commandes effacent
+les données** : ne les utilise que sur un serveur d'essai.
+
+```bash
+sudo systemctl disable --now mavioh-web 2>/dev/null; sudo rm -f /etc/systemd/system/mavioh-web.service
+sudo systemctl daemon-reload
+sudo rm -f /etc/nginx/sites-enabled/mavioh /etc/nginx/sites-available/mavioh
+sudo systemctl reload nginx 2>/dev/null || true
+sudo crontab -u www-data -l 2>/dev/null | grep -v 'artisan schedule:run' | sudo crontab -u www-data -
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS mavioh;"
+sudo -u postgres psql -c "DROP ROLE IF EXISTS mavioh;"
+sudo rm -rf /var/www/mavioh
+```
+
+Puis reprends à la section 2 : clone dans `/var/www/mavioh`, `setup-ubuntu.sh`, `install.sh`. Les
+paquets système (PHP, PostgreSQL, Node, Nginx) restent installés, il n'y a pas lieu de les retirer.

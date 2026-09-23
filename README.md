@@ -150,7 +150,7 @@ cd mobile && flutter analyze && flutter test
 | `docs/REGLES_NUTRITION.md` | formules, bornes de sécurité, macros, régimes |
 | `docs/REGLES_SPORT.md` | MET, calories, génération des séances, coach IA |
 | `docs/RECETTE.md` | scénarios de recette et critères d'acceptation |
-| `docs/DEPLOIEMENT_UBUNTU.md` | installation sur un serveur Ubuntu |
+| `docs/DEPLOIEMENT_UBUNTU.md` | installation sur un serveur Ubuntu, en une commande ou pas à pas |
 | `docs/DECISIONS.md` | choix techniques et périmètre de la version 1 |
 
 ---
