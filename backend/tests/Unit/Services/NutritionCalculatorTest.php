@@ -232,6 +232,64 @@ class NutritionCalculatorTest extends TestCase
         $this->assertMacrosCoherentes($b);
     }
 
+    /**
+     * Les deux planchers constants demandés par le propriétaire : 1 500 kcal pour un homme,
+     * 1 200 pour une femme. Les autres tests exercent le cas où le métabolisme de base domine ;
+     * ces vecteurs (personnes âgées, légères et sédentaires) sont ceux où la constante borne.
+     *
+     * @return array<string, array{0: string, 1: int, 2: int, 3: int}>
+     */
+    public static function vecteursPlancherConstant(): array
+    {
+        return [
+            'homme : 1 500 kcal' => ['homme', 158, 52, 1500],
+            'femme : 1 200 kcal' => ['femme', 150, 45, 1200],
+        ];
+    }
+
+    /**
+     * @dataProvider vecteursPlancherConstant
+     */
+    public function test_le_plancher_constant_borne_quand_le_metabolisme_de_base_est_plus_bas(
+        string $sexe,
+        int $taille,
+        int $poids,
+        int $plancherAttendu,
+    ): void {
+        $b = $this->calc->compute([
+            'sexe' => $sexe, 'age' => 70, 'taille' => $taille, 'poids' => $poids,
+            'poids_souhaite_kg' => $poids - 4, 'delai_objectif_jours' => 120,
+            'niveau_activite' => 'sedentaire', 'objectif_type' => 'perdre',
+            'regime_alimentaire' => 'omnivore', 'situation_particuliere' => 'aucune',
+            'today' => '2026-09-16',
+        ]);
+
+        $this->assertLessThan($plancherAttendu, $b['bmr'], 'Le vecteur doit avoir un BMR sous la constante.');
+        $this->assertSame($plancherAttendu, $b['plancher_kcal']);
+        $this->assertGreaterThanOrEqual($plancherAttendu, $b['calories_recommandees']);
+        $this->assertSame(0, $b['calories_recommandees'] % 10, 'La cible reste un multiple de 10.');
+        $this->assertTrue(
+            collect($b['avertissements'])->contains(fn ($m) => str_contains($m, 'seuil minimal de sécurité')),
+        );
+        $this->assertMacrosCoherentes($b);
+    }
+
+    public function test_une_cible_manuelle_sous_le_plancher_constant_est_refusee(): void
+    {
+        $profil = [
+            'sexe' => 'homme', 'age' => 70, 'taille' => 158, 'poids' => 52,
+            'poids_souhaite_kg' => 48, 'delai_objectif_jours' => 120,
+            'niveau_activite' => 'sedentaire', 'objectif_type' => 'perdre',
+            'regime_alimentaire' => 'omnivore', 'situation_particuliere' => 'aucune',
+            'today' => '2026-09-16',
+        ];
+
+        $errors = $this->calc->validateOverrides($profil, ['calories_cibles' => 1400]);
+
+        $this->assertArrayHasKey('calories_cibles', $errors);
+        $this->assertStringContainsString('1 500 kcal', $errors['calories_cibles']);
+    }
+
     public function test_delai_tres_long_porte_l_ajustement_au_minimum(): void
     {
         $b = $this->calc->compute([

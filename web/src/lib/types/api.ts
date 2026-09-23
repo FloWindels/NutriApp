@@ -347,6 +347,8 @@ export type Profile = {
   besoins: Besoins | null;
   cibles_effectives: CiblesEffectives | null;
   has_profile: boolean;
+  /** Accord santé déjà donné : le serveur ne l'exige qu'à la première sauvegarde. */
+  consentement_sante: boolean;
   imc: number | null;
   imc_cible: number | null;
 };

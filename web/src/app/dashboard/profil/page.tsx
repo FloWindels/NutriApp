@@ -1,609 +1,601 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { getApiErrorMessage } from "@/lib/api";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ApiError, apiGet, apiPost, apiPut, getErrorMessage } from "@/lib/api-client";
+import { queryKeys } from "@/lib/query-keys";
+import { formatKcal, formatNumber } from "@/lib/format";
+import {
+  NIVEAU_ACTIVITE_HELP,
+  NIVEAU_ACTIVITE_LABELS,
+  OBJECTIF_TYPE_LABELS,
+  REGIMES_ADULTES_SEULEMENT,
+  REGIME_LABELS,
+  SEXE_LABELS,
+  SITUATION_LABELS,
+} from "@/lib/vocab";
+import type {
+  Besoins,
+  DataEnvelope,
+  NiveauActivite,
+  ObjectifType,
+  Profile,
+  ProfileInput,
+  ProfilePreview,
+  Regime,
+  Sexe,
+  SituationParticuliere,
+} from "@/lib/types/api";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
+import { Field, SelectField } from "@/components/ui/field";
+import { ProgressBar } from "@/components/ui/progress-bar";
+import { SectionHeader } from "@/components/ui/section-header";
+import { SkeletonCard } from "@/components/ui/skeleton";
+import { StatCard } from "@/components/ui/stat-card";
+import { useToast } from "@/components/ui/toast";
 
-type ProfileForm = {
+/**
+ * Profil nutritionnel.
+ *
+ * Aucun calcul n'est fait ici : toutes les valeurs viennent du serveur, seul détenteur des
+ * règles (Mifflin-St Jeor ou Schofield selon l'âge, facteurs d'activité, bornes d'ajustement,
+ * planchers de sécurité — 1 500 kcal pour un homme, 1 200 pour une femme, et jamais sous le
+ * métabolisme de base en perte de poids — macros par régime). GET /profile fournit l'état
+ * enregistré, POST /profile/preview simule une modification sans rien écrire.
+ */
+
+type FormState = {
   nom: string;
-  sexe: string;
+  sexe: "" | Sexe;
   age: string;
-  tailleCm: string;
-  poidsActuelKg: string;
-  poidsSouhaiteKg: string;
+  taille: string;
+  poids: string;
+  poidsSouhaite: string;
   delaiJours: string;
-  niveauActivite: string;
-  objectifType: string;
-  regimeAlimentaire: string;
+  niveauActivite: "" | NiveauActivite;
+  objectifType: "" | ObjectifType;
+  regime: "" | Regime;
+  situation: SituationParticuliere;
+  consentementParental: boolean;
 };
 
-type CalculationResult = {
-  bmr: number;
-  maintenanceCalories: number;
-  targetCalories: number;
-  proteinsGrams: number;
-  fatsGrams: number;
-  carbsGrams: number;
-  adjustmentPerDay: number;
-  weeklyVariationKg: number;
-  variationKg: number;
-  floorCalories: number;
-  warning: string | null;
-  summary: string;
-  explanation: string;
-};
-
-type ValidationError = {
-  field: keyof ProfileForm;
-  message: string;
-};
-
-const initialForm: ProfileForm = {
+const EMPTY_FORM: FormState = {
   nom: "",
   sexe: "",
   age: "",
-  tailleCm: "",
-  poidsActuelKg: "",
-  poidsSouhaiteKg: "",
+  taille: "",
+  poids: "",
+  poidsSouhaite: "",
   delaiJours: "",
   niveauActivite: "",
   objectifType: "",
-  regimeAlimentaire: "",
+  regime: "",
+  situation: "aucune",
+  consentementParental: false,
 };
 
-const activityFactors: Record<string, number> = {
-  sedentaire: 1.2,
-  leger: 1.375,
-  modere: 1.55,
-  eleve: 1.725,
-  tres_eleve: 1.9,
-};
-
-function toNumber(value: string) {
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-function validateForm(form: ProfileForm): ValidationError[] {
-  const errors: ValidationError[] = [];
-
-  if (!form.nom.trim()) {
-    errors.push({ field: "nom", message: "Le nom est obligatoire." });
-  }
-
-  if (!form.sexe) {
-    errors.push({ field: "sexe", message: "Le sexe est obligatoire." });
-  }
-
-  const age = toNumber(form.age);
-  if (!age || age < 12 || age > 120) {
-    errors.push({ field: "age", message: "L'age doit etre compris entre 12 et 120 ans." });
-  }
-
-  const taille = toNumber(form.tailleCm);
-  if (!taille || taille < 100 || taille > 250) {
-    errors.push({ field: "tailleCm", message: "La taille doit etre comprise entre 100 et 250 cm." });
-  }
-
-  const poidsActuel = toNumber(form.poidsActuelKg);
-  if (!poidsActuel || poidsActuel < 20 || poidsActuel > 500) {
-    errors.push({ field: "poidsActuelKg", message: "Le poids actuel doit etre compris entre 20 et 500 kg." });
-  }
-
-  const poidsSouhaite = toNumber(form.poidsSouhaiteKg);
-  if (!poidsSouhaite || poidsSouhaite < 20 || poidsSouhaite > 500) {
-    errors.push({ field: "poidsSouhaiteKg", message: "Le poids souhaite doit etre compris entre 20 et 500 kg." });
-  }
-
-  const delai = toNumber(form.delaiJours);
-  if (!delai || delai < 1 || delai > 2000) {
-    errors.push({ field: "delaiJours", message: "Le nombre de jours doit etre compris entre 1 et 2000." });
-  }
-
-  if (!form.niveauActivite || !(form.niveauActivite in activityFactors)) {
-    errors.push({ field: "niveauActivite", message: "Le niveau d'activite est obligatoire." });
-  }
-
-  if (!form.objectifType || !["perdre", "maintenir", "prendre"].includes(form.objectifType)) {
-    errors.push({ field: "objectifType", message: "L'objectif est obligatoire." });
-  }
-
-  if (!form.regimeAlimentaire) {
-    errors.push({ field: "regimeAlimentaire", message: "Le regime alimentaire est obligatoire." });
-  }
-
-  return errors;
-}
-
-function calculateResult(form: ProfileForm): CalculationResult {
-  const age = Number(form.age);
-  const taille = Number(form.tailleCm);
-  const poidsActuel = Number(form.poidsActuelKg);
-  const poidsSouhaite = Number(form.poidsSouhaiteKg);
-  const delaiJours = Number(form.delaiJours);
-
-  const bmr =
-    form.sexe === "homme"
-      ? 10 * poidsActuel + 6.25 * taille - 5 * age + 5
-      : 10 * poidsActuel + 6.25 * taille - 5 * age - 161;
-
-  const maintenanceCalories = bmr * activityFactors[form.niveauActivite];
-  const variationKg = poidsSouhaite - poidsActuel;
-  const adjustmentPerDay = (variationKg * 7700) / delaiJours;
-
-  const floorCalories = form.sexe === "homme" ? 1400 : 1200;
-  const maxDailyChange = 1100;
-
-  let warning: string | null = null;
-
-  const adjustmentClamped = Math.max(-maxDailyChange, Math.min(adjustmentPerDay, maxDailyChange));
-  if (adjustmentPerDay !== adjustmentClamped) {
-    warning = "Objectif tres agressif: l'ajustement calorique a ete limite pour proteger ta sante.";
-  }
-
-  const weeklyVariationKg = (variationKg / delaiJours) * 7;
-  if (!warning && Math.abs(weeklyVariationKg) > 1) {
-    warning = "Objectif potentiellement irrealiste: la variation hebdomadaire depasse 1 kg/semaine.";
-  }
-
-  let targetCalories = maintenanceCalories + adjustmentClamped;
-  if (targetCalories < floorCalories) {
-    targetCalories = floorCalories;
-    warning = "Les calories cibles ont ete remontees au seuil de securite minimal.";
-  }
-
-  const proteinsGrams = Math.round(poidsActuel * 1.6);
-  const fatsGrams = Math.round((targetCalories * 0.28) / 9);
-  const carbsGrams = Math.max(Math.round((targetCalories - proteinsGrams * 4 - fatsGrams * 9) / 4), 0);
-
-  const summary =
-    form.objectifType === "maintenir"
-      ? "Objectif maintien: stabiliser ton poids actuel."
-      : form.objectifType === "perdre"
-        ? `Objectif perte: passer de ${poidsActuel.toFixed(1)} kg a ${poidsSouhaite.toFixed(1)} kg en ${delaiJours} jours.`
-        : `Objectif prise: passer de ${poidsActuel.toFixed(1)} kg a ${poidsSouhaite.toFixed(1)} kg en ${delaiJours} jours.`;
-
-  const explanation =
-    "Le calcul combine ton metabolisme de base, ton activite physique et ton delai cible. Les macros sont ensuite reparties automatiquement: proteines fixes, lipides a 28% des calories, glucides sur le reste.";
-
+function fromProfile(profile: Profile): FormState {
   return {
-    bmr: Math.round(bmr),
-    maintenanceCalories: Math.round(maintenanceCalories),
-    targetCalories: Math.round(targetCalories),
-    proteinsGrams,
-    fatsGrams,
-    carbsGrams,
-    adjustmentPerDay: Math.round(adjustmentClamped),
-    weeklyVariationKg: Number(weeklyVariationKg.toFixed(2)),
-    variationKg: Number(variationKg.toFixed(2)),
-    floorCalories,
-    warning,
-    summary,
-    explanation,
+    nom: profile.nom ?? "",
+    sexe: profile.sexe ?? "",
+    age: profile.age != null ? String(profile.age) : "",
+    taille: profile.taille != null ? String(profile.taille) : "",
+    poids: profile.poids != null ? String(profile.poids) : "",
+    poidsSouhaite: profile.poids_souhaite_kg != null ? String(profile.poids_souhaite_kg) : "",
+    delaiJours: profile.delai_objectif_jours != null ? String(profile.delai_objectif_jours) : "",
+    niveauActivite: profile.niveau_activite ?? "",
+    objectifType: profile.objectif_type ?? "",
+    regime: profile.regime_alimentaire ?? "",
+    situation: profile.situation_particuliere ?? "aucune",
+    consentementParental: profile.consentement_parental ?? false,
   };
 }
 
+/** Corps envoyé au serveur. `objectif_calcul_auto` rend la main au calcul serveur. */
+function toInput(form: FormState): ProfileInput {
+  const age = Number(form.age);
+  const mineur = Number.isFinite(age) && age < 18;
+  const maintien = form.objectifType === "maintenir";
+
+  return {
+    nom: form.nom.trim(),
+    sexe: form.sexe as Sexe,
+    age,
+    taille: Number(form.taille),
+    poids: Number(form.poids),
+    poids_souhaite_kg: maintien || form.poidsSouhaite === "" ? null : Number(form.poidsSouhaite),
+    delai_objectif_jours: maintien || form.delaiJours === "" ? null : Number(form.delaiJours),
+    niveau_activite: form.niveauActivite as NiveauActivite,
+    objectif_type: form.objectifType as ObjectifType,
+    regime_alimentaire: form.regime as Regime,
+    situation_particuliere: form.situation,
+    ...(mineur ? { consentement_parental: form.consentementParental } : {}),
+    objectif_calcul_auto: true,
+  };
+}
+
+const REQUIRED: Array<{ champ: keyof FormState; libelle: string }> = [
+  { champ: "nom", libelle: "Renseigne ton nom." },
+  { champ: "sexe", libelle: "Choisis ton sexe." },
+  { champ: "age", libelle: "Renseigne ton âge." },
+  { champ: "taille", libelle: "Renseigne ta taille." },
+  { champ: "poids", libelle: "Renseigne ton poids." },
+  { champ: "niveauActivite", libelle: "Choisis ton niveau d’activité." },
+  { champ: "objectifType", libelle: "Choisis ton objectif." },
+  { champ: "regime", libelle: "Choisis ton régime alimentaire." },
+];
+
+/** Contrôle minimal, pour éviter un aller-retour inutile. Le serveur reste l'autorité. */
+function champsManquants(form: FormState): Partial<Record<keyof FormState, string>> {
+  const erreurs: Partial<Record<keyof FormState, string>> = {};
+  for (const { champ, libelle } of REQUIRED) {
+    if (String(form[champ]).trim() === "") erreurs[champ] = libelle;
+  }
+  if (form.objectifType !== "" && form.objectifType !== "maintenir") {
+    if (form.poidsSouhaite.trim() === "") erreurs.poidsSouhaite = "Renseigne ton poids souhaité.";
+    if (form.delaiJours.trim() === "") erreurs.delaiJours = "Renseigne ton délai en jours.";
+  }
+  return erreurs;
+}
+
 export default function ProfilPage() {
-  const [form, setForm] = useState<ProfileForm>(initialForm);
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [calculation, setCalculation] = useState<CalculationResult | null>(null);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  // Le serveur exige l'accord santé à la première sauvegarde seulement ; ensuite il est acquis.
-  const [consentGiven, setConsentGiven] = useState(false);
-  const [consentChecked, setConsentChecked] = useState(false);
-  const [consentError, setConsentError] = useState("");
+  const queryClient = useQueryClient();
+  const toast = useToast();
 
-  const weeklyGaugePercent = useMemo(() => {
-    if (!calculation) {
-      return 0;
-    }
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [hydrateDepuis, setHydrateDepuis] = useState<string | null>(null);
+  const [simulation, setSimulation] = useState<ProfileInput | null>(null);
+  const [erreursLocales, setErreursLocales] = useState<Partial<Record<keyof FormState, string>>>({});
+  const [consentementSante, setConsentementSante] = useState(false);
+  const [erreurGlobale, setErreurGlobale] = useState<string | null>(null);
 
-    const value = Math.min(Math.abs(calculation.weeklyVariationKg), 1.2);
-    return Math.round((value / 1.2) * 100);
-  }, [calculation]);
+  const profileQuery = useQuery({
+    queryKey: queryKeys.profile,
+    queryFn: () => apiGet<Profile>("/profile"),
+  });
+  const profile = profileQuery.data ?? null;
 
-  useEffect(() => {
-    let isMounted = true;
+  // Hydratation du formulaire pendant le rendu : React 19 interdit setState dans un effet.
+  const cleProfil = profile ? JSON.stringify(fromProfile(profile)) : null;
+  if (cleProfil !== null && hydrateDepuis === null) {
+    setHydrateDepuis(cleProfil);
+    if (profile?.has_profile) setForm(fromProfile(profile));
+  }
 
-    async function loadProfile() {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setLoading(false);
-        return;
+  const previewQuery = useQuery({
+    queryKey: queryKeys.profilePreview(simulation ?? undefined),
+    queryFn: () => apiPost<DataEnvelope<ProfilePreview>>("/profile/preview", simulation),
+    enabled: simulation !== null,
+  });
+
+  // Le serveur est la seule source des chiffres : la simulation quand elle existe, sinon
+  // les besoins déjà calculés et renvoyés par GET /profile.
+  const besoins: Besoins | null = previewQuery.data?.data.besoins ?? profile?.besoins ?? null;
+  const consentementDonne = profile?.consentement_sante ?? false;
+  const age = Number(form.age);
+  const mineurJeune = Number.isFinite(age) && age > 0 && age < 15;
+  const maintien = form.objectifType === "maintenir";
+
+  const save = useMutation({
+    mutationFn: (input: ProfileInput) => apiPut<Profile>("/profile", input),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.profile, data);
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["meals"] });
+      setErreursLocales({});
+      setErreurGlobale(null);
+      toast.success("Profil enregistré.", "Tes objectifs ont été recalculés.");
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && Object.keys(error.fieldErrors).length > 0) {
+        setErreursLocales(traduireErreursServeur(error));
       }
+      setErreurGlobale(getErrorMessage(error, "Impossible d’enregistrer le profil."));
+    },
+  });
 
-      try {
-        const response = await fetch("/api/profile", {
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error("Profil non charge");
-        }
-
-        const data = await response.json();
-        if (!isMounted) {
-          return;
-        }
-
-        setConsentGiven(Boolean(data.consentement_sante));
-        setForm({
-          nom: data.nom ?? "",
-          sexe: data.sexe ?? "",
-          age: data.age != null ? String(data.age) : "",
-          tailleCm: data.taille != null ? String(data.taille) : "",
-          poidsActuelKg: data.poids != null ? String(data.poids) : "",
-          poidsSouhaiteKg: data.poids_souhaite_kg != null ? String(data.poids_souhaite_kg) : "",
-          delaiJours: data.delai_objectif_jours != null ? String(data.delai_objectif_jours) : "",
-          niveauActivite: data.niveau_activite ?? "",
-          objectifType: data.objectif_type ?? "",
-          regimeAlimentaire: data.regime_alimentaire ?? "",
-        });
-
-        if (
-          data.sexe &&
-          data.age != null &&
-          data.taille != null &&
-          data.poids != null &&
-          data.poids_souhaite_kg != null &&
-          data.delai_objectif_jours != null &&
-          data.niveau_activite &&
-          data.objectif_type &&
-          data.regime_alimentaire
-        ) {
-          setCalculation(
-            calculateResult({
-              nom: data.nom ?? "",
-              sexe: data.sexe,
-              age: String(data.age),
-              tailleCm: String(data.taille),
-              poidsActuelKg: String(data.poids),
-              poidsSouhaiteKg: String(data.poids_souhaite_kg),
-              delaiJours: String(data.delai_objectif_jours),
-              niveauActivite: data.niveau_activite,
-              objectifType: data.objectif_type,
-              regimeAlimentaire: data.regime_alimentaire,
-            })
-          );
-        }
-      } catch {
-        if (isMounted) {
-          setErrorMessage("Impossible de charger le profil enregistre.");
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadProfile();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  function setField(field: keyof ProfileForm, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+  function setChamp<K extends keyof FormState>(champ: K, valeur: FormState[K]) {
+    setForm((precedent) => ({ ...precedent, [champ]: valeur }));
+    setErreursLocales((precedent) => ({ ...precedent, [champ]: undefined }));
   }
 
-  function getFieldError(field: keyof ProfileForm) {
-    return validationErrors.find((error) => error.field === field)?.message ?? "";
+  function simuler() {
+    setErreurGlobale(null);
+    const erreurs = champsManquants(form);
+    setErreursLocales(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+    setSimulation(toInput(form));
   }
 
-  function handleCalculate() {
-    setErrorMessage("");
-    setSuccessMessage("");
+  function reinitialiser() {
+    setForm(profile?.has_profile ? fromProfile(profile) : EMPTY_FORM);
+    setErreursLocales({});
+    setSimulation(null);
+    setErreurGlobale(null);
+  }
 
-    const errors = validateForm(form);
-    setValidationErrors(errors);
-
-    if (errors.length > 0) {
-      setCalculation(null);
+  function enregistrer() {
+    setErreurGlobale(null);
+    const erreurs = champsManquants(form);
+    setErreursLocales(erreurs);
+    if (Object.keys(erreurs).length > 0) return;
+    if (!consentementDonne && !consentementSante) {
+      setErreurGlobale(
+        "Ton accord est nécessaire pour calculer des objectifs à partir de tes données de santé.",
+      );
       return;
     }
-
-    setCalculation(calculateResult(form));
+    const input = toInput(form);
+    setSimulation(input);
+    save.mutate(consentementDonne ? input : { ...input, consentement_sante: true });
   }
 
-  function handleReset() {
-    setForm(initialForm);
-    setValidationErrors([]);
-    setCalculation(null);
-    setErrorMessage("");
-    setSuccessMessage("");
+  if (profileQuery.isPending) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-4">
+        <SkeletonCard lines={6} />
+        <SkeletonCard lines={4} />
+      </div>
+    );
   }
 
-  async function handleSave() {
-    setErrorMessage("");
-    setSuccessMessage("");
-    setConsentError("");
-
-    const errors = validateForm(form);
-    setValidationErrors(errors);
-
-    if (errors.length > 0) {
-      return;
-    }
-
-    if (!consentGiven && !consentChecked) {
-      setConsentError("Ton accord est nécessaire pour calculer des objectifs à partir de tes données de santé.");
-      return;
-    }
-
-    const computed = calculation ?? calculateResult(form);
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      setErrorMessage("Session invalide. Reconnecte-toi.");
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const body = {
-        nom: form.nom,
-        sexe: form.sexe,
-        age: Number(form.age),
-        taille: Number(form.tailleCm),
-        poids: Number(form.poidsActuelKg),
-        poids_souhaite_kg: Number(form.poidsSouhaiteKg),
-        delai_objectif_jours: Number(form.delaiJours),
-        niveau_activite: form.niveauActivite,
-        objectif_type: form.objectifType,
-        objectif: form.objectifType,
-        regime_alimentaire: form.regimeAlimentaire,
-        calories_cibles: computed.targetCalories,
-        proteines_cibles: computed.proteinsGrams,
-        glucides_cibles: computed.carbsGrams,
-        lipides_cibles: computed.fatsGrams,
-        ...(consentGiven ? {} : { consentement_sante: true }),
-      };
-
-      const response = await fetch("/api/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      const payload = await response.json();
-      if (!response.ok) {
-        throw { response: { data: payload } };
-      }
-
-      setCalculation(computed);
-      setConsentGiven(true);
-      setSuccessMessage("Profil et calcul nutritionnel enregistres avec succes.");
-    } catch (error: unknown) {
-      setErrorMessage(getApiErrorMessage(error, "Impossible d'enregistrer le profil."));
-    } finally {
-      setSaving(false);
-    }
+  if (profileQuery.isError) {
+    return (
+      <ErrorState
+        title="Profil indisponible"
+        message={getErrorMessage(profileQuery.error, "Impossible de charger ton profil.")}
+        onRetry={() => profileQuery.refetch()}
+        retrying={profileQuery.isFetching}
+      />
+    );
   }
+
+  const erreurPreview =
+    previewQuery.isError && simulation !== null
+      ? getErrorMessage(previewQuery.error, "Le calcul n’a pas abouti.")
+      : null;
 
   return (
-    <>
-      <section className="mx-auto max-w-6xl rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)] sm:p-7">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Calculateur nutritionnel</h1>
-          <p className="mt-2 text-sm text-slate-600">
-            Renseigne ton profil, calcule tes cibles, puis sauvegarde les resultats.
-          </p>
-          {loading ? <p className="mt-2 text-xs text-slate-500">Chargement du profil...</p> : null}
-        </div>
+    <div className="mx-auto max-w-6xl space-y-5">
+      <SectionHeader
+        eyebrow="Nutrition"
+        level="page"
+        title="Mon profil"
+        subtitle="Tes objectifs sont calculés par Mavi’oh à partir de ces informations, puis vérifiés par des bornes de sécurité."
+      />
 
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-4 rounded-[1.5rem] border border-emerald-100 bg-emerald-50/50 p-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Nom</label>
-                <input value={form.nom} onChange={(e) => setField("nom", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5" />
-                {getFieldError("nom") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("nom")}</p> : null}
-              </div>
+      <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+        <Card tone="emerald" padding="md" className="space-y-4">
+          <CardHeader title="Mes informations" subtitle="Modifie, simule, puis enregistre." />
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Sexe</label>
-                <select value={form.sexe} onChange={(e) => setField("sexe", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <option value="">Selectionner</option>
-                  <option value="homme">Homme</option>
-                  <option value="femme">Femme</option>
-                </select>
-                {getFieldError("sexe") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("sexe")}</p> : null}
-              </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Nom"
+              required
+              value={form.nom}
+              onChange={(e) => setChamp("nom", e.target.value)}
+              error={erreursLocales.nom}
+            />
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Age</label>
-                <input type="number" value={form.age} onChange={(e) => setField("age", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5" />
-                {getFieldError("age") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("age")}</p> : null}
-              </div>
+            <SelectField
+              label="Sexe"
+              required
+              value={form.sexe}
+              onChange={(e) => setChamp("sexe", e.target.value as Sexe)}
+              error={erreursLocales.sexe}
+            >
+              <option value="">Sélectionner</option>
+              {Object.entries(SEXE_LABELS).map(([valeur, libelle]) => (
+                <option key={valeur} value={valeur}>
+                  {libelle}
+                </option>
+              ))}
+            </SelectField>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Taille (cm)</label>
-                <input type="number" value={form.tailleCm} onChange={(e) => setField("tailleCm", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5" />
-                {getFieldError("tailleCm") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("tailleCm")}</p> : null}
-              </div>
+            <Field
+              label="Âge"
+              type="number"
+              inputMode="numeric"
+              required
+              value={form.age}
+              onChange={(e) => setChamp("age", e.target.value)}
+              error={erreursLocales.age}
+            />
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Poids actuel (kg)</label>
-                <input type="number" step="0.1" value={form.poidsActuelKg} onChange={(e) => setField("poidsActuelKg", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5" />
-                {getFieldError("poidsActuelKg") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("poidsActuelKg")}</p> : null}
-              </div>
+            <Field
+              label="Taille (cm)"
+              type="number"
+              inputMode="numeric"
+              required
+              value={form.taille}
+              onChange={(e) => setChamp("taille", e.target.value)}
+              error={erreursLocales.taille}
+            />
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Poids souhaite (kg)</label>
-                <input type="number" step="0.1" value={form.poidsSouhaiteKg} onChange={(e) => setField("poidsSouhaiteKg", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5" />
-                {getFieldError("poidsSouhaiteKg") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("poidsSouhaiteKg")}</p> : null}
-              </div>
+            <Field
+              label="Poids actuel (kg)"
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              required
+              value={form.poids}
+              onChange={(e) => setChamp("poids", e.target.value)}
+              error={erreursLocales.poids}
+            />
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Nombre de jours</label>
-                <input type="number" value={form.delaiJours} onChange={(e) => setField("delaiJours", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5" />
-                {getFieldError("delaiJours") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("delaiJours")}</p> : null}
-              </div>
+            <SelectField
+              label="Objectif"
+              required
+              value={form.objectifType}
+              onChange={(e) => setChamp("objectifType", e.target.value as ObjectifType)}
+              error={erreursLocales.objectifType}
+            >
+              <option value="">Sélectionner</option>
+              {Object.entries(OBJECTIF_TYPE_LABELS).map(([valeur, libelle]) => (
+                <option key={valeur} value={valeur}>
+                  {libelle}
+                </option>
+              ))}
+            </SelectField>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Niveau d’activité</label>
-                <select value={form.niveauActivite} onChange={(e) => setField("niveauActivite", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <option value="">Selectionner</option>
-                  <option value="sedentaire">Sedentaire</option>
-                  <option value="leger">Leger</option>
-                  <option value="modere">Modere</option>
-                  <option value="eleve">Eleve</option>
-                  <option value="tres_eleve">Tres eleve</option>
-                </select>
-                {getFieldError("niveauActivite") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("niveauActivite")}</p> : null}
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Objectif</label>
-                <select value={form.objectifType} onChange={(e) => setField("objectifType", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <option value="">Selectionner</option>
-                  <option value="perdre">Perdre du poids</option>
-                  <option value="maintenir">Maintenir</option>
-                  <option value="prendre">Prendre du poids</option>
-                </select>
-                {getFieldError("objectifType") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("objectifType")}</p> : null}
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Regime alimentaire</label>
-                <select value={form.regimeAlimentaire} onChange={(e) => setField("regimeAlimentaire", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-                  <option value="">Selectionner</option>
-                  <option value="omnivore">Omnivore</option>
-                  <option value="vegetarien">Vegetarien</option>
-                  <option value="vegan">Vegan</option>
-                  <option value="keto">Keto</option>
-                  <option value="low_carb">Low carb</option>
-                  <option value="mediterraneen">Mediterraneen</option>
-                  <option value="halal">Halal</option>
-                  <option value="sans_gluten">Sans gluten</option>
-                  <option value="autre">Autre</option>
-                </select>
-                {getFieldError("regimeAlimentaire") ? <p className="mt-1 text-xs text-rose-600">{getFieldError("regimeAlimentaire")}</p> : null}
-              </div>
-            </div>
-
-            {!loading && !consentGiven ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                <label className="flex items-start gap-3 text-sm text-amber-900">
-                  <input
-                    type="checkbox"
-                    checked={consentChecked}
-                    onChange={(e) => {
-                      setConsentChecked(e.target.checked);
-                      if (e.target.checked) setConsentError("");
-                    }}
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 accent-emerald-700"
-                  />
-                  <span>
-                    J’autorise Mavi’oh à utiliser mon âge, mon sexe, ma taille et mon poids pour calculer
-                    mes objectifs nutritionnels. Ces données restent sur ce serveur ; tu peux les
-                    exporter ou supprimer ton compte depuis les paramètres.
-                  </span>
-                </label>
-                {consentError ? <p className="mt-2 text-xs text-rose-600">{consentError}</p> : null}
-              </div>
+            {!maintien ? (
+              <>
+                <Field
+                  label="Poids souhaité (kg)"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  value={form.poidsSouhaite}
+                  onChange={(e) => setChamp("poidsSouhaite", e.target.value)}
+                  error={erreursLocales.poidsSouhaite}
+                />
+                <Field
+                  label="Délai (jours)"
+                  type="number"
+                  inputMode="numeric"
+                  value={form.delaiJours}
+                  onChange={(e) => setChamp("delaiJours", e.target.value)}
+                  error={erreursLocales.delaiJours}
+                  hint="Minimum retenu par le calcul : 28 jours."
+                />
+              </>
             ) : null}
 
-            <div className="flex flex-wrap gap-3">
-              <button type="button" onClick={handleCalculate} className="rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-800">
-                Calculer
-              </button>
-              <button type="button" onClick={handleReset} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
-                Reinitialiser
-              </button>
-              <button type="button" onClick={handleSave} disabled={saving} className="rounded-xl border border-lime-300 bg-lime-100 px-5 py-2.5 text-sm font-medium text-lime-900 transition hover:bg-lime-200 disabled:opacity-60">
-                {saving ? "Enregistrement..." : "Enregistrer"}
-              </button>
-            </div>
+            <SelectField
+              label="Niveau d’activité"
+              required
+              value={form.niveauActivite}
+              onChange={(e) => setChamp("niveauActivite", e.target.value as NiveauActivite)}
+              error={erreursLocales.niveauActivite}
+              hint={
+                form.niveauActivite !== "" ? NIVEAU_ACTIVITE_HELP[form.niveauActivite] : undefined
+              }
+            >
+              <option value="">Sélectionner</option>
+              {Object.entries(NIVEAU_ACTIVITE_LABELS).map(([valeur, libelle]) => (
+                <option key={valeur} value={valeur}>
+                  {libelle}
+                </option>
+              ))}
+            </SelectField>
 
-            {errorMessage ? <p className="text-sm text-rose-600">{errorMessage}</p> : null}
-            {successMessage ? <p className="text-sm text-emerald-700">{successMessage}</p> : null}
+            <SelectField
+              label="Régime alimentaire"
+              required
+              value={form.regime}
+              onChange={(e) => setChamp("regime", e.target.value as Regime)}
+              error={erreursLocales.regime}
+            >
+              <option value="">Sélectionner</option>
+              {Object.entries(REGIME_LABELS).map(([valeur, libelle]) => (
+                <option
+                  key={valeur}
+                  value={valeur}
+                  disabled={
+                    Number.isFinite(age) &&
+                    age > 0 &&
+                    age < 18 &&
+                    REGIMES_ADULTES_SEULEMENT.includes(valeur as Regime)
+                  }
+                >
+                  {libelle}
+                </option>
+              ))}
+            </SelectField>
+
+            <SelectField
+              label="Situation particulière"
+              value={form.situation}
+              onChange={(e) => setChamp("situation", e.target.value as SituationParticuliere)}
+              error={erreursLocales.situation}
+              hint="Grossesse, allaitement ou suivi médical imposent le maintien du poids."
+            >
+              {Object.entries(SITUATION_LABELS).map(([valeur, libelle]) => (
+                <option key={valeur} value={valeur}>
+                  {libelle}
+                </option>
+              ))}
+            </SelectField>
           </div>
 
-          <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-            <p className="text-sm font-semibold text-slate-900">Resultat nutritionnel</p>
-
-            {!calculation ? (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                Clique sur « Calculer » pour obtenir ton plan.
-              </div>
-            ) : (
-              <div className="mt-4 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-emerald-50 px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.12em] text-emerald-700">Metabolisme de base</p>
-                    <p className="mt-1 text-2xl font-semibold text-emerald-900">{calculation.bmr} kcal</p>
-                  </div>
-                  <div className="rounded-2xl bg-lime-50 px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.12em] text-lime-700">Calories maintien</p>
-                    <p className="mt-1 text-2xl font-semibold text-lime-900">{calculation.maintenanceCalories} kcal</p>
-                  </div>
-                  <div className="rounded-2xl bg-slate-950 px-4 py-3 text-white sm:col-span-2">
-                    <p className="text-xs uppercase tracking-[0.12em] text-slate-300">Calories cibles</p>
-                    <p className="mt-1 text-3xl font-semibold">{calculation.targetCalories} kcal / jour</p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-200 px-4 py-3">
-                    <p className="text-xs text-slate-500">Proteines</p>
-                    <p className="mt-1 text-xl font-semibold text-slate-900">{calculation.proteinsGrams} g</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 px-4 py-3">
-                    <p className="text-xs text-slate-500">Lipides</p>
-                    <p className="mt-1 text-xl font-semibold text-slate-900">{calculation.fatsGrams} g</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 px-4 py-3">
-                    <p className="text-xs text-slate-500">Glucides</p>
-                    <p className="mt-1 text-xl font-semibold text-slate-900">{calculation.carbsGrams} g</p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Jauge objectif</p>
-                  <div className="mt-2 h-2.5 rounded-full bg-slate-200">
-                    <div className="h-2.5 rounded-full bg-emerald-600" style={{ width: `${weeklyGaugePercent}%` }} />
-                  </div>
-                  <p className="mt-2 text-sm text-slate-700">Variation estimee: {calculation.weeklyVariationKg} kg / semaine</p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-900">Resume</p>
-                  <p className="mt-1 text-sm text-slate-600">{calculation.summary}</p>
-                  <p className="mt-2 text-sm text-slate-600">{calculation.explanation}</p>
-                </div>
-
-                {calculation.warning ? (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    {calculation.warning}
-                  </div>
+          {mineurJeune ? (
+            <label className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <input
+                type="checkbox"
+                checked={form.consentementParental}
+                onChange={(e) => setChamp("consentementParental", e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 accent-emerald-700"
+              />
+              <span>
+                Un parent ou tuteur autorise l’usage de ces données. Cet accord est obligatoire
+                avant 15 ans.
+                {erreursLocales.consentementParental ? (
+                  <span className="mt-1 block font-medium text-rose-600">
+                    {erreursLocales.consentementParental}
+                  </span>
                 ) : null}
-              </div>
-            )}
-          </div>
-        </div>
+              </span>
+            </label>
+          ) : null}
 
-        <section className="mt-5 rounded-[1.5rem] border border-emerald-100 bg-emerald-50/50 px-5 py-4">
-          <h2 className="text-sm font-semibold text-emerald-900">Section explicative</h2>
-          <p className="mt-2 text-sm leading-6 text-emerald-900/90">
-            Le calculateur utilise Mifflin-St Jeor pour estimer le metabolisme de base, applique ton niveau
-            d’activité pour les calories de maintien, puis ajuste selon la variation de poids et le délai.
-            Des limites de securite evitent les objectifs trop agressifs ou dangereux.
-          </p>
-        </section>
-      </section>
-    </>
+          {!consentementDonne ? (
+            <label className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <input
+                type="checkbox"
+                checked={consentementSante}
+                onChange={(e) => {
+                  setConsentementSante(e.target.checked);
+                  if (e.target.checked) setErreurGlobale(null);
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 accent-emerald-700"
+              />
+              <span>
+                J’autorise Mavi’oh à utiliser mon âge, mon sexe, ma taille et mon poids pour
+                calculer mes objectifs nutritionnels. Ces données restent sur ce serveur ; tu peux
+                les exporter ou supprimer ton compte depuis les paramètres.
+              </span>
+            </label>
+          ) : null}
+
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" onClick={simuler} loading={previewQuery.isFetching}>
+              Calculer
+            </Button>
+            <Button type="button" variant="secondary" onClick={reinitialiser}>
+              Réinitialiser
+            </Button>
+            <Button type="button" variant="secondary" onClick={enregistrer} loading={save.isPending}>
+              Enregistrer
+            </Button>
+          </div>
+
+          {erreurGlobale ? <Banner tone="error">{erreurGlobale}</Banner> : null}
+          {erreurPreview ? <Banner tone="warning">{erreurPreview}</Banner> : null}
+        </Card>
+
+        <Card padding="md" className="space-y-4">
+          <CardHeader
+            title="Résultat nutritionnel"
+            subtitle={
+              simulation !== null ? "Simulation, non enregistrée." : "D’après ton profil enregistré."
+            }
+          />
+
+          {besoins === null ? (
+            <p className="text-sm text-slate-600">
+              Complète le formulaire puis clique sur « Calculer » pour obtenir tes objectifs.
+            </p>
+          ) : (
+            <ResultatNutritionnel besoins={besoins} />
+          )}
+        </Card>
+      </div>
+    </div>
   );
+}
+
+function ResultatNutritionnel({ besoins }: { besoins: Besoins }) {
+  const [etapesOuvertes, setEtapesOuvertes] = useState(false);
+  // Jauge de sécurité : 1 kg par semaine est la variation maximale raisonnable.
+  const jauge = Math.min(Math.round((Math.abs(besoins.variation_hebdo_kg) / 1) * 100), 100);
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl bg-emerald-700 px-5 py-4 text-white">
+        <p className="text-xs uppercase tracking-[0.12em] text-emerald-100">Calories cibles</p>
+        <p className="mt-1 text-3xl font-semibold">{formatKcal(besoins.calories_recommandees)}</p>
+        <p className="mt-1 text-xs text-emerald-100">
+          Métabolisme de base {formatKcal(besoins.bmr)} · dépense {formatKcal(besoins.tdee)} ·
+          plancher de sécurité {formatKcal(besoins.plancher_kcal)}
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Protéines" value={`${formatNumber(besoins.proteines_g, 0)} g`} />
+        <StatCard label="Lipides" value={`${formatNumber(besoins.lipides_g, 0)} g`} />
+        <StatCard label="Glucides" value={`${formatNumber(besoins.glucides_g, 0)} g`} />
+      </div>
+
+      <ProgressBar
+        value={jauge}
+        tone={jauge >= 100 ? "amber" : "emerald"}
+        label="Variation hebdomadaire"
+        caption={`${formatNumber(besoins.variation_hebdo_kg, 2)} kg / semaine`}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <StatCard label="IMC" value={formatNumber(besoins.imc, 1)} />
+        <StatCard
+          label="Poids de référence"
+          value={`${formatNumber(besoins.poids_reference, 1)} kg`}
+          caption={
+            besoins.jours_restants != null ? `${besoins.jours_restants} jours restants` : undefined
+          }
+        />
+      </div>
+
+      {besoins.avertissements.length > 0 ? (
+        <div className="space-y-2">
+          {besoins.avertissements.map((avertissement) => (
+            <Banner key={avertissement} tone="warning">
+              {avertissement}
+            </Banner>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setEtapesOuvertes((ouvert) => !ouvert)}
+          className="flex w-full items-center justify-between text-sm font-semibold text-slate-900"
+          aria-expanded={etapesOuvertes}
+        >
+          Comment ce calcul est fait
+          <span aria-hidden="true">{etapesOuvertes ? "−" : "+"}</span>
+        </button>
+        {etapesOuvertes ? (
+          <ol className="mt-3 space-y-1.5 text-sm text-slate-600">
+            {besoins.etapes.map((etape, index) => (
+              <li key={etape} className="flex gap-2">
+                <span className="text-slate-400">{index + 1}.</span>
+                <span>{etape}</span>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+      </div>
+
+      <p className="text-xs leading-5 text-slate-500">{besoins.mention}</p>
+    </div>
+  );
+}
+
+/** Rattache les erreurs de validation du serveur aux champs du formulaire. */
+function traduireErreursServeur(error: ApiError): Partial<Record<keyof FormState, string>> {
+  const correspondances: Record<string, keyof FormState> = {
+    nom: "nom",
+    sexe: "sexe",
+    age: "age",
+    taille: "taille",
+    poids: "poids",
+    poids_souhaite_kg: "poidsSouhaite",
+    delai_objectif_jours: "delaiJours",
+    niveau_activite: "niveauActivite",
+    objectif_type: "objectifType",
+    regime_alimentaire: "regime",
+    situation_particuliere: "situation",
+    consentement_parental: "consentementParental",
+  };
+
+  const erreurs: Partial<Record<keyof FormState, string>> = {};
+  for (const [champServeur, messages] of Object.entries(error.fieldErrors)) {
+    const champ = correspondances[champServeur];
+    if (champ && messages.length > 0) erreurs[champ] = messages[0];
+  }
+  return erreurs;
 }
