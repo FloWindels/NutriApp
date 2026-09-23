@@ -111,6 +111,9 @@ open('.env', 'w', encoding='utf-8').write('\n'.join(out) + '\n')
 PY
 
 log "Backend : dépendances"
+# Une exécution précédente a pu donner ces dossiers à www-data ; composer et artisan y écrivent
+# sous le compte qui construit. Ils repasseront à www-data en fin de script.
+chown -R "$RUN_USER" "$ROOT_DIR/backend/storage" "$ROOT_DIR/backend/bootstrap/cache" 2>/dev/null || true
 as_user composer install --no-dev --optimize-autoloader --no-interaction
 
 log "Backend : clé d'application"
@@ -135,6 +138,8 @@ chown -R www-data:www-data "$ROOT_DIR/backend/storage" "$ROOT_DIR/backend/bootst
 log "Web : configuration et construction"
 cd "$ROOT_DIR/web"
 printf 'API_URL=%s\nNEXT_PUBLIC_API_URL=%s\n' "$API_BASE" "$MOBILE_API" > .env.local
+# Même raison que pour storage/ : .next appartient à www-data après une première installation.
+[[ -d .next ]] && chown -R "$RUN_USER" .next 2>/dev/null || true
 as_user npm ci
 as_user npm run build
 chown -R www-data:www-data "$ROOT_DIR/web/.next"
