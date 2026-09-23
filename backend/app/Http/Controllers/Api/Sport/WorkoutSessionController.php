@@ -421,6 +421,7 @@ class WorkoutSessionController extends SportController
                 'block' => $exercise['block'],
                 'position' => ++$position,
                 'name' => mb_substr(trim((string) $exercise['name']), 0, 120),
+                'movement' => $exercise['movement'] ?? null,
                 'sets' => isset($exercise['sets']) ? (int) $exercise['sets'] : null,
                 'reps' => isset($exercise['reps']) ? (int) $exercise['reps'] : null,
                 'duration_sec' => isset($exercise['duration_sec']) ? (int) $exercise['duration_sec'] : null,

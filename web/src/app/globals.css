@@ -23,6 +23,40 @@
   }
 }
 
+/*
+ * Illustrations d'exercices : deux poses superposées, alternées en fondu.
+ * Le mouvement se lit en un coup d'œil sans rien télécharger.
+ */
+@keyframes exo-pose-alternee {
+  0%,
+  44% {
+    opacity: 1;
+  }
+  56%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.exo-figure .exo-pose-1 {
+  animation: exo-pose-alternee 2.4s ease-in-out infinite;
+}
+
+.exo-figure .exo-pose-2 {
+  animation: exo-pose-alternee 2.4s ease-in-out infinite reverse;
+}
+
+/* Accessibilité : figure fixe sur la pose de départ, qui reste informative. */
+@media (prefers-reduced-motion: reduce) {
+  .exo-figure .exo-pose-1,
+  .exo-figure .exo-pose-2 {
+    animation: none;
+  }
+  .exo-figure .exo-pose-2 {
+    opacity: 0;
+  }
+}
+
 html {
   min-height: 100%;
 }

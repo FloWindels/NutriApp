@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Sport;
 
+use App\Services\Sport\ExerciseMovement;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -68,6 +69,10 @@ class ProposalResource extends JsonResource
             'category' => (string) ($ex['category'] ?? 'force'),
             'muscle_group' => (string) ($ex['muscle_group'] ?? 'corps_entier'),
             'equipment' => (string) ($ex['equipment'] ?? 'aucun'),
+            'movement' => (string) ($ex['movement'] ?? ExerciseMovement::guess(
+                $ex['slug'] ?? null, $ex['category'] ?? null, $ex['muscle_group'] ?? null,
+                $ex['equipment'] ?? null, $ex['name'] ?? null,
+            )),
             'sets' => isset($ex['sets']) && $ex['sets'] !== null ? (int) $ex['sets'] : null,
             'reps' => isset($ex['reps']) && $ex['reps'] !== null ? (int) $ex['reps'] : null,
             'duration_sec' => isset($ex['duration_sec']) && $ex['duration_sec'] !== null ? (int) $ex['duration_sec'] : null,

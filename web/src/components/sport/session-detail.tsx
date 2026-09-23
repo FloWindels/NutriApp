@@ -28,6 +28,7 @@ import { SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { getErrorMessage } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { ExerciseFigure } from "@/components/sport/exercise-figure";
 import { formatKcal, formatMinutes, formatRelativeDay, parseDecimal } from "@/lib/format";
 import { useResetOnChange } from "@/lib/use-reset-on-change";
 import { BLOCK_LABELS } from "@/lib/vocab";
@@ -350,6 +351,7 @@ function ExerciseRow({
             onChange={(event) => onChange({ ...row, completed: event.target.checked })}
             className="size-5 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
           />
+          <ExerciseFigure movement={exercise.movement} name={exercise.name} size={40} />
           <span className="min-w-0">
             <span className="block truncate text-sm font-medium text-slate-900">{exercise.name}</span>
             {details ? <span className="block text-xs text-slate-500">{details}</span> : null}

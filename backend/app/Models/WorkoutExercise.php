@@ -16,6 +16,7 @@ class WorkoutExercise extends Model
         'block',
         'position',
         'name',
+        'movement',
         'sets',
         'reps',
         'duration_sec',

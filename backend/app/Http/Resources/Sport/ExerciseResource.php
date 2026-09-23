@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Sport;
 
 use App\Models\Exercise;
+use App\Services\Sport\ExerciseMovement;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -28,6 +29,10 @@ class ExerciseResource extends JsonResource
             'category' => (string) $exercise->category,
             'muscle_group' => (string) $exercise->muscle_group,
             'equipment' => (string) $exercise->equipment,
+            'movement' => (string) ($exercise->movement ?: ExerciseMovement::guess(
+                $exercise->slug, $exercise->category, $exercise->muscle_group,
+                $exercise->equipment, $exercise->name,
+            )),
             'level' => (string) $exercise->level,
             'met' => (float) $exercise->met,
             'default_sets' => $exercise->default_sets !== null ? (int) $exercise->default_sets : null,

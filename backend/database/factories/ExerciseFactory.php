@@ -7,6 +7,7 @@ use App\Enums\ExerciseCategory;
 use App\Enums\ExerciseLevel;
 use App\Enums\MuscleGroup;
 use App\Models\Exercise;
+use App\Services\Sport\ExerciseMovement;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -21,12 +22,18 @@ class ExerciseFactory extends Factory
     {
         $name = ucfirst(fake()->unique()->words(3, true));
 
+        $category = ExerciseCategory::Force->value;
+        $muscle = fake()->randomElement(MuscleGroup::values());
+        $equipment = Equipment::Aucun->value;
+
         return [
             'name' => $name,
             'slug' => Str::slug($name).'-'.fake()->unique()->numberBetween(1000, 999999),
-            'category' => ExerciseCategory::Force->value,
-            'muscle_group' => fake()->randomElement(MuscleGroup::values()),
-            'equipment' => Equipment::Aucun->value,
+            'category' => $category,
+            'muscle_group' => $muscle,
+            'equipment' => $equipment,
+            // Le nom est aléatoire : le motif vient donc du repli par groupe musculaire.
+            'movement' => ExerciseMovement::guess(null, $category, $muscle, $equipment, $name),
             'level' => ExerciseLevel::Debutant->value,
             'met' => fake()->randomFloat(1, 2.5, 8.0),
             'default_sets' => 3,

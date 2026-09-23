@@ -159,6 +159,16 @@ export type ShoppingSource = "manuel" | "auto_stock" | "planificateur" | "recomm
 export type PlanStatus = "prevu" | "realise" | "annule";
 
 export type ExerciseCategory = "force" | "cardio" | "mobilite" | "gainage";
+
+/** Motif de mouvement, qui choisit l’illustration affichée (backend : ExerciseMovement). */
+export type ExerciseMovement =
+  | "squat" | "fente" | "charniere_hanche" | "pont_hanche" | "isolation_jambe"
+  | "poussee_horizontale" | "poussee_verticale" | "tirage_horizontal" | "tirage_vertical"
+  | "elevation_bras" | "flexion_coude" | "extension_coude"
+  | "gainage_statique" | "gainage_dynamique" | "flexion_tronc" | "extension_dorsale"
+  | "course" | "marche" | "velo" | "rameur" | "nage" | "saut" | "appuis_sur_place" | "frappes"
+  | "etirement_statique" | "cercles_articulaires" | "mobilite_colonne"
+  | "generique";
 export type MuscleGroup =
   | "jambes"
   | "fessiers"
@@ -1210,6 +1220,7 @@ export type Exercise = {
   instructions: string;
   contraindications?: ZoneAEviter[] | null;
   is_public: boolean;
+  movement: ExerciseMovement;
 };
 
 export type ExerciseSearchParams = {
@@ -1235,6 +1246,7 @@ export type WorkoutExercise = {
   met: number | null;
   completed: boolean;
   instructions?: string | null;
+  movement?: ExerciseMovement | null;
 };
 
 export type WorkoutSession = {
@@ -1407,6 +1419,7 @@ export type ProposalExercise = {
   intensity: Intensity | null;
   instructions: string;
   met: number | null;
+  movement: ExerciseMovement;
 };
 
 export type ProposalBlock = { key: WorkoutBlockKey; name: string; exercises: ProposalExercise[] };

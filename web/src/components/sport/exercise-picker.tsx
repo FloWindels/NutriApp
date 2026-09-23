@@ -1,5 +1,6 @@
 "use client";
 
+import { ExerciseFigure } from "@/components/sport/exercise-figure";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { sportApi } from "@/components/sport/sport-api";
@@ -84,8 +85,14 @@ export function ExercisePickerModal({ open, onClose, onPick }: ExercisePickerPro
                 <button
                   type="button"
                   onClick={() => onPick(exercise)}
-                  className="flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-left transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/20"
+                  className="flex min-h-12 w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-left transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/20"
                 >
+                  <ExerciseFigure
+                    movement={exercise.movement}
+                    name={exercise.name}
+                    equipment={exercise.equipment}
+                    size={40}
+                  />
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-slate-900">{exercise.name}</span>
                     <span className="block truncate text-xs text-slate-500">

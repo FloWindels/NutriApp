@@ -32,3 +32,6 @@ coverage/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Configuration locale de l’aperçu (chemins propres à la machine)
+.claude/launch.json

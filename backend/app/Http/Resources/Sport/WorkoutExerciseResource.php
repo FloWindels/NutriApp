@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Sport;
 
 use App\Models\WorkoutExercise;
+use App\Services\Sport\ExerciseMovement;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -39,6 +40,10 @@ class WorkoutExerciseResource extends JsonResource
             'completed' => (bool) $item->completed,
             'notes' => $item->notes,
             'instructions' => $catalog?->instructions,
+            'movement' => (string) ($item->movement ?: ($catalog?->movement ?: ExerciseMovement::guess(
+                $catalog?->slug, $catalog?->category, $catalog?->muscle_group,
+                $catalog?->equipment, $item->name,
+            ))),
         ];
     }
 }

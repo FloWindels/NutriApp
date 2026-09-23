@@ -10,6 +10,7 @@ use App\Enums\Lieu;
 use App\Enums\MuscleGroup;
 use App\Enums\SessionKind;
 use App\Enums\SessionSource;
+use App\Services\Sport\ExerciseMovement;
 use App\Services\Sport\SportVocab;
 use App\Services\Sport\WorkoutProposalSchema;
 use Illuminate\Validation\Rule;
@@ -85,6 +86,7 @@ class StoreSessionRequest extends SportFormRequest
             'category' => ['nullable', 'string', Rule::enum(ExerciseCategory::class)],
             'muscle_group' => ['nullable', 'string', Rule::enum(MuscleGroup::class)],
             'equipment' => ['nullable', 'string', Rule::in(Equipment::values())],
+            'movement' => ['nullable', 'string', Rule::in(ExerciseMovement::MOVEMENTS)],
             'sets' => ['nullable', 'integer', 'between:1,10'],
             'reps' => ['nullable', 'integer', 'between:1,50'],
             'duration_sec' => ['nullable', 'integer', 'between:5,3600'],

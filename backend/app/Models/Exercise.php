@@ -18,6 +18,7 @@ class Exercise extends Model
         'category',
         'muscle_group',
         'equipment',
+        'movement',
         'level',
         'met',
         'default_sets',

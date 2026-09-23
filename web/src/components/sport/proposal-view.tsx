@@ -17,6 +17,7 @@ import { useToast } from "@/components/ui/toast";
 import { getErrorMessage } from "@/lib/api-client";
 import { formatKcal, formatMinutes, todayIso } from "@/lib/format";
 import { messages } from "@/lib/messages";
+import { ExerciseFigure } from "@/components/sport/exercise-figure";
 import type { Exercise, ProposalExercise, SessionInput, WorkoutProposal } from "@/lib/types/api";
 import {
   BLOCK_LABELS,
@@ -121,6 +122,7 @@ export function ProposalView({
                       category: exercise.category,
                       muscle_group: exercise.muscle_group,
                       equipment: exercise.equipment,
+                      movement: exercise.movement,
                       sets: row.sets ?? exercise.default_sets,
                       reps: row.reps ?? exercise.default_reps,
                       duration_sec: row.duration_sec ?? exercise.default_duration_sec,
@@ -212,7 +214,13 @@ export function ProposalView({
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <ExerciseFigure
+                      movement={exercise.movement}
+                      name={exercise.name}
+                      equipment={exercise.equipment}
+                    />
+                    <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900">{exercise.name}</p>
                     <p className="mt-0.5 text-xs text-slate-500">
                       {[
@@ -224,6 +232,7 @@ export function ProposalView({
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
+                    </div>
                   </div>
                   <Button
                     size="sm"

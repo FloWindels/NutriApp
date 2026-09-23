@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Exercise;
+use App\Services\Sport\ExerciseMovement;
 use Illuminate\Database\Seeder;
 
 /**
@@ -28,6 +29,9 @@ class ExerciseSeeder extends Seeder
                 'category' => $e['category'],
                 'muscle_group' => $e['muscle_group'],
                 'equipment' => $e['equipment'],
+                'movement' => ExerciseMovement::guess(
+                    $e['slug'], $e['category'], $e['muscle_group'], $e['equipment'], $e['name'],
+                ),
                 'level' => $e['level'],
                 'met' => $e['met'],
                 'default_sets' => $e['sets'],
@@ -47,7 +51,7 @@ class ExerciseSeeder extends Seeder
                 $chunk->values()->all(),
                 ['slug'],
                 [
-                    'name', 'category', 'muscle_group', 'equipment', 'level', 'met',
+                    'name', 'category', 'muscle_group', 'equipment', 'movement', 'level', 'met',
                     'default_sets', 'default_reps', 'default_duration_sec', 'instructions',
                     'contraindications', 'is_public', 'updated_at',
                 ],
