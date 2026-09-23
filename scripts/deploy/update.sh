@@ -6,7 +6,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WEB_SERVICE="${WEB_SERVICE:-mavioh-web}"
-PHP_FPM="${PHP_FPM:-php8.3-fpm}"
+PHP_FPM="${PHP_FPM:-php$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || echo 8.3)-fpm}"
 
 log() { echo -e "\n[mavioh] $*"; }
 

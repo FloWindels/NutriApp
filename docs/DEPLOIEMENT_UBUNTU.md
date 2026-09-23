@@ -34,8 +34,22 @@ cd /var/www/mavioh
 sudo bash scripts/deploy/setup-ubuntu.sh
 ```
 
-Il installe : PHP 8.3 (cli, fpm, pgsql, sqlite3, mbstring, xml, curl, zip, intl, bcmath, gd),
+Il installe : PHP 8.3 (cli, fpm, pgsql, sqlite3, mbstring, xml, curl, zip, intl, bcmath),
 Composer, PostgreSQL, Node.js LTS, Nginx et Certbot.
+
+Le script ne s'arrête jamais sur un paquet facultatif : il installe tout ce qu'il peut, puis
+affiche en fin de course la liste de ce qui manque réellement. Deux points méritent une
+explication :
+
+- **`php8.3-gd` peut refuser de s'installer sur Ubuntu 22.04** : il réclame un `libgd3` plus
+  récent que celui de la distribution. C'est sans conséquence, aucune fonctionnalité de Mavi'oh
+  ne l'utilise, les photos de recettes étant stockées telles quelles. Le script affiche un
+  avertissement et poursuit.
+- **Si PHP 8.3 est introuvable**, le script se rabat sur le PHP de la distribution (8.1 sur
+  Ubuntu 22.04), qui satisfait l'exigence `php ^8.1` du backend.
+
+Une autre version peut être imposée :
+`sudo PHP_VERSION=8.2 bash scripts/deploy/setup-ubuntu.sh`.
 
 Vérifie ensuite :
 
@@ -291,3 +305,5 @@ La première commande doit renvoyer le catalogue des portions, la seconde un jet
 | Le site web ne joint pas l'API | `API_URL` dans `web/.env.local`, puis `npm run build` et redémarrage du service |
 | Le téléphone ne joint pas l'API | HTTPS valide et `API_BASE_URL` passé au build Flutter |
 | Séances IA absentes | `ANTHROPIC_API_KEY` vide : c'est le comportement prévu, les règles prennent le relais |
+| `nginx : command not found` après l'installation | le script a été interrompu avant : relance `sudo bash scripts/deploy/setup-ubuntu.sh`, il est idempotent |
+| `php8.3-gd` refuse de s'installer | normal sur Ubuntu 22.04, sans effet sur Mavi'oh : poursuis le déploiement |
