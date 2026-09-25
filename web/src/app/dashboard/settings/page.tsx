@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { DOCUMENTS } from "@/components/legal/legal-page";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -208,6 +210,24 @@ export default function SettingsPage() {
         <ul className="space-y-1 text-sm text-slate-600">
           <li>Données nutritionnelles : Open Food Facts (ODbL).</li>
           <li>Les objectifs sont des estimations, pas un avis médical.</li>
+        </ul>
+      </Card>
+
+      <Card padding="md">
+        <p className="text-sm font-semibold text-slate-900">Tes données et tes droits</p>
+        <p className="mt-2 text-sm text-slate-600">
+          « Exporter mes données » te remet l’intégralité de ce que Mavi’oh conserve sur toi, dans
+          un fichier lisible. « Supprimer mon compte » efface tout, après confirmation par mot de
+          passe. Ces deux actions sont immédiates et ne demandent aucune démarche.
+        </p>
+        <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+          {DOCUMENTS.map((doc) => (
+            <li key={doc.href}>
+              <Link href={doc.href} className="text-emerald-800 hover:underline">
+                {doc.titre}
+              </Link>
+            </li>
+          ))}
         </ul>
       </Card>
 

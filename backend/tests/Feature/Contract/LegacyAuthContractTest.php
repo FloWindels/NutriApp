@@ -25,6 +25,9 @@ class LegacyAuthContractTest extends TestCase
             'email' => 'lea@example.com',
             'password' => 'secret123',
             'password_confirmation' => 'secret123',
+            'accept_conditions' => true,
+            'cgu_version' => '2026-09-25',
+            'confidentialite_version' => '2026-09-25',
         ]);
 
         $response->assertCreated();
@@ -67,7 +70,7 @@ class LegacyAuthContractTest extends TestCase
 
         $response->assertOk();
         $this->assertSame(
-            [...self::USER_KEYS, 'has_profile', 'household_id', 'consentement_sante', 'settings'],
+            [...self::USER_KEYS, 'has_profile', 'household_id', 'consentement_sante', 'conditions', 'settings'],
             array_keys($response->json())
         );
         $this->assertSame(['timezone', 'theme'], array_keys($response->json('settings')));

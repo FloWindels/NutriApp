@@ -155,6 +155,7 @@ cd mobile && flutter analyze && flutter test
 | `docs/RECETTE.md` | scénarios de recette et critères d'acceptation |
 | `docs/DEPLOIEMENT_UBUNTU.md` | installation sur un serveur Ubuntu, en une commande ou pas à pas |
 | `docs/DECISIONS.md` | choix techniques et périmètre de la version 1 |
+| `docs/RGPD.md` | registre des traitements, analyse des risques, procédure de violation |
 
 ---
 
@@ -163,6 +164,20 @@ cd mobile && flutter analyze && flutter test
 Carte des restaurants, OCR des étiquettes, saisie vocale,
 notifications push système, espace d'administration `/admin`, mode hors ligne en écriture et thème
 sombre sur mobile. Ces sujets sont cadrés dans le cahier des charges pour des versions ultérieures.
+
+---
+
+## Mentions légales et protection des données
+
+Le site publie quatre documents, accessibles sans compte : `/mentions-legales`, `/cgu`,
+`/confidentialite` et `/cookies`. Leur contenu factuel — identité de l'éditeur, hébergeur,
+contact — vient d'un seul fichier, `web/src/lib/legal/operateur.ts`, **à remplir avant toute
+ouverture au public** : tant qu'une valeur manque, les pages affichent un avertissement visible.
+
+L'acceptation des conditions est obligatoire à l'inscription, et la date comme la version des
+textes acceptés sont conservées, conformément à l'article 7.1 du RGPD. Le dossier interne de
+conformité — registre des traitements, sous-traitants, transferts, procédure de violation de
+données — est dans `docs/RGPD.md`, avec la liste de ce qui reste à faire.
 
 ---
 

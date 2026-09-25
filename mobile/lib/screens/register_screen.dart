@@ -42,12 +42,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  bool _accepteConditions = false;
+
   Future<void> _submit() async {
     setState(() {
       _errorMessage = null;
       _fieldErrors = {};
     });
     if (!_formKey.currentState!.validate()) return;
+    if (!_accepteConditions) {
+      setState(() => _errorMessage =
+          'Tu dois accepter les conditions et la politique de confidentialité.');
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -57,6 +64,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
         passwordConfirmation: _passwordConfirmationController.text,
+        acceptConditions: _accepteConditions,
       );
       if (!mounted) return;
       await _routeAfterAuth(result.user);
@@ -229,6 +237,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               },
                             ),
                             const SizedBox(height: 14),
+                            CheckboxListTile(
+                              value: _accepteConditions,
+                              onChanged: _isLoading
+                                  ? null
+                                  : (valeur) => setState(() => _accepteConditions = valeur ?? false),
+                              controlAffinity: ListTileControlAffinity.leading,
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              title: const Text(
+                                'J’accepte les conditions générales d’utilisation et la politique '
+                                'de confidentialité.',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                              subtitle: const Text(
+                                'Mavi’oh traite des données de santé : ce traitement n’a lieu '
+                                'qu’avec ton accord, demandé séparément avant tout calcul.',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
                             if (_errorMessage != null)
                               StatusBanner.error(_errorMessage!, margin: const EdgeInsets.only(bottom: 14)),
                             ElevatedButton(

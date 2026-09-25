@@ -22,6 +22,9 @@ class AuthExtensionsTest extends TestCase
             'email' => '  LEA@Example.COM ',
             'password' => 'secret123',
             'password_confirmation' => 'secret123',
+            'accept_conditions' => true,
+            'cgu_version' => '2026-09-25',
+            'confidentialite_version' => '2026-09-25',
         ]);
 
         $response->assertCreated()->assertJsonPath('user.email', 'lea@example.com');
@@ -42,6 +45,9 @@ class AuthExtensionsTest extends TestCase
             'email' => 'LEA@example.com',
             'password' => 'secret123',
             'password_confirmation' => 'secret123',
+            'accept_conditions' => true,
+            'cgu_version' => '2026-09-25',
+            'confidentialite_version' => '2026-09-25',
         ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors(['email']);

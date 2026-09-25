@@ -1,5 +1,6 @@
 "use client";
 
+import { VERSION_CGU, VERSION_CONFIDENTIALITE } from "@/lib/legal/versions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -21,6 +22,9 @@ const schema = z
     email: z.email("Adresse e-mail invalide."),
     password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères."),
     password_confirmation: z.string().min(1, "Confirme ton mot de passe."),
+    accept_conditions: z.literal(true, {
+      message: "Tu dois accepter les conditions et la politique de confidentialité.",
+    }),
   })
   .refine((values) => values.password === values.password_confirmation, {
     message: "Les deux mots de passe ne correspondent pas.",
@@ -42,12 +46,22 @@ export default function RegisterPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", email: "", password: "", password_confirmation: "" },
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      password_confirmation: "",
+      accept_conditions: false as true,
+    },
   });
 
   async function onSubmit(values: FormValues) {
     setGlobalError(null);
-    const body: RegisterInput = values;
+    const body: RegisterInput = {
+      ...values,
+      cgu_version: VERSION_CGU,
+      confidentialite_version: VERSION_CONFIDENTIALITE,
+    };
     try {
       const response = await apiPost<AuthResponse>("/auth/register", body, { anonymous: true });
       setSession(response.token, response.user);
@@ -121,6 +135,37 @@ export default function RegisterPage() {
         >
           {showPassword ? "Masquer les mots de passe" : "Afficher les mots de passe"}
         </button>
+
+        <div>
+          <label className="flex items-start gap-3 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-emerald-700"
+              {...register("accept_conditions")}
+            />
+            <span>
+              J’accepte les{" "}
+              <Link href="/cgu" target="_blank" className="font-medium text-emerald-800 hover:underline">
+                conditions générales d’utilisation
+              </Link>{" "}
+              et la{" "}
+              <Link
+                href="/confidentialite"
+                target="_blank"
+                className="font-medium text-emerald-800 hover:underline"
+              >
+                politique de confidentialité
+              </Link>
+              . {BRAND} traite des données de santé : ce traitement n’a lieu qu’avec ton accord,
+              qui te sera demandé séparément avant tout calcul.
+            </span>
+          </label>
+          {errors.accept_conditions ? (
+            <p className="mt-1.5 text-xs font-medium text-rose-600" role="alert">
+              {errors.accept_conditions.message}
+            </p>
+          ) : null}
+        </div>
 
         {globalError ? <Banner tone="error">{globalError}</Banner> : null}
 

@@ -396,6 +396,25 @@ La première commande doit renvoyer le catalogue des portions, la seconde un jet
 
 ---
 
+## 10 bis. Avant d'ouvrir le service à d'autres personnes
+
+Dès qu'un compte autre que le tien existe, Mavi'oh traite les données de santé d'un tiers et le
+RGPD s'applique pleinement. Trois choses sont alors bloquantes :
+
+1. **Remplir `web/src/lib/legal/operateur.ts`** — identité de l'éditeur, adresse, contact,
+   hébergeur. Tant qu'une valeur manque, les pages légales affichent un bandeau d'avertissement
+   bien visible. Reconstruire le site ensuite (`npm run build`).
+2. **Passer en HTTPS** avec un certificat valide. La politique de confidentialité affirme que les
+   échanges sont chiffrés : en HTTP, cette affirmation est fausse et les mots de passe circulent
+   en clair.
+3. **Installer la sauvegarde quotidienne** (section 8). La politique annonce une rotation de
+   quatorze jours.
+
+La liste complète — registre des traitements, sous-traitants, transferts hors Union européenne,
+procédure en cas de violation de données — est dans `docs/RGPD.md`.
+
+---
+
 ## 11. Repartir de zéro
 
 Pour reprendre une installation ratée sans traîner d'état intermédiaire. **Ces commandes effacent

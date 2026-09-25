@@ -48,6 +48,9 @@ class AuthController extends Controller
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
+                'cgu_accepted_at' => now(),
+                'cgu_version' => $validated['cgu_version'],
+                'confidentialite_version' => $validated['confidentialite_version'],
             ]);
 
             UserSetting::query()->firstOrCreate(['user_id' => $user->id]);
@@ -114,6 +117,11 @@ class AuthController extends Controller
             'has_profile' => $profile !== null && $calculator->isComplete($profile),
             'household_id' => $user->household_id !== null ? (int) $user->household_id : null,
             'consentement_sante' => $user->consentement_sante_at !== null,
+            'conditions' => [
+                'accepte_le' => $user->cgu_accepted_at?->toISOString(),
+                'cgu_version' => $user->cgu_version,
+                'confidentialite_version' => $user->confidentialite_version,
+            ],
             'settings' => [
                 'timezone' => (string) $settings->timezone,
                 'theme' => (string) $settings->theme,

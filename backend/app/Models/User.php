@@ -21,6 +21,9 @@ class User extends Authenticatable
         'password',
         'household_id',
         'consentement_sante_at',
+        'cgu_accepted_at',
+        'cgu_version',
+        'confidentialite_version',
     ];
 
     protected $hidden = [
@@ -31,6 +34,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'consentement_sante_at' => 'datetime',
+        'cgu_accepted_at' => 'datetime',
         'household_id' => 'integer',
     ];
 

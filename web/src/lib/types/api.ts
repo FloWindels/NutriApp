@@ -241,6 +241,11 @@ export type RegisterInput = {
   email: string;
   password: string;
   password_confirmation: string;
+  /** Case cochée à l'inscription : obligatoire côté serveur. */
+  accept_conditions: boolean;
+  /** Versions des textes réellement présentés, conservées comme preuve (RGPD art. 7.1). */
+  cgu_version: string;
+  confidentialite_version: string;
 };
 export type ForgotPasswordInput = { email: string };
 export type ResetPasswordInput = {

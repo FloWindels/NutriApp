@@ -1,3 +1,4 @@
+import { LegalFooter } from "@/components/legal/legal-footer";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { BRAND, TAGLINE } from "@/lib/messages";
@@ -88,6 +89,8 @@ export function AuthShell({
           {children}
 
           {footer ? <p className="mt-6 text-center text-sm text-slate-600">{footer}</p> : null}
+
+          <LegalFooter className="mt-8" />
         </section>
       </div>
     </main>

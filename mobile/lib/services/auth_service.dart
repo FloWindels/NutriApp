@@ -1,3 +1,4 @@
+import '../core/legal.dart';
 import '../core/api_client.dart';
 import '../core/session.dart';
 import '../models/me.dart';
@@ -28,12 +29,17 @@ class AuthService {
     required String email,
     required String password,
     required String passwordConfirmation,
+    required bool acceptConditions,
   }) async {
     final json = await _api.postJson('/register', body: {
       'name': name.trim(),
       'email': email.trim(),
       'password': password,
       'password_confirmation': passwordConfirmation,
+      // Preuve de ce qui a été accepté, et de quand (RGPD art. 7.1).
+      'accept_conditions': acceptConditions,
+      'cgu_version': Legal.versionCgu,
+      'confidentialite_version': Legal.versionConfidentialite,
     });
     final result = AuthResult.fromJson(json);
     await _api.saveToken(result.token);
