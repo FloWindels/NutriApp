@@ -291,6 +291,35 @@ sudo bash scripts/deploy/update.sh
 Le script fait `git pull`, réinstalle les dépendances, applique les migrations, reconstruit le site
 et redémarre les services. Les migrations sont additives : aucune donnée n'est perdue.
 
+### Ce que la mise à jour vers les offres change pour les comptes existants
+
+La colonne `offre` arrive avec **`gratuit` par défaut**. Aucune donnée n'est perdue, mais tout
+compte déjà inscrit — le tien compris — se retrouve sur l'offre gratuite au redémarrage : plus de
+stock, plus de liste de courses, plus de planificateur, plus de mode foyer, plus d'IA, plus de
+séances proposées. Le journal des repas, le profil, les pesées, les recettes et le suivi sportif
+continuent comme avant, et tout revient le jour où une offre est posée.
+
+Deux gestes suffisent, dans cet ordre :
+
+```bash
+cd /var/www/mavioh/backend && php artisan mavioh:promouvoir ton@email.fr
+```
+
+Puis, sur `http://<adresse-du-serveur>/admin` → **Comptes** → « Changer l'offre » : pose-toi
+l'offre **Foyer** sans échéance, et fais de même pour les comptes qui doivent retrouver leurs
+fonctions. Chaque geste demande un motif et laisse une trace au journal — y compris quand tu te
+l'appliques à toi-même.
+
+Pour les personnes que tu invites plutôt que de servir une par une : **Codes d'accès** → créer un
+code, qu'elles saisissent dans leurs paramètres. Un code ouvre, il ne referme jamais : il ne peut
+pas rabaisser une offre déjà meilleure.
+
+### Tant que le serveur est en HTTP sur le réseau local
+
+L'espace d'administration circule alors en clair sur ton réseau, jeton compris. C'est acceptable
+sur un réseau domestique que tu maîtrises, ce ne l'est plus dès que le service s'ouvre à d'autres
+personnes : voir la section 10 bis.
+
 ---
 
 ## 7 bis. Coach sportif IA en local (facultatif)
