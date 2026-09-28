@@ -11,7 +11,7 @@
  */
 
 export const VERSION_CGU = "2026-09-25";
-export const VERSION_CONFIDENTIALITE = "2026-09-25";
+export const VERSION_CONFIDENTIALITE = "2026-09-28";
 export const VERSION_MENTIONS = "2026-09-25";
 
 /** Affichée en tête de chaque document. */

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -34,6 +35,8 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'consentement_sante_at' => 'datetime',
+        'suspendu_le' => 'datetime',
+        'role' => UserRole::class,
         'cgu_accepted_at' => 'datetime',
         'household_id' => 'integer',
     ];
@@ -41,6 +44,16 @@ class User extends Authenticatable
     // ------------------------------------------------------------------
     // Compte
     // ------------------------------------------------------------------
+
+    public function isAdmin(): bool
+    {
+        return $this->role === UserRole::Administrateur;
+    }
+
+    public function estSuspendu(): bool
+    {
+        return $this->suspendu_le !== null;
+    }
 
     public function profile(): HasOne
     {

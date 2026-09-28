@@ -396,6 +396,23 @@ La première commande doit renvoyer le catalogue des portions, la seconde un jet
 
 ---
 
+## 9 bis. Se nommer administrateur
+
+L'espace d'administration vit sur `/admin`. Il n'apparaît dans aucun menu et ne se devine pas :
+Laravel renvoie « Introuvable. » à quiconque n'est pas administrateur, exactement comme pour une
+adresse inexistante.
+
+Aucune interface ne permet de se promouvoir — c'est délibéré. La seule façon de désigner un
+administrateur est une commande sur le serveur, donc un accès que toi seul possèdes :
+
+```bash
+cd /var/www/mavioh/backend && php artisan mavioh:promouvoir ton@email.fr
+```
+
+Pour retirer le rôle : la même commande avec `--retirer`. Ouvre ensuite `https://ton-domaine/admin`.
+
+---
+
 ## 10 bis. Avant d'ouvrir le service à d'autres personnes
 
 Dès qu'un compte autre que le tien existe, Mavi'oh traite les données de santé d'un tiers et le

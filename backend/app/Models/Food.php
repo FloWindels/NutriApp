@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Scopes\NonMasqueScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -10,6 +11,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Food extends Model
 {
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new NonMasqueScope);
+    }
+
     use HasFactory;
 
     protected $table = 'food';

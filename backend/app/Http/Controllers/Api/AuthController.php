@@ -29,6 +29,8 @@ use Laravel\Sanctum\PersonalAccessToken;
 class AuthController extends Controller
 {
     public const MSG_IDENTIFIANTS = 'Identifiants invalides.';
+
+    public const MSG_SUSPENDU = 'Ce compte est suspendu. Contacte le service pour en savoir plus.';
     public const MSG_DECONNECTE = 'Déconnecté.';
     public const MSG_LIEN_ENVOYE = 'Si un compte existe, un lien de réinitialisation a été envoyé.';
     public const MSG_MOT_DE_PASSE_REINITIALISE = 'Mot de passe réinitialisé.';
@@ -77,6 +79,14 @@ class AuthController extends Controller
         if (! $user || ! Hash::check($validated['password'], (string) $user->password)) {
             throw ValidationException::withMessages([
                 'email' => [self::MSG_IDENTIFIANTS],
+            ]);
+        }
+
+        // Un compte suspendu ne doit plus pouvoir entrer, et le message reste sobre : il dit
+        // que le compte est suspendu, sans exposer le motif écrit par l'administrateur.
+        if ($user->estSuspendu()) {
+            throw ValidationException::withMessages([
+                'email' => [self::MSG_SUSPENDU],
             ]);
         }
 

@@ -148,6 +148,10 @@ export default function ConfidentialitePage() {
               "Si tu rejoins un foyer, ses membres voient le stock partagé, la liste de courses et les repas communs. Ton journal alimentaire personnel et tes données de santé restent privés.",
             ],
             [
+              "Administrateur du service",
+              "Accède aux comptes (nom d’usage, adresse e-mail, dates, état d’acceptation des conditions), aux contenus publiés et à des statistiques agrégées, afin de gérer le service et de modérer les contenus signalés. Il n’a accès ni à ton journal alimentaire, ni à ton profil de santé, ni à tes pesées, ni à tes séances : ce cloisonnement est imposé par le code et vérifié par des tests. Chacune de ses actions est consignée avec son motif.",
+            ],
+            [
               "Open Food Facts",
               "Base de données publique interrogée pour enrichir les fiches d’aliments. Seul le terme recherché ou le code-barres scanné lui est transmis, jamais ton identité ni ton journal.",
             ],

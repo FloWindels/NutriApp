@@ -47,6 +47,13 @@ class RouteServiceProvider extends ServiceProvider
                 ->name('v1.')
                 ->group(base_path('routes/api.php'));
 
+            // Monté une seule fois, hors de routes/api.php : ce dernier est chargé deux fois
+            // (sous /api et /api/v1) et place tout son contenu derrière auth:sanctum, ce qui
+            // ferait répondre 401 — donc révélerait le préfixe — à un visiteur anonyme.
+            Route::middleware('api')
+                ->prefix('api/admin')
+                ->group(base_path('routes/admin.php'));
+
             Route::middleware('web')
                 ->group(base_path('routes/web.php'));
         });

@@ -126,6 +126,19 @@ nombre d'utilisateurs devient significatif.
 | Destinataire | Open Food Facts (association française, données sous licence ODbL) |
 | Transfert hors UE | Aucun |
 
+### T7 bis — Administration et modération
+
+| | |
+|---|---|
+| Finalité | Gérer les comptes, modérer les contenus publiés, mesurer l'usage du service |
+| Base légale | Intérêt légitime (art. 6.1.f) : faire fonctionner un service sûr et conforme |
+| Personnes | Tous les utilisateurs, pour la seule partie « enveloppe » de leur compte |
+| Données | Nom d'usage, adresse e-mail, dates, état d'acceptation des conditions, contenus publiés. **Jamais** le journal alimentaire, le profil de santé, les pesées ni les séances |
+| Garde-fou | Imposé par le code : `AdminUserController` n'importe aucun modèle de contenu, et un test échoue s'il venait à le faire |
+| Traçabilité | Chaque action est consignée dans `admin_actions` avec son motif, en ajout seul |
+| Conservation | Journal d'administration conservé sans purge automatique à ce stade |
+| Transfert hors UE | Aucun |
+
 ### T8 — Sécurité et journalisation
 
 | | |
@@ -261,6 +274,7 @@ Dit clairement, pour qu'aucun de ces points ne soit cru acquis :
   d'ailleurs aucune. À implémenter si une durée de conservation limitée est souhaitée.
 - **Aucune vérification de l'âge déclaré ni de la réalité de l'accord parental** : comme la
   quasi-totalité des services, Mavi'oh s'en remet à la déclaration.
+- **Aucune purge automatique du journal d'administration** : à décider selon la durée de conservation souhaitée.
 - **Aucun registre des violations** encore ouvert : à créer le jour où il en survient une, ou
   d'avance, vide.
 - **Pas de relecture juridique** à ce stade.
