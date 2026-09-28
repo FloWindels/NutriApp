@@ -38,6 +38,11 @@ export class ApiError extends Error {
   get isValidation(): boolean {
     return this.status === 422;
   }
+
+  /** 402 : la fonctionnalité existe, mais elle fait partie d'une offre payante. */
+  get isOffreRequise(): boolean {
+    return this.status === 402;
+  }
 }
 
 export function isApiError(error: unknown): error is ApiError {
@@ -93,6 +98,8 @@ function statusMessage(status: number, payload: ApiErrorPayload | null): string 
   switch (status) {
     case 401:
       return messages.unauthorized;
+    case 402:
+      return messages.offreRequise;
     case 403:
       return messages.forbidden;
     case 404:

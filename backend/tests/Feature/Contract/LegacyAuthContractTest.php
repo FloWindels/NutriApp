@@ -70,7 +70,7 @@ class LegacyAuthContractTest extends TestCase
 
         $response->assertOk();
         $this->assertSame(
-            [...self::USER_KEYS, 'has_profile', 'household_id', 'consentement_sante', 'conditions', 'settings'],
+            [...self::USER_KEYS, 'has_profile', 'household_id', 'consentement_sante', 'offre', 'conditions', 'settings'],
             array_keys($response->json())
         );
         $this->assertSame(['timezone', 'theme'], array_keys($response->json('settings')));

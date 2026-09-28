@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AdminCodeController;
 use App\Http\Controllers\Api\Admin\AdminModerationController;
 use App\Http\Controllers\Api\Admin\AdminStatsController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
@@ -31,6 +32,10 @@ Route::middleware(['admin', 'throttle:60,1'])->group(function () {
     Route::post('/moderation/foods/{food}/show', [AdminModerationController::class, 'showFood'])->whereNumber('food');
     Route::post('/moderation/recipes/{recipe}/hide', [AdminModerationController::class, 'hideRecipe'])->whereNumber('recipe');
     Route::post('/moderation/recipes/{recipe}/show', [AdminModerationController::class, 'showRecipe'])->whereNumber('recipe');
+
+    Route::get('/codes', [AdminCodeController::class, 'index']);
+    Route::post('/codes', [AdminCodeController::class, 'store']);
+    Route::post('/codes/{code}/revoke', [AdminCodeController::class, 'revoke'])->whereNumber('code');
 
     Route::get('/journal', [AdminModerationController::class, 'journal']);
 });

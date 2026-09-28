@@ -18,3 +18,6 @@ Route::get('/account/export', [AccountController::class, 'export']);
 Route::put('/account/password', [AccountController::class, 'updatePassword']);
 Route::put('/account', [AccountController::class, 'update']);
 Route::delete('/account', [AccountController::class, 'destroy']);
+
+// Consommation d'un code d'accès offert par l'éditeur.
+Route::post('/account/code', [AccountController::class, 'redeemCode'])->middleware('throttle:code');

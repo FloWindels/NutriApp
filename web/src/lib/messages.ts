@@ -12,6 +12,8 @@ export const messages = {
   timeout: "Le serveur met trop de temps à répondre.",
   unauthorized: "Ta session a expiré, reconnecte-toi.",
   forbidden: "Action non autorisée.",
+  offreRequise:
+    "Cette fonctionnalité fait partie d’une offre payante.",
   notFound: "Introuvable.",
   server: "Le serveur est indisponible pour le moment.",
   tooManyRequests: "Trop de requêtes, réessaie dans une minute.",

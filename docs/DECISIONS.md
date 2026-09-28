@@ -98,6 +98,7 @@ mesurée ou approchée, comme le demandait le cahier des charges.
 |---|---|
 | Restaurants et carte | dépend d'une source de données et d'une géolocalisation à choisir |
 | OCR d'étiquette, saisie vocale | phases ultérieures du cahier des charges |
+| Offres verrouillées sur mobile | Le backend refuse en 402 partout, donc aucune fonctionnalité payante n'est atteignable depuis le téléphone. En revanche l'application n'affiche pas encore d'écran d'invitation : elle montre l'erreur. À compléter |
 | Espace d'administration sur mobile | La modération se fait posément, depuis un bureau. Le porter doublerait la surface d'attaque et de test pour un usage marginal, alors que le mobile n'a aucune notion de rôle. Décision assumée, pas un oubli |
 | Notifications système (push) | les notifications sont pour l'instant internes à l'application |
 | Espace d'administration `/admin` | périmètre et droits non définis |

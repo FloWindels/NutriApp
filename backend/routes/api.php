@@ -60,11 +60,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/recipes/{recipe}', [RecipeController::class, 'update'])->whereNumber('recipe');
     Route::delete('/recipes/{recipe}', [RecipeController::class, 'destroy'])->whereNumber('recipe');
 
-    Route::get('/stocks', [StockController::class, 'index']);
-    Route::post('/stocks', [StockController::class, 'storeLocation']);
-    Route::post('/stocks/items', [StockController::class, 'storeItem']);
-    Route::put('/stocks/items/{item}', [StockController::class, 'updateItem'])->whereNumber('item');
-    Route::delete('/stocks/items/{item}', [StockController::class, 'destroyItem'])->whereNumber('item');
+    Route::get('/stocks', [StockController::class, 'index'])->middleware('offre:stock');
+    Route::post('/stocks', [StockController::class, 'storeLocation'])->middleware('offre:stock');
+    Route::post('/stocks/items', [StockController::class, 'storeItem'])->middleware('offre:stock');
+    Route::put('/stocks/items/{item}', [StockController::class, 'updateItem'])->whereNumber('item')->middleware('offre:stock');
+    Route::delete('/stocks/items/{item}', [StockController::class, 'destroyItem'])->whereNumber('item')->middleware('offre:stock');
 
     // Routes authentifiées des modules (routes/api/*.php), un fichier par module.
     foreach (glob(__DIR__.'/api/*.php') ?: [] as $moduleRouteFile) {

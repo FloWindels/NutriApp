@@ -11,11 +11,11 @@ use Illuminate\Support\Facades\Route;
 | Routes littérales avant les routes paramétrées.
 */
 
-Route::get('/shopping-list', [ShoppingListController::class, 'index']);
-Route::post('/shopping-list/items', [ShoppingListController::class, 'store']);
-Route::post('/shopping-list/generate', [ShoppingListController::class, 'generate']);
-Route::delete('/shopping-list/checked', [ShoppingListController::class, 'clearChecked']);
+Route::get('/shopping-list', [ShoppingListController::class, 'index'])->middleware('offre:courses');
+Route::post('/shopping-list/items', [ShoppingListController::class, 'store'])->middleware('offre:courses');
+Route::post('/shopping-list/generate', [ShoppingListController::class, 'generate'])->middleware('offre:courses');
+Route::delete('/shopping-list/checked', [ShoppingListController::class, 'clearChecked'])->middleware('offre:courses');
 
-Route::put('/shopping-list/items/{item}', [ShoppingListController::class, 'update'])->whereNumber('item');
-Route::delete('/shopping-list/items/{item}', [ShoppingListController::class, 'destroy'])->whereNumber('item');
-Route::post('/shopping-list/items/{item}/to-stock', [ShoppingListController::class, 'toStock'])->whereNumber('item');
+Route::put('/shopping-list/items/{item}', [ShoppingListController::class, 'update'])->whereNumber('item')->middleware('offre:courses');
+Route::delete('/shopping-list/items/{item}', [ShoppingListController::class, 'destroy'])->whereNumber('item')->middleware('offre:courses');
+Route::post('/shopping-list/items/{item}/to-stock', [ShoppingListController::class, 'toStock'])->whereNumber('item')->middleware('offre:stock');

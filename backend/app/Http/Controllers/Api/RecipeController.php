@@ -170,6 +170,14 @@ class RecipeController extends Controller
             'internet' => ['sometimes', 'boolean'],
         ]);
 
+        if (! $request->user()->peut('ia')) {
+            return response()->json(['data' => [
+                'source' => 'indisponible',
+                'message' => 'La génération de recettes par l’IA fait partie d’une offre payante.',
+                'capacite_requise' => 'ia',
+            ]]);
+        }
+
         try {
             $proposition = $generator->generate(
                 $request->user(),

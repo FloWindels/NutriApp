@@ -228,10 +228,19 @@ export type AuthResponse = { token: string; user: AuthUser };
 export type MeSettings = { timezone: string; theme: Theme };
 
 /** `GET /me` — legacy user keys at top level + new siblings. */
+/** Offre effective : celle du compte, ou celle du foyer si elle est meilleure. */
+export type OffreCourante = {
+  nom: "gratuit" | "complet" | "foyer";
+  libelle: string;
+  capacites: string[];
+  expire_le: string | null;
+};
+
 export type Me = AuthUser & {
   has_profile: boolean;
   household_id: number | null;
   consentement_sante: boolean;
+  offre: OffreCourante;
   settings: MeSettings;
 };
 

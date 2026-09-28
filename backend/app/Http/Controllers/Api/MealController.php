@@ -243,7 +243,7 @@ class MealController extends Controller
     public function photoCapability(): JsonResponse
     {
         return $this->json(['data' => [
-            'disponible' => LlmProvider::visionConfigured(),
+            'disponible' => LlmProvider::visionConfigured() && request()->user()->peut('ia'),
             'llm_model' => LlmProvider::visionModelName(),
         ]]);
     }
@@ -258,6 +258,18 @@ class MealController extends Controller
      */
     public function analyzePhoto(AnalyzePlateRequest $request, PlateRecognitionService $recognition): JsonResponse
     {
+        if (! $request->user()->peut('ia')) {
+            return $this->json(['data' => [
+                'aliments' => [],
+                'description' => '',
+                'confiance_globale' => 0.0,
+                'avertissements' => ['La reconnaissance de photo fait partie d’une offre payante.'],
+                'source' => 'indisponible',
+                'llm_model' => null,
+                'capacite_requise' => 'ia',
+            ]]);
+        }
+
         try {
             $data = $recognition->analyze($request->user(), $request->base64(), $request->mediaType());
         } catch (LlmUnavailableException $e) {

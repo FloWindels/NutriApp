@@ -50,7 +50,7 @@ class WorkoutAiGenerator
      */
     public function iaDisponible(User $user): bool
     {
-        if (! $this->iaConfigured()) {
+        if (! $this->iaConfigured() || ! $user->peut('ia')) {
             return false;
         }
 

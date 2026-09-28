@@ -14,9 +14,9 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/stocks/alerts', [StockController::class, 'alerts']);
+Route::get('/stocks/alerts', [StockController::class, 'alerts'])->middleware('offre:stock');
 
-Route::post('/stocks/items/{item}/consume', [StockController::class, 'consume'])->whereNumber('item');
+Route::post('/stocks/items/{item}/consume', [StockController::class, 'consume'])->whereNumber('item')->middleware('offre:stock');
 
-Route::put('/stocks/{stock}', [StockController::class, 'updateLocation'])->whereNumber('stock');
-Route::delete('/stocks/{stock}', [StockController::class, 'destroyLocation'])->whereNumber('stock');
+Route::put('/stocks/{stock}', [StockController::class, 'updateLocation'])->whereNumber('stock')->middleware('offre:stock');
+Route::delete('/stocks/{stock}', [StockController::class, 'destroyLocation'])->whereNumber('stock')->middleware('offre:stock');

@@ -11,10 +11,10 @@ use Illuminate\Support\Facades\Route;
 | Routes littérales avant les routes paramétrées.
 */
 
-Route::get('/planner', [PlannerController::class, 'index']);
-Route::post('/planner', [PlannerController::class, 'store']);
-Route::post('/planner/generate', [PlannerController::class, 'generate']);
+Route::get('/planner', [PlannerController::class, 'index'])->middleware('offre:planificateur');
+Route::post('/planner', [PlannerController::class, 'store'])->middleware('offre:planificateur');
+Route::post('/planner/generate', [PlannerController::class, 'generate'])->middleware('offre:planificateur');
 
-Route::put('/planner/{plan}', [PlannerController::class, 'update'])->whereNumber('plan');
-Route::delete('/planner/{plan}', [PlannerController::class, 'destroy'])->whereNumber('plan');
-Route::post('/planner/{plan}/log', [PlannerController::class, 'log'])->whereNumber('plan');
+Route::put('/planner/{plan}', [PlannerController::class, 'update'])->whereNumber('plan')->middleware('offre:planificateur');
+Route::delete('/planner/{plan}', [PlannerController::class, 'destroy'])->whereNumber('plan')->middleware('offre:planificateur');
+Route::post('/planner/{plan}/log', [PlannerController::class, 'log'])->whereNumber('plan')->middleware('offre:planificateur');

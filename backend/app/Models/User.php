@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Offre;
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,6 +38,8 @@ class User extends Authenticatable
         'consentement_sante_at' => 'datetime',
         'suspendu_le' => 'datetime',
         'role' => UserRole::class,
+        'offre' => Offre::class,
+        'offre_expire_le' => 'datetime',
         'cgu_accepted_at' => 'datetime',
         'household_id' => 'integer',
     ];
@@ -44,6 +47,51 @@ class User extends Authenticatable
     // ------------------------------------------------------------------
     // Compte
     // ------------------------------------------------------------------
+
+    /**
+     * Offre réellement applicable.
+     *
+     * C'est la meilleure des deux entre celle du compte et celle du propriétaire de son foyer :
+     * sans cela l'offre Foyer ne servirait qu'à celui qui la paie, alors qu'elle est faite pour
+     * couvrir le ménage. Une offre expirée retombe sur la gratuite, sans rien détruire.
+     */
+    public function offreEffective(): Offre
+    {
+        $sienne = $this->offreValide();
+
+        if ($this->household_id === null) {
+            return $sienne;
+        }
+
+        $proprietaire = static::query()
+            ->select(['id', 'offre', 'offre_expire_le'])
+            ->whereIn('id', function ($query) {
+                $query->select('owner_id')->from('households')->where('id', $this->household_id);
+            })
+            ->first();
+
+        $celleDuFoyer = $proprietaire?->offreValide() ?? Offre::Gratuit;
+
+        return $celleDuFoyer->rang() > $sienne->rang() ? $celleDuFoyer : $sienne;
+    }
+
+    /** Offre du compte lui-même, ramenée à la gratuite si elle a expiré. */
+    public function offreValide(): Offre
+    {
+        $offre = $this->offre ?? Offre::Gratuit;
+
+        if ($this->offre_expire_le !== null && $this->offre_expire_le->isPast()) {
+            return Offre::Gratuit;
+        }
+
+        return $offre;
+    }
+
+    /** L'unique question posée par le middleware et les contrôleurs. */
+    public function peut(string $capacite): bool
+    {
+        return $this->offreEffective()->permet($capacite);
+    }
 
     public function isAdmin(): bool
     {

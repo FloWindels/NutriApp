@@ -42,6 +42,8 @@ class AccountExporter
                 'email_verified_at' => $user->email_verified_at?->toISOString(),
                 'consentement_sante_at' => $user->consentement_sante_at?->toISOString(),
                 'conditions_acceptees_le' => $user->cgu_accepted_at?->toISOString(),
+                'offre' => $user->offre?->value,
+                'offre_expire_le' => $user->offre_expire_le?->toISOString(),
                 'cgu_version' => $user->cgu_version,
                 'confidentialite_version' => $user->confidentialite_version,
                 'household_id' => $user->household_id !== null ? (int) $user->household_id : null,

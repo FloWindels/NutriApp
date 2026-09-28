@@ -92,12 +92,13 @@ type JournalLigne = {
   created_at: string | null;
 };
 
-type Onglet = "tableau" | "comptes" | "moderation" | "journal";
+type Onglet = "tableau" | "comptes" | "moderation" | "codes" | "journal";
 
 const ONGLETS: { cle: Onglet; libelle: string }[] = [
   { cle: "tableau", libelle: "Tableau de bord" },
   { cle: "comptes", libelle: "Comptes" },
   { cle: "moderation", libelle: "Modération" },
+  { cle: "codes", libelle: "Codes d’accès" },
   { cle: "journal", libelle: "Journal" },
 ];
 
@@ -160,6 +161,7 @@ export default function AdminPage() {
       {onglet === "tableau" ? <TableauDeBord stats={stats.data.data} /> : null}
       {onglet === "comptes" ? <Comptes /> : null}
       {onglet === "moderation" ? <Moderation /> : null}
+      {onglet === "codes" ? <Codes /> : null}
       {onglet === "journal" ? <Journal /> : null}
     </main>
   );
@@ -486,6 +488,144 @@ function Moderation() {
               >
                 {recette.masque_le ? "Rétablir" : "Masquer"}
               </Button>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
+
+type CodeAcces = {
+  id: number;
+  code: string;
+  offre: string;
+  offre_libelle: string;
+  duree_jours: number | null;
+  utilisations: number;
+  utilisations_max: number;
+  expire_le: string | null;
+  actif: boolean;
+  utilisable: boolean;
+  note: string | null;
+};
+
+function Codes() {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const [offre, setOffre] = useState("foyer");
+  const [utilisations, setUtilisations] = useState("1");
+  const [duree, setDuree] = useState("");
+  const [note, setNote] = useState("");
+
+  const codes = useQuery({
+    queryKey: ["admin", "codes"],
+    queryFn: () => apiGet<{ data: CodeAcces[] }>("/admin/codes"),
+  });
+
+  const creer = useMutation({
+    mutationFn: () =>
+      apiPost<{ data: { code: string } }>("/admin/codes", {
+        offre,
+        utilisations_max: Number(utilisations) || 1,
+        ...(duree.trim() !== "" ? { duree_jours: Number(duree) } : {}),
+        ...(note.trim() !== "" ? { note: note.trim() } : {}),
+      }),
+    onSuccess: (reponse) => {
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      setNote("");
+      toast.success("Code créé.", reponse.data.code);
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const revoquer = useMutation({
+    mutationFn: ({ id, motif }: { id: number; motif: string }) =>
+      apiPost(`/admin/codes/${id}/revoke`, { motif }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      toast.success("Code révoqué.");
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  return (
+    <div className="space-y-4">
+      <Banner tone="info">
+        Un code ouvre l’application entière à qui le saisit dans ses paramètres. Révoquer un code
+        empêche les nouvelles utilisations, sans reprendre l’accès à ceux qui s’en sont déjà
+        servis de bonne foi. Chaque création est consignée au journal.
+      </Banner>
+
+      <Card padding="md" className="space-y-3">
+        <CardHeader title="Créer un code" subtitle="À dicter ou à recopier : ni O/0, ni I/1, ni S/5." />
+        <div className="grid gap-3 sm:grid-cols-4">
+          <label className="text-sm">
+            <span className="mb-1.5 block font-medium text-slate-700">Offre</span>
+            <select
+              value={offre}
+              onChange={(event) => setOffre(event.target.value)}
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3"
+            >
+              <option value="complet">Complet</option>
+              <option value="foyer">Foyer</option>
+            </select>
+          </label>
+          <Field
+            label="Utilisations"
+            type="number"
+            min="1"
+            value={utilisations}
+            onChange={(event) => setUtilisations(event.target.value)}
+          />
+          <Field
+            label="Durée (jours)"
+            type="number"
+            min="1"
+            value={duree}
+            onChange={(event) => setDuree(event.target.value)}
+            hint="Vide = sans fin"
+          />
+          <Field label="Note" value={note} onChange={(event) => setNote(event.target.value)} />
+        </div>
+        <Button type="button" onClick={() => creer.mutate()} loading={creer.isPending}>
+          Créer le code
+        </Button>
+      </Card>
+
+      <Card padding="md">
+        <CardHeader title="Codes existants" />
+        <ul className="mt-3 space-y-2">
+          {codes.data?.data.length === 0 ? <li className="text-sm text-slate-500">Aucun code.</li> : null}
+          {codes.data?.data.map((code) => (
+            <li
+              key={code.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 px-3 py-2.5"
+            >
+              <div className="min-w-0">
+                <p className="font-mono text-sm font-semibold tracking-wider text-slate-900">{code.code}</p>
+                <p className="text-xs text-slate-500">
+                  {code.offre_libelle} · {code.utilisations}/{code.utilisations_max} utilisé
+                  {code.duree_jours ? ` · ${code.duree_jours} jours` : " · sans fin"}
+                  {code.note ? ` · ${code.note}` : ""}
+                  {code.utilisable ? "" : " · inutilisable"}
+                </p>
+              </div>
+              {code.actif ? (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => {
+                    const motif = window.prompt(`Motif de la révocation du code ${code.code} :`);
+                    if (motif === null || motif.trim().length < 3) return;
+                    revoquer.mutate({ id: code.id, motif: motif.trim() });
+                  }}
+                >
+                  Révoquer
+                </Button>
+              ) : (
+                <span className="text-xs text-slate-400">révoqué</span>
+              )}
             </li>
           ))}
         </ul>

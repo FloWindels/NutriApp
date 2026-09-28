@@ -127,6 +127,12 @@ class AuthController extends Controller
             'has_profile' => $profile !== null && $calculator->isComplete($profile),
             'household_id' => $user->household_id !== null ? (int) $user->household_id : null,
             'consentement_sante' => $user->consentement_sante_at !== null,
+            'offre' => [
+                'nom' => $user->offreEffective()->value,
+                'libelle' => $user->offreEffective()->label(),
+                'capacites' => array_values($user->offreEffective()->capacites()),
+                'expire_le' => $user->offre_expire_le?->toISOString(),
+            ],
             'conditions' => [
                 'accepte_le' => $user->cgu_accepted_at?->toISOString(),
                 'cgu_version' => $user->cgu_version,

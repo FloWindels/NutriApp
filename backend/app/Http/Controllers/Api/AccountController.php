@@ -7,6 +7,7 @@ use App\Http\Requests\Account\DeleteAccountRequest;
 use App\Http\Requests\Account\UpdateAccountRequest;
 use App\Http\Requests\Account\UpdatePasswordRequest;
 use App\Models\User;
+use App\Services\Offres\CodeAccesService;
 use App\Services\Account\AccountDeletionService;
 use App\Services\Account\AccountExporter;
 use Illuminate\Http\JsonResponse;
@@ -78,6 +79,28 @@ class AccountController extends Controller
         $service->delete($user, (string) $request->validated('password'));
 
         return response()->json(['message' => self::MSG_COMPTE_SUPPRIME]);
+    }
+
+    /**
+     * POST /account/code — ouvre une offre à partir d'un code fourni par l'éditeur.
+     *
+     * C'est le chemin par lequel un proche invité à essayer l'application obtient l'accès
+     * complet, sans qu'aucun paiement n'existe encore.
+     */
+    public function redeemCode(Request $request, CodeAccesService $codes): JsonResponse
+    {
+        $valide = $request->validate(['code' => ['required', 'string', 'max:24']]);
+
+        $code = $codes->consommer($request->user(), $valide['code']);
+
+        return response()->json([
+            'message' => 'Code accepté. Ton offre a été mise à jour.',
+            'data' => [
+                'offre' => $code->offre->value,
+                'offre_libelle' => $code->offre->label(),
+                'expire_le' => $request->user()->fresh()->offre_expire_le?->toISOString(),
+            ],
+        ]);
     }
 
     public function export(Request $request, AccountExporter $exporter): JsonResponse

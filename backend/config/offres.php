@@ -1,0 +1,42 @@
+<?php
+
+use App\Enums\Offre;
+
+/**
+ * Découpage des offres.
+ *
+ * Une capacité est nommée ici et nulle part ailleurs : le middleware `offre`, les contrôleurs
+ * et l'interface s'y réfèrent par ce nom. Déplacer une fonctionnalité d'une offre à l'autre est
+ * donc une ligne à changer dans ce fichier, pas une chasse dans tout le code.
+ */
+return [
+
+    /*
+    | stock          — gestion du garde-manger, alertes de péremption, anti-gaspillage
+    | courses        — liste de courses partagée et sa génération
+    | planificateur  — planification des repas de la semaine
+    | coach          — conseils du jour (moteur de règles, sans IA)
+    | regimes        — évaluation du régime reconnu
+    | ia             — séances, recettes et photo d'assiette générées par un modèle
+    | foyer          — partage avec les autres membres du ménage
+    */
+    'capacites' => [
+        // Le suivi normal, sans rien de ce qui précède : repas, aliments, code-barres,
+        // recettes personnelles, sport par les règles, poids, profil, paramètres, historique.
+        Offre::Gratuit->value => [],
+
+        Offre::Complet->value => ['stock', 'courses', 'planificateur', 'coach', 'regimes', 'ia'],
+
+        Offre::Foyer->value => ['stock', 'courses', 'planificateur', 'coach', 'regimes', 'ia', 'foyer'],
+    ],
+
+    /** Tarifs indicatifs, affichés par le site. Aucun paiement n'est encore branché. */
+    'tarifs' => [
+        Offre::Gratuit->value => ['mensuel' => 0.0, 'annuel' => 0.0],
+        Offre::Complet->value => ['mensuel' => 4.99, 'annuel' => 39.99],
+        Offre::Foyer->value => ['mensuel' => 7.99, 'annuel' => 59.99],
+    ],
+
+    /** Nombre de membres qu'un foyer peut réunir sous l'offre Foyer. */
+    'foyer_membres_max' => 5,
+];

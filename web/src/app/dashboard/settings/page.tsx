@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { DOCUMENTS } from "@/components/legal/legal-page";
+import { OffreCard } from "@/components/settings/offre-card";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -212,6 +213,8 @@ export default function SettingsPage() {
           <li>Les objectifs sont des estimations, pas un avis médical.</li>
         </ul>
       </Card>
+
+      <OffreCard />
 
       <Card padding="md">
         <p className="text-sm font-semibold text-slate-900">Tes données et tes droits</p>

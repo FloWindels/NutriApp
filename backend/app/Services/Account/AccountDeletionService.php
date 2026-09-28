@@ -3,6 +3,7 @@
 namespace App\Services\Account;
 
 use App\Enums\HouseholdRole;
+use App\Models\CodeAccesUtilisation;
 use App\Models\DailyTarget;
 use App\Models\Food;
 use App\Models\Household;
@@ -197,6 +198,7 @@ class AccountDeletionService
         Recommendation::query()->where('user_id', $userId)->delete();
         UserSetting::query()->where('user_id', $userId)->delete();
         NotificationRead::query()->where('user_id', $userId)->delete();
+        CodeAccesUtilisation::query()->where('user_id', $userId)->delete();
 
         // Courses et planificateur personnels (les lignes de foyer ont été réattribuées plus haut).
         ShoppingItem::query()->where('user_id', $userId)->whereNull('household_id')->delete();
