@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { ActivityModal } from "@/components/sport/activity-modal";
 import { GenerateForm } from "@/components/sport/generate-form";
 import { LogPlanModal } from "@/components/sport/log-modal";
-import { SessionRow } from "@/components/sport/shared";
+import { CoachSportifVerrouille, SessionRow } from "@/components/sport/shared";
 import { coefficientPct, useSportSummary } from "@/components/sport/sport-api";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { Modal } from "@/components/ui/modal";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { getErrorMessage } from "@/lib/api-client";
+import { useOffre } from "@/hooks/use-offre";
 import { capitalize, formatKcal, formatMinutes, formatRelativeDay, formatTime, todayIso } from "@/lib/format";
 import type { SportPlan } from "@/lib/types/api";
 
@@ -29,6 +30,7 @@ export type TodayTabProps = {
 export function TodayTab({ autoGenerate = false }: TodayTabProps) {
   const date = useMemo(() => todayIso(), []);
   const summaryQuery = useSportSummary();
+  const { peut } = useOffre();
   const [generating, setGenerating] = useState(autoGenerate);
   const [generatePlanId, setGeneratePlanId] = useState<number | null>(null);
   const [activityOpen, setActivityOpen] = useState(false);
@@ -145,7 +147,9 @@ export function TodayTab({ autoGenerate = false }: TodayTabProps) {
         </Button>
       </div>
 
-      {generating ? (
+      {generating && !peut("seances") ? <CoachSportifVerrouille /> : null}
+
+      {generating && peut("seances") ? (
         <GenerateForm
           key={generatePlanId ?? "libre"}
           planId={generatePlanId}

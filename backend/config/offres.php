@@ -16,13 +16,15 @@ return [
     | courses        — liste de courses partagée et sa génération
     | planificateur  — planification des repas de la semaine
     | coach          — conseils du jour (moteur de règles, sans IA)
+    | seances        — le coach sportif propose une séance : par l'IA comme par les règles
     | regimes        — évaluation du régime reconnu
     | ia             — séances, recettes et photo d'assiette générées par un modèle
     | foyer          — partage avec les autres membres du ménage
     */
     'capacites' => [
-        // Le suivi normal : repas, aliments, code-barres, recettes personnelles, sport par les
-        // règles, poids, profil, paramètres, historique.
+        // Le suivi normal : repas, aliments, code-barres, recettes personnelles, poids, profil,
+        // paramètres, historique, et le suivi sportif — enregistrer ses séances et ses activités,
+        // tenir son calendrier. Ce qui est payant, c'est le coach qui PROPOSE une séance.
         //
         // Le coach du jour y figure délibérément. C'est un moteur de règles qui ne coûte rien à
         // faire tourner, et c'est le meilleur argument d'abonnement du produit : on ne paie que
@@ -30,9 +32,9 @@ return [
         // planificateur, qui eux sont payants.
         Offre::Gratuit->value => ['coach'],
 
-        Offre::Complet->value => ['stock', 'courses', 'planificateur', 'coach', 'regimes', 'ia'],
+        Offre::Complet->value => ['stock', 'courses', 'planificateur', 'coach', 'seances', 'regimes', 'ia'],
 
-        Offre::Foyer->value => ['stock', 'courses', 'planificateur', 'coach', 'regimes', 'ia', 'foyer'],
+        Offre::Foyer->value => ['stock', 'courses', 'planificateur', 'coach', 'seances', 'regimes', 'ia', 'foyer'],
     ],
 
     /** Tarifs indicatifs, affichés par le site. Aucun paiement n'est encore branché. */

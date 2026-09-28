@@ -35,9 +35,9 @@ Route::delete('/sport/sports/{sport}', [SportCatalogController::class, 'destroy'
 Route::get('/sport/calendar', [SportCalendarController::class, 'index']);
 Route::post('/sport/calendar', [SportCalendarController::class, 'store']);
 Route::post('/sport/calendar/recurring', [SportCalendarController::class, 'storeRecurring']);
-Route::post('/sport/calendar/plan-week', [SportCalendarController::class, 'planWeek']);
+Route::post('/sport/calendar/plan-week', [SportCalendarController::class, 'planWeek'])->middleware('offre:seances');
 Route::post('/sport/calendar/{plan}/log', [SportCalendarController::class, 'log'])->whereNumber('plan');
-Route::post('/sport/calendar/{plan}/propose', [SportCalendarController::class, 'propose'])->whereNumber('plan');
+Route::post('/sport/calendar/{plan}/propose', [SportCalendarController::class, 'propose'])->whereNumber('plan')->middleware('offre:seances');
 Route::put('/sport/calendar/{plan}', [SportCalendarController::class, 'update'])->whereNumber('plan');
 Route::delete('/sport/calendar/{plan}', [SportCalendarController::class, 'destroy'])->whereNumber('plan');
 
@@ -47,7 +47,7 @@ Route::post('/sport/calories/estimate', [SportActivityController::class, 'estima
 
 // --- Séances ------------------------------------------------------------------------------
 Route::get('/sport/sessions', [WorkoutSessionController::class, 'index']);
-Route::post('/sport/sessions/generate', [WorkoutSessionController::class, 'generate']);
+Route::post('/sport/sessions/generate', [WorkoutSessionController::class, 'generate'])->middleware('offre:seances');
 Route::post('/sport/sessions', [WorkoutSessionController::class, 'store']);
 Route::post('/sport/sessions/{session}/start', [WorkoutSessionController::class, 'start'])->whereNumber('session');
 Route::post('/sport/sessions/{session}/complete', [WorkoutSessionController::class, 'complete'])->whereNumber('session');

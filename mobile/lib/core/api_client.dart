@@ -12,6 +12,8 @@ enum ApiErrorKind {
   timeout,
   unauthorized,
   forbidden,
+  /// 402 : la fonctionnalité existe, mais elle fait partie d'une offre payante.
+  offreRequise,
   notFound,
   validation,
   server,
@@ -42,6 +44,8 @@ class ApiException implements Exception {
   bool get isNetwork => kind == ApiErrorKind.network || kind == ApiErrorKind.timeout;
 
   bool get isUnauthorized => kind == ApiErrorKind.unauthorized;
+
+  bool get isOffreRequise => kind == ApiErrorKind.offreRequise;
 
   /// Builds an [ApiException] from a [DioException], applying the French
   /// mapping of the contract (§16.1).
@@ -91,6 +95,13 @@ class ApiException implements Exception {
       return ApiException(
         kind: ApiErrorKind.forbidden,
         message: 'Action non autorisée.',
+        statusCode: status,
+      );
+    }
+    if (status == 402) {
+      return ApiException(
+        kind: ApiErrorKind.offreRequise,
+        message: serverMessage ?? 'Cette fonctionnalité fait partie d’une offre payante.',
         statusCode: status,
       );
     }

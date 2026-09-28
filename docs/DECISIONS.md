@@ -55,6 +55,26 @@ dépassé, un réseau coupé ou une réponse illisible, les règles Mavi'oh pren
 automatiquement et l'utilisateur reçoit quand même une séance. Aucune donnée nominative n'est envoyée
 au modèle : seul un contexte anonymisé l'est.
 
+## Ce que couvre l'offre gratuite
+
+Le partage n'est pas « les fonctions simples d'un côté, l'IA de l'autre ». Il porte sur le travail
+rendu :
+
+- **Gratuit, le suivi.** Enregistrer ses repas, chercher un aliment, scanner un code-barres, écrire
+  ses recettes, se peser, tenir son calendrier sportif, consigner une activité ou une séance faite,
+  relire son historique. Plus le **coach du jour**, un moteur de règles qui ne coûte rien à faire
+  tourner et qui donne envie du reste.
+- **Payant, ce qui travaille à la place de l'utilisateur.** Le stock et ses alertes, la liste de
+  courses, le planificateur, l'évaluation d'un régime, le mode foyer, l'IA — et le **coach sportif**,
+  c'est-à-dire la séance proposée.
+
+Le coach sportif est payant **quel que soit son moteur**. L'IA n'est qu'une implémentation : quand
+elle est absente, lente ou illisible, les règles Mavi'oh rendent le même service, une séance
+construite pour quelqu'un. Laisser passer le repli reviendrait à offrir la fonction dès que l'IA
+tombe, et à faire dépendre un droit d'accès de la disponibilité d'un serveur de modèles. Le verrou
+est donc posé sur les routes qui *proposent* (`sessions/generate`, `calendar/{plan}/propose`,
+`calendar/plan-week`), jamais sur celles qui *enregistrent*.
+
 ## État et navigation côté mobile
 
 `flutter_riverpod` et `go_router` étaient déclarés mais inutilisés. La version 1 s'appuie sur des
@@ -98,7 +118,7 @@ mesurée ou approchée, comme le demandait le cahier des charges.
 |---|---|
 | Restaurants et carte | dépend d'une source de données et d'une géolocalisation à choisir |
 | OCR d'étiquette, saisie vocale | phases ultérieures du cahier des charges |
-| Offres verrouillées sur mobile | Le backend refuse en 402 partout, donc aucune fonctionnalité payante n'est atteignable depuis le téléphone. En revanche l'application n'affiche pas encore d'écran d'invitation : elle montre l'erreur. À compléter |
+| Écran d'invitation sur mobile | Le backend refuse en 402 partout : aucune fonctionnalité payante n'est atteignable depuis le téléphone, et l'application affiche le message du serveur, qui dit quelle offre est requise. Ce qui manque encore, c'est l'écran qui vante la fonction et propose de saisir un code, comme sur le web. À compléter |
 | Espace d'administration sur mobile | La modération se fait posément, depuis un bureau. Le porter doublerait la surface d'attaque et de test pour un usage marginal, alors que le mobile n'a aucune notion de rôle. Décision assumée, pas un oubli |
 | Notifications système (push) | les notifications sont pour l'instant internes à l'application |
 | Espace d'administration `/admin` | périmètre et droits non définis |

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { OffreRequise } from "@/components/ui/offre-requise";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { cn } from "@/lib/cn";
 import { formatKcal, formatMinutes, formatTime } from "@/lib/format";
@@ -149,5 +150,22 @@ export function SportGlyph({ className }: { className?: string }) {
         <rect x="14.5" y="8" width="3" height="8" rx="1.2" stroke="currentColor" strokeWidth="1.8" />
       </svg>
     </span>
+  );
+}
+
+/**
+ * Ce que voit un compte gratuit à la place d'une séance proposée.
+ *
+ * Le verrou porte sur la proposition — que la séance vienne de l'IA ou des règles Mavi'oh,
+ * c'est le même travail rendu. Enregistrer une activité, tenir son calendrier et consulter
+ * ses séances restent gratuits, et le texte le dit pour ne pas laisser croire que le suivi
+ * sportif disparaît.
+ */
+export function CoachSportifVerrouille() {
+  return (
+    <OffreRequise
+      titre="Le coach sportif fait partie des offres payantes"
+      argument="Mavi’oh construit la séance à ta place : les exercices, les séries, les charges et la durée, adaptés à ton niveau, à ton matériel et au temps dont tu disposes. Enregistrer une activité, planifier tes jours et retrouver tes séances passées restent gratuits."
+    />
   );
 }

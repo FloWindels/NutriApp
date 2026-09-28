@@ -5,7 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { GenerateForm } from "@/components/sport/generate-form";
 import { LogPlanModal } from "@/components/sport/log-modal";
 import { PlanModal } from "@/components/sport/plan-modal";
-import { PlanStatusPill, SessionRow, SportGlyph } from "@/components/sport/shared";
+import { CoachSportifVerrouille, PlanStatusPill, SessionRow, SportGlyph } from "@/components/sport/shared";
 import { monthBounds, sportApi, useInvalidateSport, useSportCalendar } from "@/components/sport/sport-api";
 import { WeekPlanModal } from "@/components/sport/week-plan-modal";
 import { Banner } from "@/components/ui/banner";
@@ -18,6 +18,7 @@ import { Modal } from "@/components/ui/modal";
 import { MonthCalendar, type CalendarMarkerTone } from "@/components/ui/month-calendar";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { useOffre } from "@/hooks/use-offre";
 import { getErrorMessage } from "@/lib/api-client";
 import { capitalize, formatKcal, formatLongDate, formatMinutes, formatTime, todayIso } from "@/lib/format";
 import type { SportPlan } from "@/lib/types/api";
@@ -38,6 +39,7 @@ export function CalendarTab() {
   const [proposePlan, setProposePlan] = useState<SportPlan | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SportPlan | null>(null);
 
+  const { peut } = useOffre();
   const invalidate = useInvalidateSport();
   const { success, error: toastError } = useToast();
 
@@ -231,7 +233,9 @@ export function CalendarTab() {
               </Card>
             )}
 
-            {proposePlan ? (
+            {proposePlan && !peut("seances") ? <CoachSportifVerrouille /> : null}
+
+            {proposePlan && peut("seances") ? (
               <GenerateForm
                 key={proposePlan.id}
                 planId={proposePlan.id}
@@ -251,7 +255,15 @@ export function CalendarTab() {
         date={selected}
         plan={planModal.plan}
       />
-      <WeekPlanModal open={weekOpen} onClose={() => setWeekOpen(false)} date={selected} />
+      <WeekPlanModal open={weekOpen && peut("seances")} onClose={() => setWeekOpen(false)} date={selected} />
+
+      <Modal
+        open={weekOpen && !peut("seances")}
+        onClose={() => setWeekOpen(false)}
+        title="Planifier ma semaine"
+      >
+        <CoachSportifVerrouille />
+      </Modal>
       <LogPlanModal open={logPlan !== null} onClose={() => setLogPlan(null)} plan={logPlan} />
 
       {deleteTarget?.recurrence_id ? (
