@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, getErrorMessage } from "@/lib/api-client";
-import { formatNumber } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import type { DataEnvelope } from "@/lib/types/api";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
-import { Field } from "@/components/ui/field";
+import { Field, SelectField } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
 import { Overline, SectionHeader } from "@/components/ui/section-header";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/stat-card";
@@ -57,6 +58,16 @@ type AdminUser = {
   email_verifie: boolean;
   role: string;
   dans_un_foyer: boolean;
+  offre: OffreCle;
+  offre_libelle: string;
+  offre_expire_le: string | null;
+  /** Son offre à elle, échéance appliquée : c'est le serveur qui tranche, pas l'horloge du navigateur. */
+  offre_valide: OffreCle;
+  /** Ce dont le compte dispose vraiment : la meilleure entre la sienne et celle de son foyer. */
+  offre_effective: OffreCle;
+  offre_effective_libelle: string;
+  /** Combien de comptes dépendent de l'offre de celui-ci, parce qu'il porte leur foyer. */
+  foyer_membres_couverts: number;
   suspendu_le: string | null;
   suspension_motif: string | null;
   cgu_version: string | null;
@@ -92,6 +103,8 @@ type JournalLigne = {
   created_at: string | null;
 };
 
+type OffreCle = "gratuit" | "complet" | "foyer";
+
 type Onglet = "tableau" | "comptes" | "moderation" | "codes" | "journal";
 
 const ONGLETS: { cle: Onglet; libelle: string }[] = [
@@ -101,6 +114,36 @@ const ONGLETS: { cle: Onglet; libelle: string }[] = [
   { cle: "codes", libelle: "Codes d’accès" },
   { cle: "journal", libelle: "Journal" },
 ];
+
+const OFFRES: { cle: OffreCle; libelle: string }[] = [
+  { cle: "gratuit", libelle: "Gratuit" },
+  { cle: "complet", libelle: "Complet" },
+  { cle: "foyer", libelle: "Foyer" },
+];
+
+/** Miroir de Offre::rang() : une offre n’en couvre une autre que si son rang est plus haut. */
+const RANG_OFFRE: Record<OffreCle, number> = { gratuit: 0, complet: 1, foyer: 2 };
+
+// Le journal garde des identifiants stables : les traduire ici, et non en base, permet de
+// reformuler un libellé sans toucher aux lignes déjà écrites.
+const CIBLES_JOURNAL: Record<string, string> = {
+  user: "compte",
+  food: "aliment",
+  recipe: "recette",
+  code_acces: "code d’accès",
+};
+
+const ACTIONS_JOURNAL: Record<string, string> = {
+  suspendre_compte: "Suspension d’un compte",
+  lever_suspension: "Levée d’une suspension",
+  changer_offre: "Changement d’offre",
+  masquer_aliment: "Masquage d’un aliment",
+  demasquer_aliment: "Rétablissement d’un aliment",
+  masquer_recette: "Masquage d’une recette",
+  demasquer_recette: "Rétablissement d’une recette",
+  creer_code_acces: "Création d’un code d’accès",
+  revoquer_code_acces: "Révocation d’un code d’accès",
+};
 
 export default function AdminPage() {
   const [onglet, setOnglet] = useState<Onglet>("tableau");
@@ -272,6 +315,7 @@ function Comptes() {
   const toast = useToast();
   const [recherche, setRecherche] = useState("");
   const [terme, setTerme] = useState("");
+  const [cible, setCible] = useState<AdminUser | null>(null);
 
   const comptes = useQuery({
     queryKey: ["admin", "users", terme],
@@ -284,6 +328,17 @@ function Comptes() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin"] });
       toast.success("Compte mis à jour.");
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const changerOffre = useMutation({
+    mutationFn: ({ id, ...corps }: { id: number; offre: OffreCle; duree_jours?: number; motif: string }) =>
+      apiPost(`/admin/users/${id}/offre`, corps),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      setCible(null);
+      toast.success("Offre mise à jour.");
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
@@ -331,10 +386,10 @@ function Comptes() {
 
       {comptes.data ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[46rem] border-collapse text-sm">
+          <table className="w-full min-w-[58rem] border-collapse text-sm">
             <thead>
               <tr>
-                {["Compte", "État", "Conditions", "Inscrit le", ""].map((entete) => (
+                {["Compte", "État", "Offre", "Conditions", "Inscrit le", ""].map((entete) => (
                   <th
                     key={entete}
                     className="border-b border-slate-300 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500"
@@ -364,6 +419,9 @@ function Comptes() {
                       "Actif"
                     )}
                   </td>
+                  <td className="border-b border-slate-200 px-3 py-2.5">
+                    <OffreCellule compte={compte} />
+                  </td>
                   <td className="border-b border-slate-200 px-3 py-2.5 text-xs text-slate-600">
                     {compte.cgu_version ?? "—"}
                   </td>
@@ -371,11 +429,16 @@ function Comptes() {
                     {compte.created_at ? compte.created_at.slice(0, 10) : "—"}
                   </td>
                   <td className="border-b border-slate-200 px-3 py-2.5">
-                    {compte.role === "administrateur" ? null : (
-                      <Button size="sm" variant={compte.suspendu_le ? "secondary" : "danger"} onClick={() => basculer(compte)}>
-                        {compte.suspendu_le ? "Rétablir" : "Suspendre"}
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      <Button size="sm" variant="secondary" onClick={() => setCible(compte)}>
+                        Changer l’offre
                       </Button>
-                    )}
+                      {compte.role === "administrateur" ? null : (
+                        <Button size="sm" variant={compte.suspendu_le ? "secondary" : "danger"} onClick={() => basculer(compte)}>
+                          {compte.suspendu_le ? "Rétablir" : "Suspendre"}
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -383,7 +446,180 @@ function Comptes() {
           </table>
         </div>
       ) : null}
+
+      {cible ? (
+        <ModaleOffre
+          key={cible.id}
+          compte={cible}
+          envoiEnCours={changerOffre.isPending}
+          onFermer={() => setCible(null)}
+          onValider={(corps) => changerOffre.mutate({ id: cible.id, ...corps })}
+        />
+      ) : null}
     </Card>
+  );
+}
+
+/**
+ * Ce qu’un compte a souscrit, et ce dont il dispose réellement : les deux divergent pour le
+ * membre d’un foyer, couvert par l’offre du propriétaire. N’afficher que la colonne brute
+ * ferait croire à tort que cette personne est bridée.
+ */
+function OffreCellule({ compte }: { compte: AdminUser }) {
+  // L’échéance se joue à l’heure près, et le navigateur ne voit qu’une date : recalculer ici
+  // annoncerait une offre encore active des heures après que le serveur l’a coupée. C’est donc
+  // lui qui tranche, avec offre_valide.
+  const expiree = compte.offre_expire_le !== null && compte.offre_valide !== compte.offre;
+  // L’offre effective n’est pas toujours la meilleure des deux : une échéance passée la fait
+  // retomber SOUS l’offre souscrite. Comparer les deux clés brutes annoncerait donc « couvert
+  // par le foyer » à un compte échu qui n’a même pas de foyer.
+  const couvertParLeFoyer =
+    compte.dans_un_foyer && RANG_OFFRE[compte.offre_effective] > RANG_OFFRE[compte.offre_valide];
+
+  return (
+    <>
+      <p className="text-slate-900">
+        <span className="font-medium">{compte.offre_libelle}</span>
+        {expiree ? <span className="text-rose-700"> (expirée)</span> : null}
+        {couvertParLeFoyer ? (
+          <span className="text-slate-600"> · couvert par le foyer ({compte.offre_effective_libelle})</span>
+        ) : null}
+      </p>
+      <p className="mt-0.5 text-xs text-slate-500">
+        {compte.offre_expire_le
+          ? `${expiree ? "expirée le" : "jusqu’au"} ${formatDate(compte.offre_expire_le)}`
+          : "sans échéance"}
+      </p>
+      {compte.foyer_membres_couverts > 0 ? (
+        <p className="mt-0.5 text-xs text-slate-500">
+          couvre {compte.foyer_membres_couverts} membre{compte.foyer_membres_couverts > 1 ? "s" : ""} de son foyer
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Jours restants avant une échéance, arrondis au jour supérieur : reposer la même durée
+ * reconduit la même date, et une échéance déjà passée ne propose rien.
+ */
+function joursRestants(echeance: string | null): string {
+  if (echeance === null) return "";
+
+  const jours = Math.ceil((Date.parse(echeance) - Date.now()) / 86_400_000);
+
+  return jours >= 1 && jours <= 3650 ? String(jours) : "";
+}
+
+/**
+ * Poser une offre à la main demande trois réponses : laquelle, pour combien de temps, et
+ * pourquoi. Une invite du navigateur n’en accepte qu’une, d’où cette boîte de dialogue.
+ */
+function ModaleOffre({
+  compte,
+  envoiEnCours,
+  onFermer,
+  onValider,
+}: {
+  compte: AdminUser;
+  envoiEnCours: boolean;
+  onFermer: () => void;
+  onValider: (corps: { offre: OffreCle; duree_jours?: number; motif: string }) => void;
+}) {
+  // Préremplie avec ce qu’il reste à courir : rouvrir la boîte pour corriger un détail ne doit
+  // pas transformer une offre datée en abonnement à vie par simple omission.
+  const [offre, setOffre] = useState<OffreCle>(compte.offre);
+  const [duree, setDuree] = useState(() => joursRestants(compte.offre_expire_le));
+  const [motif, setMotif] = useState("");
+
+  // L’offre gratuite n’expire pas : la durée est neutralisée pendant le rendu, et non remise à
+  // zéro dans un effet — React 19 interdit d’y écrire un état.
+  const sansEcheance = offre === "gratuit";
+  const dureeSaisie = sansEcheance ? "" : duree;
+  const jours = Number(dureeSaisie.trim());
+  const dureeValide = dureeSaisie.trim() === "" || (Number.isInteger(jours) && jours >= 1 && jours <= 3650);
+  const motifValide = motif.trim().length >= 3;
+
+  function envoyer() {
+    if (!motifValide || !dureeValide) return;
+    onValider({
+      offre,
+      ...(dureeSaisie.trim() === "" ? {} : { duree_jours: jours }),
+      motif: motif.trim(),
+    });
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onFermer}
+      locked={envoiEnCours}
+      title="Changer l’offre"
+      description={`${compte.name} — ${compte.email} · aujourd’hui : ${compte.offre_libelle}, ${
+        compte.offre_expire_le ? `jusqu’au ${formatDate(compte.offre_expire_le)}` : "sans échéance"
+      }`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onFermer} disabled={envoiEnCours}>
+            Annuler
+          </Button>
+          <Button onClick={envoyer} loading={envoiEnCours} disabled={!motifValide || !dureeValide}>
+            Appliquer
+          </Button>
+        </>
+      }
+    >
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          envoyer();
+        }}
+      >
+        <SelectField label="Offre" value={offre} onChange={(event) => setOffre(event.target.value as OffreCle)}>
+          {OFFRES.map((item) => (
+            <option key={item.cle} value={item.cle}>
+              {item.libelle}
+            </option>
+          ))}
+        </SelectField>
+
+        <Field
+          label="Durée (jours)"
+          type="number"
+          min="1"
+          max="3650"
+          value={dureeSaisie}
+          disabled={sansEcheance}
+          onChange={(event) => setDuree(event.target.value)}
+          hint={
+            sansEcheance
+              ? "L’offre gratuite n’expire pas."
+              : compte.offre_expire_le && dureeSaisie.trim() === ""
+                ? `Vide = supprimer l’échéance du ${formatDate(compte.offre_expire_le)} : l’offre n’aura plus de fin.`
+                : "Vide = sans échéance. Sinon, de 1 à 3650 jours à compter d’aujourd’hui."
+          }
+          error={dureeValide ? undefined : "Entre 1 et 3650 jours."}
+        />
+
+        {compte.foyer_membres_couverts > 0 && RANG_OFFRE[offre] < RANG_OFFRE["foyer"] ? (
+          <Banner tone="warning">
+            {compte.foyer_membres_couverts > 1
+              ? `Ce compte couvre ${compte.foyer_membres_couverts} autres personnes de son foyer. Lui retirer l’offre Foyer leur retire aussi, à l’instant, les fonctions payantes qu’elles en tiennent.`
+              : "Ce compte couvre une autre personne de son foyer. Lui retirer l’offre Foyer lui retire aussi, à l’instant, les fonctions payantes qu’elle en tient."}
+          </Banner>
+        ) : null}
+
+        <Field
+          label="Motif"
+          required
+          value={motif}
+          onChange={(event) => setMotif(event.target.value)}
+          placeholder="Pourquoi ce changement ?"
+          hint="Consigné au journal avec ton adresse. Trois caractères au minimum."
+        />
+      </form>
+    </Modal>
   );
 }
 
@@ -654,12 +890,12 @@ function Journal() {
         {journal.data?.data.map((ligne) => (
           <li key={ligne.id} className="rounded-2xl border border-slate-200 px-3 py-2.5 text-sm">
             <p className="text-slate-900">
-              <span className="font-medium">{ligne.action}</span>
+              <span className="font-medium">{ACTIONS_JOURNAL[ligne.action] ?? ligne.action}</span>
               {ligne.cible_libelle ? ` — ${ligne.cible_libelle}` : ""}
             </p>
             <p className="mt-0.5 text-xs text-slate-500">
               {ligne.admin_email} · {ligne.created_at?.slice(0, 19).replace("T", " ")} ·{" "}
-              {ligne.cible_type}
+              {CIBLES_JOURNAL[ligne.cible_type] ?? ligne.cible_type}
               {ligne.cible_id !== null ? ` #${ligne.cible_id}` : ""}
             </p>
             <p className="mt-1 text-xs text-slate-600">Motif : {ligne.motif}</p>

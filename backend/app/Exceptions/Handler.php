@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
@@ -94,6 +95,20 @@ class Handler extends ExceptionHandler
                     $e->getHeaders()
                 );
             }
+        });
+
+        // Un mauvais verbe sur une route d'administration trahissait tout l'espace : Symfony
+        // répond « The GET method is not supported for route api/admin/users/1/offre. Supported
+        // methods: POST. », là où une URL inexistante répond « Introuvable. ». Le préfixe, le
+        // chemin exact et le verbe attendu se lisaient donc sans le moindre jeton. L'espace
+        // d'administration doit rester indistinguable d'une adresse qui n'existe pas.
+        $this->renderable(function (MethodNotAllowedHttpException $e, Request $request) {
+            if (! $request->is('api/admin/*') && ! $request->is('api/admin')) {
+                return null;
+            }
+
+            // Mot pour mot la réponse du middleware `admin`, sinon la différence trahirait.
+            return new JsonResponse(['message' => 'Introuvable.'], 404);
         });
 
         // Filet de sécurité : toute autre erreur sur l'API devient un JSON propre.

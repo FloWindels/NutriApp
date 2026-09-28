@@ -76,13 +76,33 @@ class CodeAccesService
                 ]);
             }
 
+            // Un code ouvre, il ne referme jamais. Sans cette garde, quelqu'un à qui un
+            // administrateur a posé l'offre Foyer à la main la perdrait en saisissant un code
+            // « Complet, 30 jours » reçu ailleurs — et les membres de son foyer avec lui.
+            $actuelle = $user->offreValide();
+
+            if ($code->offre->rang() < $actuelle->rang()) {
+                throw ValidationException::withMessages([
+                    'code' => ['Ton offre actuelle est déjà plus complète que ce code.'],
+                ]);
+            }
+
             CodeAccesUtilisation::query()->create(['code_acces_id' => $code->id, 'user_id' => $user->id]);
             $code->increment('utilisations');
+
+            $echeance = $code->duree_jours !== null ? now()->addDays($code->duree_jours) : null;
+
+            // À rang égal, une échéance ne se rapproche pas : un code de 30 jours ne doit pas
+            // raboter un accès accordé sans terme, ni une date plus lointaine déjà acquise.
+            if ($code->offre === $actuelle && $echeance !== null
+                && ($user->offre_expire_le === null || $user->offre_expire_le->greaterThan($echeance))) {
+                $echeance = $user->offre_expire_le;
+            }
 
             $user->forceFill([
                 'offre' => $code->offre,
                 // Sans durée, l'accès ne s'éteint pas de lui-même.
-                'offre_expire_le' => $code->duree_jours !== null ? now()->addDays($code->duree_jours) : null,
+                'offre_expire_le' => $echeance,
             ])->save();
 
             return $code;

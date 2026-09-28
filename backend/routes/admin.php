@@ -25,6 +25,7 @@ Route::middleware(['admin', 'throttle:60,1'])->group(function () {
     Route::get('/users', [AdminUserController::class, 'index']);
     Route::post('/users/{user}/suspend', [AdminUserController::class, 'suspend'])->whereNumber('user');
     Route::post('/users/{user}/restore', [AdminUserController::class, 'restore'])->whereNumber('user');
+    Route::post('/users/{user}/offre', [AdminUserController::class, 'offre'])->whereNumber('user');
 
     Route::get('/moderation/foods', [AdminModerationController::class, 'foods']);
     Route::get('/moderation/recipes', [AdminModerationController::class, 'recipes']);

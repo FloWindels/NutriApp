@@ -154,6 +154,48 @@ class CodeAccesTest extends TestCase
         $this->postJson('/api/account/code', ['code' => $code])->assertStatus(422);
     }
 
+    /**
+     * Un code ouvre, il ne referme jamais.
+     *
+     * Depuis que l'administrateur peut poser une offre à la main, le cas devient concret :
+     * quelqu'un à qui on a accordé le Foyer perdrait son foyer — et les siens avec — en saisissant
+     * un code « Complet » reçu ailleurs.
+     */
+    public function test_un_code_ne_retrograde_jamais_une_offre_deja_meilleure(): void
+    {
+        $this->admin();
+        $code = $this->postJson('/api/admin/codes', ['offre' => 'complet', 'utilisations_max' => 5])
+            ->assertCreated()->json('data.code');
+
+        $ami = User::factory()->create();
+        $ami->forceFill(['offre' => Offre::Foyer, 'offre_expire_le' => null])->save();
+        Sanctum::actingAs($ami, ['*']);
+
+        $this->postJson('/api/account/code', ['code' => $code])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('code');
+
+        $this->assertSame(Offre::Foyer, $ami->fresh()->offre);
+        $this->assertNull($ami->fresh()->offre_expire_le);
+    }
+
+    /** À rang égal, une échéance ne se rapproche pas : un accès sans terme le reste. */
+    public function test_un_code_a_duree_ne_raccourcit_pas_un_acces_deja_accorde(): void
+    {
+        $this->admin();
+        $code = $this->postJson('/api/admin/codes', [
+            'offre' => 'foyer', 'utilisations_max' => 5, 'duree_jours' => 30,
+        ])->assertCreated()->json('data.code');
+
+        $ami = User::factory()->create();
+        $ami->forceFill(['offre' => Offre::Foyer, 'offre_expire_le' => null])->save();
+        Sanctum::actingAs($ami, ['*']);
+
+        $this->postJson('/api/account/code', ['code' => $code])->assertOk();
+
+        $this->assertNull($ami->fresh()->offre_expire_le, 'Un code de 30 jours ne borne pas un accès sans terme.');
+    }
+
     public function test_les_essais_repetes_sont_limites(): void
     {
         Sanctum::actingAs(User::factory()->gratuit()->create(), ['*']);

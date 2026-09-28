@@ -75,6 +75,29 @@ tombe, et à faire dépendre un droit d'accès de la disponibilité d'un serveur
 est donc posé sur les routes qui *proposent* (`sessions/generate`, `calendar/{plan}/propose`,
 `calendar/plan-week`), jamais sur celles qui *enregistrent*.
 
+## Poser une offre à la main
+
+Aucun paiement n'est branché. Une offre s'ouvre donc de deux façons : un **code d'accès**, que
+l'on distribue, ou un **réglage direct** depuis le panneau d'administration, qui vise une personne.
+Les deux passent par le journal, parce que décider de ce à quoi quelqu'un a droit — parfois contre
+de l'argent — doit rester défendable devant lui.
+
+Trois règles encadrent le geste :
+
+- **Il ne détruit rien.** Seules `offre` et `offre_expire_le` bougent. Repasser un compte au gratuit
+  lui retire des fonctions, jamais ses repas, son profil ou ses pesées, et il retrouve tout le jour
+  où il reprend une offre.
+- **Un code n'abaisse jamais une offre.** Quelqu'un à qui on a posé le Foyer garderait autrement son
+  offre jusqu'au jour où il saisirait un code « Complet » reçu ailleurs — et ferait tomber les
+  membres de son foyer avec lui. À rang égal, une échéance ne se rapproche pas non plus.
+- **L'écran dit ce que le geste va faire.** L'offre en cours et son échéance sont rappelées, la durée
+  est préremplie avec ce qu'il reste à courir, et retirer l'offre de quelqu'un qui porte un foyer
+  affiche combien de personnes perdront l'accès en même temps que lui.
+
+L'expiration est tranchée par le serveur, jamais par le navigateur : elle se joue à l'heure près,
+et une comparaison de dates côté client afficherait une offre encore active des heures après que
+l'accès a réellement été coupé.
+
 ## État et navigation côté mobile
 
 `flutter_riverpod` et `go_router` étaient déclarés mais inutilisés. La version 1 s'appuie sur des
