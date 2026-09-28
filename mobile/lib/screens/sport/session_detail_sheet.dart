@@ -340,6 +340,10 @@ class _SessionDetailSheetState extends State<SessionDetailSheet> {
                           color: exercise.completed ? MaviohColors.primary : MaviohColors.border,
                         ),
                         const SizedBox(width: 8),
+                        // Le motif de mouvement, envoyé par l'API : il distingue un squat d'un
+                        // tirage sans avoir à lire le nom.
+                        Icon(movementIcon(exercise.movement), size: 16, color: MaviohColors.primary),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             exercise.name,

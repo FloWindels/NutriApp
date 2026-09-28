@@ -1,3 +1,4 @@
+import '../widgets/legal_links.dart';
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -451,6 +452,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          const LegalLinks(),
           const SizedBox(height: 10),
           const Text(
             AppStrings.offAttribution,

@@ -1,3 +1,4 @@
+import 'meals/plate_photo_sheet.dart';
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -161,6 +162,13 @@ class _MealsScreenState extends State<MealsScreen> {
     final result = await AddToMealSheet.show(context, date: _date, mealType: mealType);
     if (!mounted || result == null) return;
     _applyDay(result.day);
+  }
+
+  /// Photo d'assiette : l'analyse propose, la personne vérifie, puis le repas est enregistré.
+  Future<void> _addFromPhoto(String mealType) async {
+    final enregistre = await PlatePhotoSheet.show(context, date: _date, type: mealType);
+    if (!mounted || enregistre != true) return;
+    await _load();
   }
 
   MealItemInput _inputFor(MealItem item) {
@@ -376,6 +384,7 @@ class _MealsScreenState extends State<MealsScreen> {
               type: type,
               meal: day.mealOfType(type),
               onAdd: () => _add(type),
+              onAddFromPhoto: () => _addFromPhoto(type),
               onEditItem: _editItem,
               onDeleteItem: _deleteItem,
             ),
@@ -397,6 +406,7 @@ class _MealCard extends StatelessWidget {
   final String type;
   final Meal? meal;
   final VoidCallback onAdd;
+  final VoidCallback onAddFromPhoto;
   final void Function(Meal meal, MealItem item) onEditItem;
   final void Function(Meal meal, MealItem item) onDeleteItem;
 
@@ -404,6 +414,7 @@ class _MealCard extends StatelessWidget {
     required this.type,
     required this.meal,
     required this.onAdd,
+    required this.onAddFromPhoto,
     required this.onEditItem,
     required this.onDeleteItem,
   });
@@ -452,6 +463,12 @@ class _MealCard extends StatelessWidget {
               Text(
                 fmtKcal(calories),
                 style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: MaviohColors.textSecondary),
+              ),
+              IconButton(
+                tooltip: 'Photographier mon assiette',
+                onPressed: onAddFromPhoto,
+                icon: const Icon(Icons.photo_camera_outlined),
+                color: MaviohColors.primary,
               ),
               IconButton(
                 tooltip: 'Ajouter ${AppStrings.mealTypeDative(type)}',

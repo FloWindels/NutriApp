@@ -18,6 +18,8 @@ class Exercise {
   final String instructions;
   final List<String> contraindications;
   final bool isPublic;
+  /// Motif de mouvement, qui choisit l'illustration (backend : ExerciseMovement).
+  final String movement;
 
   const Exercise({
     required this.id,
@@ -34,12 +36,14 @@ class Exercise {
     this.instructions = '',
     this.contraindications = const [],
     this.isPublic = true,
+    this.movement = 'generique',
   });
 
   factory Exercise.fromJson(Map<String, dynamic> json) => Exercise(
         id: parseIntOr(json['id'] ?? json['exercise_id'], 0),
         name: parseString(json['name']) ?? 'Exercice',
         slug: parseString(json['slug']) ?? '',
+        movement: parseString(json['movement']) ?? 'generique',
         category: parseString(json['category']) ?? 'force',
         muscleGroup: parseString(json['muscle_group']) ?? 'corps_entier',
         equipment: parseString(json['equipment']) ?? 'aucun',
@@ -184,6 +188,8 @@ class WorkoutExercise {
   final bool completed;
   final String? instructions;
   final String? notes;
+  /// Motif de mouvement, qui choisit l'illustration (backend : ExerciseMovement).
+  final String movement;
 
   const WorkoutExercise({
     required this.id,
@@ -200,6 +206,7 @@ class WorkoutExercise {
     this.completed = false,
     this.instructions,
     this.notes,
+    this.movement = 'generique',
   });
 
   factory WorkoutExercise.fromJson(Map<String, dynamic> json) => WorkoutExercise(
@@ -208,6 +215,7 @@ class WorkoutExercise {
         block: parseString(json['block']) ?? 'principal',
         position: parseIntOr(json['position'], 0),
         name: parseString(json['name']) ?? 'Exercice',
+        movement: parseString(json['movement']) ?? 'generique',
         sets: parseInt(json['sets']),
         reps: parseInt(json['reps']),
         durationSec: parseInt(json['duration_sec']),

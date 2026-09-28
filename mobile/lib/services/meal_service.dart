@@ -1,6 +1,7 @@
 import '../core/api_client.dart';
 import '../core/formatters.dart';
 import '../models/meal.dart';
+import '../models/plate.dart';
 
 /// Meals & daily tracking (§4).
 class MealService {
@@ -33,6 +34,26 @@ class MealService {
       if (items.isNotEmpty) 'items': items.map((i) => i.toJson()).toList(),
     });
     return MealMutationResult.fromJson(json);
+  }
+
+  /// `GET /meals/photo-capability` : le serveur sait-il lire une photo ?
+  Future<bool> photoDisponible() async {
+    final json = await _api.getJson('/meals/photo-capability');
+    return parseBool((json['data'] as Map<String, dynamic>?)?['disponible']);
+  }
+
+  /// `POST /meals/analyze-photo` — n'écrit rien : la proposition doit être vérifiée.
+  ///
+  /// Une analyse par un modèle local dépasse largement le délai de lecture habituel, d'où le
+  /// délai allongé passé ici.
+  Future<PlateAnalysis> analyserPhoto(String dataUri) async {
+    final json = await _api.postJson(
+      '/meals/analyze-photo',
+      body: {'image': dataUri},
+      receiveTimeout: const Duration(seconds: 120),
+    );
+
+    return PlateAnalysis.fromJson((json['data'] as Map<String, dynamic>?) ?? const {});
   }
 
   /// `POST /meals/{meal}/items`.

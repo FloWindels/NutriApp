@@ -1,3 +1,5 @@
+import '../core/legal.dart';
+import '../widgets/legal_links.dart';
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
@@ -245,10 +247,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               controlAffinity: ListTileControlAffinity.leading,
                               contentPadding: EdgeInsets.zero,
                               dense: true,
-                              title: const Text(
-                                'J’accepte les conditions générales d’utilisation et la politique '
-                                'de confidentialité.',
-                                style: TextStyle(fontSize: 13),
+                              title: Row(
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'J’accepte les conditions générales d’utilisation et la '
+                                      'politique de confidentialité.',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                  // Accepter un texte qu'on ne peut pas lire n'a pas de sens :
+                                  // les deux documents s'ouvrent d'ici.
+                                  IconButton(
+                                    icon: const Icon(Icons.description_outlined, size: 18),
+                                    tooltip: 'Lire les conditions',
+                                    onPressed: () => ouvrirPageLegale(context, Legal.cheminCgu),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.privacy_tip_outlined, size: 18),
+                                    tooltip: 'Lire la politique de confidentialité',
+                                    onPressed: () => ouvrirPageLegale(context, Legal.cheminConfidentialite),
+                                  ),
+                                ],
                               ),
                               subtitle: const Text(
                                 'Mavi’oh traite des données de santé : ce traitement n’a lieu '

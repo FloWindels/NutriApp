@@ -123,3 +123,61 @@ IconData blockIcon(String key) {
       return Icons.fitness_center;
   }
 }
+
+/// Icône du motif de mouvement, pour distinguer les exercices d'un coup d'œil.
+///
+/// Le site dessine des silhouettes animées ; sur mobile, une icône Material distincte par motif
+/// rend le même service pour un coût sans commune mesure avec le portage de vingt-sept dessins.
+/// Les vingt-sept motifs de `ExerciseMovement` sont couverts, avec un repli neutre.
+IconData movementIcon(String? movement) {
+  switch (movement) {
+    case 'squat':
+    case 'fente':
+    case 'isolation_jambe':
+      return Icons.airline_seat_legroom_extra;
+    case 'charniere_hanche':
+    case 'pont_hanche':
+      return Icons.transfer_within_a_station;
+    case 'poussee_horizontale':
+    case 'poussee_verticale':
+      return Icons.fitness_center;
+    case 'tirage_horizontal':
+    case 'tirage_vertical':
+      return Icons.swap_vert;
+    case 'elevation_bras':
+      return Icons.open_with;
+    case 'flexion_coude':
+    case 'extension_coude':
+      return Icons.sports_martial_arts;
+    case 'gainage_statique':
+    case 'gainage_dynamique':
+      return Icons.horizontal_rule;
+    case 'flexion_tronc':
+    case 'extension_dorsale':
+      return Icons.airline_seat_flat;
+    case 'course':
+      return Icons.directions_run;
+    case 'marche':
+      return Icons.directions_walk;
+    case 'velo':
+      return Icons.directions_bike;
+    case 'rameur':
+      return Icons.rowing;
+    case 'nage':
+      return Icons.pool;
+    case 'saut':
+      return Icons.arrow_upward;
+    case 'appuis_sur_place':
+      return Icons.repeat;
+    case 'frappes':
+      return Icons.sports_mma;
+    case 'etirement_statique':
+      return Icons.accessibility_new;
+    case 'cercles_articulaires':
+      return Icons.rotate_right;
+    case 'mobilite_colonne':
+      return Icons.waves;
+    default:
+      return Icons.fitness_center;
+  }
+}
