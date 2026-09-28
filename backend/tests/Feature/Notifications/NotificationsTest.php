@@ -154,10 +154,10 @@ class NotificationsTest extends TestCase
 
     public function test_only_priority_one_recommendations_not_ignored_are_included(): void
     {
-        Recommendation::factory()->for($this->user)->create(['date' => $this->today, 'priority' => 1, 'title' => 'Produit périmé', 'message' => 'Vérifie le poulet.', 'actions' => [['kind' => 'supprimer_stock', 'stock_item_id' => 12]]]);
-        Recommendation::factory()->for($this->user)->create(['date' => $this->today, 'priority' => 2, 'title' => 'Budget restant']);
-        Recommendation::factory()->for($this->user)->create(['date' => $this->today, 'priority' => 1, 'title' => 'Ignorée', 'status' => 'ignoree']);
-        Recommendation::factory()->for($this->user)->create(['date' => $this->day(-1), 'priority' => 1, 'title' => 'Hier']);
+        Recommendation::factory()->for($this->user)->create(['date' => $this->today, 'priority' => 1, 'dedupe_key' => 'test-perime', 'title' => 'Produit périmé', 'message' => 'Vérifie le poulet.', 'actions' => [['kind' => 'supprimer_stock', 'stock_item_id' => 12]]]);
+        Recommendation::factory()->for($this->user)->create(['date' => $this->today, 'priority' => 2, 'dedupe_key' => 'test-budget', 'title' => 'Budget restant']);
+        Recommendation::factory()->for($this->user)->create(['date' => $this->today, 'priority' => 1, 'dedupe_key' => 'test-ignoree', 'title' => 'Ignorée', 'status' => 'ignoree']);
+        Recommendation::factory()->for($this->user)->create(['date' => $this->day(-1), 'priority' => 1, 'dedupe_key' => 'test-hier', 'title' => 'Hier']);
 
         $data = $this->getJson('/api/notifications')->assertOk()->json('data');
 
