@@ -13,5 +13,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+// Génération par IA : appel long et coûteux, plafond dédié comme pour la photo.
+Route::post('/recipes/generate', [RecipeController::class, 'generate'])->middleware('throttle:vision');
 Route::post('/recipes/estimate', [RecipeController::class, 'estimate']);
 Route::get('/recipes/{recipe}', [RecipeController::class, 'show'])->whereNumber('recipe');

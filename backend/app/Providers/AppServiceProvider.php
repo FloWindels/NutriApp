@@ -2,12 +2,16 @@
 
 namespace App\Providers;
 
+use App\Contracts\LlmRecipeClient;
 use App\Contracts\LlmVisionClient;
 use App\Contracts\LlmWorkoutClient;
+use App\Services\Llm\AnthropicRecipeClient;
 use App\Services\Llm\AnthropicVisionClient;
 use App\Services\Llm\AnthropicWorkoutClient;
+use App\Services\Llm\NullRecipeClient;
 use App\Services\Llm\NullVisionClient;
 use App\Services\Llm\NullWorkoutClient;
+use App\Services\Llm\OllamaRecipeClient;
 use App\Services\Llm\OllamaVisionClient;
 use App\Services\Llm\OllamaWorkoutClient;
 use App\Support\LlmProvider;
@@ -29,6 +33,15 @@ class AppServiceProvider extends ServiceProvider
                 LlmProvider::ANTHROPIC => $app->make(AnthropicWorkoutClient::class),
                 LlmProvider::OLLAMA => $app->make(OllamaWorkoutClient::class),
                 default => $app->make(NullWorkoutClient::class),
+            };
+        });
+
+        // Rédiger une recette est de la génération de texte : même sélecteur que le coach.
+        $this->app->bind(LlmRecipeClient::class, function ($app) {
+            return match (LlmProvider::current()) {
+                LlmProvider::ANTHROPIC => $app->make(AnthropicRecipeClient::class),
+                LlmProvider::OLLAMA => $app->make(OllamaRecipeClient::class),
+                default => $app->make(NullRecipeClient::class),
             };
         });
 

@@ -24,6 +24,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { RecipeEditor } from "./recipe-editor";
+import { RecipeGeneratorModal } from "./recipe-generator-modal";
 
 type Scope = "publiques" | "mine" | "toutes";
 
@@ -151,6 +152,7 @@ export function RecipesPage() {
   const [mealType, setMealType] = useState<MealType | "">("");
   const [detail, setDetail] = useState<Recipe | null>(null);
   const [editor, setEditor] = useState<{ recipe: Recipe | null } | null>(null);
+  const [generateur, setGenerateur] = useState(false);
   const [toDelete, setToDelete] = useState<Recipe | null>(null);
   const [toAdd, setToAdd] = useState<Recipe | null>(null);
 
@@ -207,7 +209,12 @@ export function RecipesPage() {
         title="Recettes"
         subtitle="Tes recettes et celles de la communauté, avec les calories et les macros par portion."
         actions={
-          <Button onClick={() => setEditor({ recipe: null })}>Nouvelle recette</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setGenerateur(true)}>
+              Avec ce que j’ai
+            </Button>
+            <Button onClick={() => setEditor({ recipe: null })}>Nouvelle recette</Button>
+          </div>
         }
       />
 
@@ -411,6 +418,37 @@ export function RecipesPage() {
 
       {editor ? (
         <RecipeEditor open onClose={() => setEditor(null)} recipe={editor.recipe} onSaved={handleSaved} />
+      ) : null}
+
+      {generateur ? (
+        <RecipeGeneratorModal
+          open
+          onClose={() => setGenerateur(false)}
+          onAccept={(proposition) => {
+            // La proposition n'est pas enregistrée : elle pré-remplit l'éditeur, où elle peut
+            // encore être corrigée avant sauvegarde.
+            setGenerateur(false);
+            setEditor({
+              recipe: {
+                title: proposition.titre ?? "",
+                description: proposition.description ?? "",
+                prep_time_minutes: proposition.temps_preparation_min ?? null,
+                servings: proposition.portions ?? 1,
+                calories: proposition.estimation?.calories ?? 0,
+                proteins: proposition.estimation?.proteins ?? 0,
+                carbs: proposition.estimation?.carbs ?? 0,
+                fat: proposition.estimation?.fat ?? 0,
+                ingredients: (proposition.ingredients ?? []).map((ingredient) => ({
+                  name: ingredient.name,
+                  ean: ingredient.ean,
+                  amount: ingredient.amount,
+                  unit: ingredient.unit,
+                })),
+                is_public: false,
+              } as unknown as Recipe,
+            });
+          }}
+        />
       ) : null}
 
       <ConfirmDialog

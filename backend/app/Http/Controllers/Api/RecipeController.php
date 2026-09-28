@@ -8,6 +8,8 @@ use App\Http\Requests\Recipes\IndexRecipesRequest;
 use App\Http\Requests\Recipes\StoreRecipeRequest;
 use App\Http\Requests\Recipes\UpdateRecipeRequest;
 use App\Http\Resources\RecipeResource;
+use App\Exceptions\LlmUnavailableException;
+use App\Services\Recipes\RecipeGenerator;
 use App\Models\Recipe;
 use App\Models\User;
 use App\Services\Foods\FoodCatalog;
@@ -154,6 +156,31 @@ class RecipeController extends Controller
      * POST /recipes/estimate {ingredients:[{name, ean, amount, unit}], servings?}
      * → {data:{calories, proteins, carbs, fat, resolved_count, total_count, is_estimate:true, details:[…]}}.
      */
+    /**
+     * POST /recipes/generate → {data} — proposition de recette à partir du stock.
+     *
+     * N'écrit rien : la personne vérifie, corrige, puis enregistre par POST /recipes. Sans IA
+     * configurée, la réponse reste un 200 disant que la génération est indisponible, pour que
+     * l'interface bascule sur la saisie manuelle plutôt que d'afficher une erreur.
+     */
+    public function generate(Request $request, RecipeGenerator $generator): JsonResponse
+    {
+        $valide = $request->validate([
+            'demande' => ['required', 'string', 'min:3', 'max:500'],
+        ]);
+
+        try {
+            $proposition = $generator->generate($request->user(), $valide['demande']);
+        } catch (LlmUnavailableException $e) {
+            return response()->json(['data' => [
+                'source' => 'indisponible',
+                'message' => $e->getMessage(),
+            ]]);
+        }
+
+        return response()->json(['data' => $proposition]);
+    }
+
     public function estimate(EstimateRecipeRequest $request, RecipeNutritionEstimator $estimator): JsonResponse
     {
         $validated = $request->validated();
