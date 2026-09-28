@@ -39,9 +39,10 @@ const OFFRES: Offre[] = [
       "Tes propres recettes",
       "Objectifs calculés et suivi du poids",
       "Séances de sport proposées par les règles Mavi’oh",
+      "Coach du jour : conseils adaptés à ta journée",
       "Export et suppression de tes données",
     ],
-    exclus: ["Stock et anti-gaspillage", "Liste de courses", "Planificateur", "Coach du jour", "Mode foyer", "Intelligence artificielle"],
+    exclus: ["Stock et anti-gaspillage", "Liste de courses", "Planificateur", "Mode foyer", "Intelligence artificielle"],
   },
   {
     cle: "complet",
@@ -56,7 +57,6 @@ const OFFRES: Offre[] = [
       "Alertes de péremption et anti-gaspillage",
       "Liste de courses, alimentée par le stock",
       "Planificateur de la semaine",
-      "Coach du jour : conseils adaptés à ta journée",
       "Régime reconnu et son évaluation",
       "IA : séances, recettes depuis ton stock, photo d’assiette",
     ],
@@ -91,8 +91,9 @@ export default function OffresPage() {
       <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">Les offres</h1>
       <p className="mt-2 max-w-2xl text-[15px] leading-7 text-slate-600">
         Le suivi de ce que tu manges est gratuit, pour de bon : pas de période d’essai qui
-        s’arrête, pas de quota sur la recherche d’aliments. Ce qui se paie, c’est ce qui demande
-        du travail au serveur ou fait gagner du temps à toute une maison.
+        s’arrête, pas de quota sur la recherche d’aliments, et le coach du jour est compris.
+        Ce qui se paie, c’est ce qui demande du travail au serveur ou fait gagner du temps à
+        toute une maison.
       </p>
 
       <div className="mt-8 grid gap-4 lg:grid-cols-3">

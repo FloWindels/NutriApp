@@ -21,9 +21,14 @@ return [
     | foyer          — partage avec les autres membres du ménage
     */
     'capacites' => [
-        // Le suivi normal, sans rien de ce qui précède : repas, aliments, code-barres,
-        // recettes personnelles, sport par les règles, poids, profil, paramètres, historique.
-        Offre::Gratuit->value => [],
+        // Le suivi normal : repas, aliments, code-barres, recettes personnelles, sport par les
+        // règles, poids, profil, paramètres, historique.
+        //
+        // Le coach du jour y figure délibérément. C'est un moteur de règles qui ne coûte rien à
+        // faire tourner, et c'est le meilleur argument d'abonnement du produit : on ne paie que
+        // ce dont on a compris l'intérêt. Ses conseils mènent naturellement vers le stock et le
+        // planificateur, qui eux sont payants.
+        Offre::Gratuit->value => ['coach'],
 
         Offre::Complet->value => ['stock', 'courses', 'planificateur', 'coach', 'regimes', 'ia'],
 

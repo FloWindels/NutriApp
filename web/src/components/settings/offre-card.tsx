@@ -51,7 +51,7 @@ export function OffreCard() {
               {offre.expire_le ? ` jusqu’au ${offre.expire_le.slice(0, 10)}` : ""}.{" "}
               {offre.nom === "gratuit" ? (
                 <>
-                  Le stock, le foyer, le coach et l’IA font partie des{" "}
+                  Le stock, le foyer, le planificateur et l’IA font partie des{" "}
                   <Link href="/offres" className="text-emerald-800 hover:underline">
                     offres payantes
                   </Link>

@@ -84,7 +84,6 @@ class VerrouOffreTest extends TestCase
             'alertes de stock' => ['get', '/api/stocks/alerts'],
             'courses' => ['get', '/api/shopping-list'],
             'planificateur' => ['get', '/api/planner'],
-            'coach' => ['get', '/api/recommendations'],
             // Le catalogue /api/diets est public ; c'est l'évaluation personnelle qui est payante.
             'régimes' => ['get', '/api/diets/evaluate'],
         ];
@@ -140,6 +139,10 @@ class VerrouOffreTest extends TestCase
         $this->getJson('/api/settings')->assertSuccessful();
         $this->getJson('/api/weights')->assertSuccessful();
         $this->getJson('/api/portions')->assertSuccessful();
+
+        // Le coach du jour est volontairement ouvert : c'est un moteur de règles, il ne coûte
+        // rien, et c'est lui qui donne envie des fonctions payantes vers lesquelles il renvoie.
+        $this->getJson('/api/recommendations')->assertSuccessful();
     }
 
     public function test_une_offre_expiree_retombe_sur_le_gratuit_sans_rien_detruire(): void
@@ -180,6 +183,7 @@ class VerrouOffreTest extends TestCase
         $this->getJson('/api/me')
             ->assertOk()
             ->assertJsonPath('offre.nom', 'gratuit')
-            ->assertJsonPath('offre.capacites', []);
+            // Le gratuit porte désormais une capacité : le coach du jour.
+            ->assertJsonPath('offre.capacites', ['coach']);
     }
 }
