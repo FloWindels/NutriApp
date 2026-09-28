@@ -27,6 +27,8 @@ class GenerateSessionRequest extends SportFormRequest
             'sport_id' => $this->sportIdRules(),
             'lieu' => ['nullable', 'string', Rule::enum(Lieu::class)],
             'notes' => ['nullable', 'string', 'max:500'],
+            // Recherche web pour cette génération seulement, jamais activée par défaut.
+            'internet' => ['sometimes', 'boolean'],
             'seed' => ['nullable', 'integer', 'between:0,1000000'],
         ], $this->vocabularyRules());
     }

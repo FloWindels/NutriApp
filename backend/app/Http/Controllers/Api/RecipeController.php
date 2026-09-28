@@ -167,10 +167,15 @@ class RecipeController extends Controller
     {
         $valide = $request->validate([
             'demande' => ['required', 'string', 'min:3', 'max:500'],
+            'internet' => ['sometimes', 'boolean'],
         ]);
 
         try {
-            $proposition = $generator->generate($request->user(), $valide['demande']);
+            $proposition = $generator->generate(
+                $request->user(),
+                $valide['demande'],
+                (bool) ($valide['internet'] ?? false),
+            );
         } catch (LlmUnavailableException $e) {
             return response()->json(['data' => [
                 'source' => 'indisponible',

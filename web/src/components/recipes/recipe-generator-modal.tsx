@@ -40,6 +40,7 @@ export type Proposition = {
   ingredients_retires?: { nom: string; raison: string }[];
   estimation?: { calories: number; proteins: number; carbs: number; fat: number };
   llm_model?: string | null;
+  sources_web?: { titre: string; url: string; domaine: string }[];
 };
 
 const EXEMPLES = [
@@ -60,9 +61,11 @@ export function RecipeGeneratorModal({
   const [demande, setDemande] = useState("");
   const [proposition, setProposition] = useState<Proposition | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [internet, setInternet] = useState(false);
 
   const generer = useMutation({
-    mutationFn: (texte: string) => apiPost<{ data: Proposition }>("/recipes/generate", { demande: texte }),
+    mutationFn: (texte: string) =>
+      apiPost<{ data: Proposition }>("/recipes/generate", { demande: texte, internet }),
     onSuccess: (reponse) => setProposition(reponse.data),
     onError: (error) => setErreur(getErrorMessage(error, "La génération n’a pas abouti.")),
   });
@@ -114,6 +117,22 @@ export function RecipeGeneratorModal({
             </button>
           ))}
         </div>
+
+        <label className="flex items-start gap-2.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={internet}
+            onChange={(event) => setInternet(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-emerald-700"
+          />
+          <span>
+            Chercher aussi des idées sur Internet.{" "}
+            <span className="text-slate-500">
+              Seule la phrase ci-dessus est transmise au moteur de recherche : ni ton profil, ni
+              ton poids, ni ton objectif. Les sources trouvées te sont citées.
+            </span>
+          </span>
+        </label>
 
         <Button type="button" onClick={lancer} loading={generer.isPending}>
           {generer.isPending ? "Je cherche…" : "Proposer une recette"}
@@ -191,6 +210,27 @@ export function RecipeGeneratorModal({
                 Autre proposition
               </Button>
             </div>
+
+            {proposition.sources_web && proposition.sources_web.length > 0 ? (
+              <div>
+                <Overline className="mb-2">Sources consultées</Overline>
+                <ul className="space-y-1 text-xs text-slate-600">
+                  {proposition.sources_web.map((source) => (
+                    <li key={source.url}>
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="text-emerald-800 hover:underline"
+                      >
+                        {source.titre || source.domaine}
+                      </a>{" "}
+                      <span className="text-slate-400">({source.domaine})</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
             <p className="text-xs text-slate-500">
               Proposée par l’IA{proposition.llm_model ? ` (${proposition.llm_model})` : ""}. Les

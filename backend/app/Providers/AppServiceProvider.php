@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\WebSearchClient;
 use App\Contracts\LlmRecipeClient;
 use App\Contracts\LlmVisionClient;
 use App\Contracts\LlmWorkoutClient;
@@ -14,6 +15,8 @@ use App\Services\Llm\NullWorkoutClient;
 use App\Services\Llm\OllamaRecipeClient;
 use App\Services\Llm\OllamaVisionClient;
 use App\Services\Llm\OllamaWorkoutClient;
+use App\Services\Search\NullWebSearchClient;
+use App\Services\Search\SearxWebSearchClient;
 use App\Support\LlmProvider;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\ServiceProvider;
@@ -34,6 +37,13 @@ class AppServiceProvider extends ServiceProvider
                 LlmProvider::OLLAMA => $app->make(OllamaWorkoutClient::class),
                 default => $app->make(NullWorkoutClient::class),
             };
+        });
+
+        // Recherche web : désactivée tant qu'aucune instance n'est configurée.
+        $this->app->bind(WebSearchClient::class, function ($app) {
+            return filled(config('services.recherche.base_url'))
+                ? $app->make(SearxWebSearchClient::class)
+                : $app->make(NullWebSearchClient::class);
         });
 
         // Rédiger une recette est de la génération de texte : même sélecteur que le coach.

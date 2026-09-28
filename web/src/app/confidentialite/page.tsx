@@ -148,6 +148,10 @@ export default function ConfidentialitePage() {
               "Si tu rejoins un foyer, ses membres voient le stock partagé, la liste de courses et les repas communs. Ton journal alimentaire personnel et tes données de santé restent privés.",
             ],
             [
+              "Moteur de recherche",
+              "Uniquement si tu demandes explicitement une recherche sur Internet pour une recette ou une séance, au cas par cas. Seule la phrase que tu as écrite est transmise au moteur : jamais ton profil, ton poids, ton objectif, ni ton identité. Cette fonction est éteinte tant qu'aucun moteur n'est configuré par l'éditeur.",
+            ],
+            [
               "Administrateur du service",
               "Accède aux comptes (nom d’usage, adresse e-mail, dates, état d’acceptation des conditions), aux contenus publiés et à des statistiques agrégées, afin de gérer le service et de modérer les contenus signalés. Il n’a accès ni à ton journal alimentaire, ni à ton profil de santé, ni à tes pesées, ni à tes séances : ce cloisonnement est imposé par le code et vérifié par des tests. Chacune de ses actions est consignée avec son motif.",
             ],
@@ -176,7 +180,10 @@ export default function ConfidentialitePage() {
           <li>
             <strong>Modèle exécuté localement</strong> sur le serveur de {service} (Ollama).
             Aucune donnée ne quitte le serveur, aucun transfert hors de l’Union européenne n’a
-            lieu. C’est la configuration à privilégier.
+            lieu. C’est la configuration à privilégier. Une exception, et une seule : si tu
+            demandes une recherche sur Internet pour une recette ou une séance, la phrase que tu
+            as écrite part alors vers un moteur de recherche. Cette fonction est facultative,
+            éteinte par défaut, et se décide à chaque génération.
           </li>
           <li>
             <strong>API d’un fournisseur tiers</strong> (Anthropic, États-Unis), si elle est

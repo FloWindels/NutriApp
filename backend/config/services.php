@@ -77,6 +77,15 @@ return [
         'vision_timeout' => (int) env('OLLAMA_VISION_TIMEOUT', 180),
     ],
 
+    // Recherche web pour l'IA. Vide = desactivee, aucune requete ne sort.
+    // SearXNG s'auto-heberge : `docker run -p 8888:8080 searxng/searxng`.
+    'recherche' => [
+        'base_url' => env('WEB_SEARCH_URL', ''),
+        'timeout' => (int) env('WEB_SEARCH_TIMEOUT', 8),
+        // Liste blanche de domaines, separes par des virgules. Vide = tous les domaines HTTPS.
+        'domaines' => env('WEB_SEARCH_DOMAINS', ''),
+    ],
+
     'anthropic' => [
         'api_key' => env('ANTHROPIC_API_KEY'),
         'model' => env('ANTHROPIC_MODEL', 'claude-opus-5'),

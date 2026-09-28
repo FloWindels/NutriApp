@@ -139,6 +139,18 @@ nombre d'utilisateurs devient significatif.
 | Conservation | Journal d'administration conservé sans purge automatique à ce stade |
 | Transfert hors UE | Aucun |
 
+### T7 ter — Recherche sur Internet pour l'IA
+
+| | |
+|---|---|
+| Finalité | Nourrir une génération de recette ou de séance de sources extérieures |
+| Base légale | **Consentement**, demandé à chaque génération : la fonction est éteinte par défaut |
+| Données transmises | La seule phrase écrite par la personne, tronquée à 160 caractères. **Ni profil, ni poids, ni objectif, ni identité** — vérifié par un test automatisé |
+| Destinataire | Le moteur de recherche configuré par l'éditeur. Aucun si `WEB_SEARCH_URL` est vide, ce qui est le défaut |
+| Transfert hors UE | Dépend du moteur. Une instance SearXNG auto-hébergée reste sur la machine |
+| Protection | Résultats injectés comme données dans une section délimitée, HTML retiré, extraits tronqués, liste blanche de domaines possible, HTTPS exigé. La sortie reste vérifiée par les règles du serveur |
+| Conservation | Résultats mis en cache une heure, jamais persistés en base |
+
 ### T8 — Sécurité et journalisation
 
 | | |
