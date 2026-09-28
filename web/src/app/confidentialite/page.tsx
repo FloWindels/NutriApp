@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Article, LegalPage, Tableau, Valeur } from "@/components/legal/legal-page";
-import { OPERATEUR } from "@/lib/legal/operateur";
+import { OPERATEUR, estLocal } from "@/lib/legal/operateur";
 import { VERSION_CONFIDENTIALITE } from "@/lib/legal/versions";
 
 export const metadata: Metadata = {
@@ -12,6 +12,7 @@ export const metadata: Metadata = {
 
 export default function ConfidentialitePage() {
   const { service, editeur, contact, dpo, hebergeur, autorite, ageConsentementNumerique } = OPERATEUR;
+  const local = estLocal();
 
   return (
     <LegalPage
@@ -324,9 +325,20 @@ export default function ConfidentialitePage() {
       </Article>
 
       <Article numero="9" titre="Sécurité">
+        {local ? (
+          <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+            <strong>À savoir dans la configuration actuelle.</strong> {service} tourne sur un
+            réseau privé, sans certificat : les échanges entre ton appareil et le serveur{" "}
+            <strong>ne sont pas chiffrés</strong>. Quelqu’un ayant accès à ce réseau pourrait les
+            lire, mot de passe compris. C’est acceptable sur un réseau domestique de confiance, et
+            c’est la raison pour laquelle le service n’est pas exposé à Internet. Le chiffrement
+            sera mis en place avant toute ouverture.
+          </p>
+        ) : null}
         <p>
-          Les mesures suivantes protègent tes données (art. 32 RGPD) : chiffrement des échanges
-          par HTTPS, mots de passe stockés sous forme d’empreinte cryptographique non réversible,
+          Les mesures suivantes protègent tes données (art. 32 RGPD) :{" "}
+          {local ? "isolement du serveur, qui n’est pas joignable depuis Internet" : "chiffrement des échanges par HTTPS"},
+          mots de passe stockés sous forme d’empreinte cryptographique non réversible,
           authentification par jeton à durée limitée, cloisonnement strict des données entre
           comptes vérifié par des tests automatisés, limitation du nombre de requêtes pour
           prévenir les abus, sauvegardes régulières, et journalisation qui ne contient ni image
@@ -359,6 +371,29 @@ export default function ConfidentialitePage() {
           .
         </p>
       </Article>
+
+      {local ? (
+        <Article numero="11 bis" titre="État actuel du service">
+          <p>
+            {service} n’est pas ouvert au public. Il tourne sur un serveur privé, accessible
+            uniquement depuis le réseau local, sans nom de domaine ni certificat. Concrètement :
+          </p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>aucun compte ne peut être créé depuis Internet ;</li>
+            <li>les échanges ne sont pas chiffrés, comme expliqué à l’article 9 ;</li>
+            <li>
+              les données restent sur une machine dont l’éditeur a la maîtrise physique, et ne
+              sont transmises à personne d’autre, sauf si l’intelligence artificielle distante ou
+              la recherche sur Internet sont activées — deux fonctions décrites aux articles 4 et
+              5, et désactivées par défaut.
+            </li>
+          </ul>
+          <p>
+            Ce document sera mis à jour, et sa version changée, le jour où le service sera rendu
+            accessible depuis Internet.
+          </p>
+        </Article>
+      ) : null}
 
       <Article numero="12" titre="Modification de cette politique">
         <p>

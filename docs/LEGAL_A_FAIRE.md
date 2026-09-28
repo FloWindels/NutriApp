@@ -1,7 +1,8 @@
 # Ce qu'il reste à faire, côté légal
 
-Liste de travail pour Mavi'oh, établie le 28 septembre 2026, dans l'hypothèse retenue avec le
-propriétaire : **service ouvert à des utilisateurs extérieurs, éditeur établi en Belgique**.
+Liste de travail pour Mavi'oh, mise à jour le 29 septembre 2026. Éditeur établi en **Belgique**.
+Le service tourne aujourd'hui **en local** ; la section 0 dit ce que cela change, les suivantes
+valent pour le jour où il sera ouvert à des utilisateurs extérieurs.
 
 Trois sections : ce qui est **obligatoire** et bloque une ouverture au public, ce qui le devient
 **à partir d'un certain seuil**, et ce qui **serait bien** sans être exigé.
@@ -11,6 +12,36 @@ Trois sections : ce qui est **obligatoire** et bloque une ouverture au public, c
 > responsable du traitement reste entière : fais-les relire par un juriste avant l'ouverture.
 
 L'état détaillé des traitements est dans [RGPD.md](RGPD.md). Ce document-ci est la liste d'actions.
+
+---
+
+## 0. Où en est-on aujourd'hui
+
+**Le service tourne en local, sans nom de domaine ni HTTPS, et n'est offert à personne.** C'est
+l'état déclaré dans `web/src/lib/legal/operateur.ts` (`deploiement: "local"`), et les quatre
+documents publics s'y adaptent tout seuls :
+
+- ils affichent un bandeau « Service en accès local » ;
+- la politique de confidentialité **n'affirme plus que les échanges sont chiffrés** — elle dit
+  au contraire, en toutes lettres, qu'ils ne le sont pas et pourquoi c'est acceptable tant que le
+  serveur n'est pas exposé ;
+- les mentions légales précisent que le service n'est pas offert au public ;
+- les conditions ne promettent aucune disponibilité.
+
+**Dans cette situation, le côté légal est terminé.** Les huit informations d'identité restent à
+renseigner, mais elles ne deviennent obligatoires qu'à l'ouverture : tant que tu es seul
+utilisateur, le RGPD ne s'applique même pas (exemption « activité purement personnelle »), et dès
+que tu invites un proche, les documents existants suffisent parce qu'ils décrivent exactement ce
+qui se passe.
+
+**Le jour de l'ouverture**, trois gestes font basculer l'ensemble :
+
+1. remplir `operateur.ts` ;
+2. passer `deploiement` à `"public"` ;
+3. changer les versions dans `web/src/lib/legal/versions.ts` et `mobile/lib/core/legal.dart`, pour
+   que les comptes existants reprennent connaissance des textes.
+
+Les sections suivantes listent ce qui devient alors obligatoire.
 
 ---
 

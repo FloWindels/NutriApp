@@ -10,9 +10,9 @@
  * Une correction de faute d'orthographe ne change pas la version.
  */
 
-export const VERSION_CGU = "2026-09-25";
-export const VERSION_CONFIDENTIALITE = "2026-09-28";
-export const VERSION_MENTIONS = "2026-09-25";
+export const VERSION_CGU = "2026-09-29";
+export const VERSION_CONFIDENTIALITE = "2026-09-29";
+export const VERSION_MENTIONS = "2026-09-29";
 
 /** Affichée en tête de chaque document. */
 export function dateVersion(version: string): string {

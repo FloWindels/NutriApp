@@ -18,6 +18,20 @@ Hypothèses retenues, à corriger si elles changent :
 
 ---
 
+## 0. État du déploiement
+
+**Septembre 2026 : le service tourne en local**, sur un réseau privé, sans nom de domaine ni
+certificat, et n'est offert à personne. `web/src/lib/legal/operateur.ts` le déclare
+(`deploiement: "local"`) et les documents publics s'y adaptent — ils annoncent l'absence de
+chiffrement au lieu de promettre le contraire.
+
+Tant que le propriétaire est seul utilisateur, le RGPD ne s'applique pas (art. 2.2.c, activité
+purement personnelle). Dès qu'un tiers obtient un compte, il s'applique pleinement, et tout ce
+qui suit vaut. Le registre ci-dessous est donc tenu d'avance, ce qui est la bonne façon de s'y
+prendre : il sera exact le jour où il deviendra obligatoire.
+
+---
+
 ## 1. Ce qu'il reste à faire avant l'ouverture au public
 
 | # | Action | Qui | Bloquant |

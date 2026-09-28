@@ -6,8 +6,8 @@
 class Legal {
   const Legal._();
 
-  static const String versionCgu = '2026-09-25';
-  static const String versionConfidentialite = '2026-09-28';
+  static const String versionCgu = '2026-09-29';
+  static const String versionConfidentialite = '2026-09-29';
 
   /// Chemins publics, à concaténer à l'URL du site.
   static const String cheminCgu = '/cgu';

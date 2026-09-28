@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { OPERATEUR, estIncomplet } from "@/lib/legal/operateur";
+import { OPERATEUR, estIncomplet, estLocal } from "@/lib/legal/operateur";
 import { dateVersion } from "@/lib/legal/versions";
 
 /**
@@ -29,6 +29,7 @@ export function LegalPage({
   children: ReactNode;
 }) {
   const manquants = estIncomplet();
+  const local = estLocal();
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-10 sm:px-6">
@@ -41,9 +42,24 @@ export function LegalPage({
         Version du {dateVersion(version)} · {OPERATEUR.service}
       </p>
 
+      {local ? (
+        <div className="mt-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+          <p className="font-semibold">Service en accès local.</p>
+          <p className="mt-1">
+            {OPERATEUR.service} tourne actuellement sur un réseau privé, sans nom de domaine ni
+            certificat, et n’est pas offert au public. Ces documents sont complets et exacts pour
+            cette situation ; ils prendront leur pleine portée le jour de l’ouverture.
+          </p>
+        </div>
+      ) : null}
+
       {manquants.length > 0 ? (
-        <div className="mt-6 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p className="font-semibold">Document incomplet — à ne pas publier en l’état.</p>
+        <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">
+            {local
+              ? "À renseigner avant d’ouvrir le service à d’autres personnes."
+              : "Document incomplet — à ne pas publier en l’état."}
+          </p>
           <p className="mt-1">
             Les informations suivantes doivent être renseignées dans{" "}
             <code className="rounded bg-amber-100 px-1">web/src/lib/legal/operateur.ts</code> :{" "}

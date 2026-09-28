@@ -55,6 +55,17 @@ export type Operateur = {
   };
   /** Âge en dessous duquel l'accord d'un titulaire de l'autorité parentale est exigé. */
   ageConsentementNumerique: number;
+  /**
+   * État réel du déploiement, qui change ce que les documents peuvent affirmer.
+   *
+   * `local` : le service tourne sur un réseau privé, sans nom de domaine ni certificat, et
+   * n'est pas offert au public. Les documents existent, sont exacts, et annoncent cette
+   * situation au lieu de promettre un chiffrement qui n'existe pas.
+   *
+   * `public` : le service est accessible depuis Internet en HTTPS. C'est l'état qui rend
+   * obligatoires toutes les mentions d'identité.
+   */
+  deploiement: "local" | "public";
 };
 
 export const OPERATEUR: Operateur = {
@@ -87,7 +98,14 @@ export const OPERATEUR: Operateur = {
   // Belgique : 13 ans (loi du 30 juillet 2018, art. 7). Mavi’oh exige l'accord parental
   // jusqu'à 15 ans, volontairement plus prudent que le minimum légal.
   ageConsentementNumerique: 13,
+  // À passer à "public" le jour de l'ouverture, en même temps que le domaine et le certificat.
+  deploiement: "local",
 };
+
+/** Vrai tant que le service n'est pas offert au public. */
+export function estLocal(operateur: Operateur = OPERATEUR): boolean {
+  return operateur.deploiement === "local";
+}
 
 /** Une valeur non renseignée doit sauter aux yeux, en ligne comme en relecture. */
 export function estIncomplet(operateur: Operateur = OPERATEUR): string[] {

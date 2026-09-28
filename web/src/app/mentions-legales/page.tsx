@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Article, LegalPage, Valeur } from "@/components/legal/legal-page";
-import { OPERATEUR } from "@/lib/legal/operateur";
+import { OPERATEUR, estLocal } from "@/lib/legal/operateur";
 import { VERSION_MENTIONS } from "@/lib/legal/versions";
 
 export const metadata: Metadata = {
@@ -94,6 +94,18 @@ export default function MentionsLegalesPage() {
           soumise aux conditions de cette licence.
         </p>
       </Article>
+
+      {estLocal() ? (
+        <Article numero="4 bis" titre="Service non offert au public">
+          <p>
+            {service} fonctionne actuellement sur une installation privée, accessible uniquement
+            depuis un réseau local. Il n’est proposé à personne d’autre que son éditeur et les
+            personnes qu’il invite directement. Les obligations d’identification propres aux
+            services de la société de l’information prendront leur pleine portée le jour où le
+            service sera rendu accessible depuis Internet.
+          </p>
+        </Article>
+      ) : null}
 
       <Article numero="5" titre="Nature du service">
         <p>

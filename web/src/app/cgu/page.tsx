@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Article, LegalPage, Valeur } from "@/components/legal/legal-page";
-import { OPERATEUR } from "@/lib/legal/operateur";
+import { OPERATEUR, estLocal } from "@/lib/legal/operateur";
 import { VERSION_CGU } from "@/lib/legal/versions";
 
 export const metadata: Metadata = {
@@ -115,6 +115,13 @@ export default function CguPage() {
       </Article>
 
       <Article numero="7" titre="Disponibilité">
+        {estLocal() ? (
+          <p className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sky-950">
+            Le service tourne aujourd’hui sur une installation privée, accessible depuis le seul
+            réseau local. Il n’est donc joignable ni à distance, ni lorsque la machine est
+            éteinte, et aucune disponibilité n’est promise.
+          </p>
+        ) : null}
         <p>
           Le service est fourni gratuitement, en l’état, sans garantie de disponibilité
           ininterrompue. Des interruptions peuvent survenir pour maintenance, mise à jour, panne
