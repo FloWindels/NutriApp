@@ -11,6 +11,12 @@ cd web && npm run dev
 cd mobile && flutter run --dart-define=API_BASE_URL=http://<IP-du-PC>:8000/api
 ```
 
+Sur le poste de développement Windows, PHP, Node et Flutter sont portables et hors du PATH :
+
+```bash
+export PATH="/c/Users/flore/AppData/Local/mavioh-tools/php:/c/Users/flore/AppData/Local/mavioh-tools/node:/c/Users/flore/AppData/Local/mavioh-tools/flutter/bin:$PATH"
+```
+
 Compte de démonstration : `demo@mavioh.app` / `Demo1234!`
 
 Chaque scénario se déroule **sur le site web et sur l'application mobile**, sauf mention contraire.
@@ -141,6 +147,44 @@ Chaque scénario se déroule **sur le site web et sur l'application mobile**, sa
 | J3 | Couper le réseau du téléphone au milieu d'un ajout | Message clair, feuille conservée, aucune donnée perdue |
 | J4 | Utiliser l'application avec une taille de police augmentée | Aucun texte tronqué sur l'accueil |
 | J5 | Naviguer le site au clavier | Tous les champs et boutons atteignables |
+
+## K. Offres et accès (B2C, sans paiement branché)
+
+Aucun paiement n'est branché : ces scénarios se déroulent avec un compte gratuit d'un côté et
+l'espace d'administration de l'autre. Prévoir **deux comptes** — un compte ordinaire fraîchement
+créé, et un compte administrateur (`php artisan mavioh:promouvoir ton@email.fr`).
+
+| # | Étapes | Attendu |
+|---|---|---|
+| K1 | Créer un compte et regarder ce qui marche | Repas, aliments, code-barres, recettes, poids, profil, historique : tout répond. Le **coach du jour** aussi |
+| K2 | Ouvrir Stock, Liste de courses, Planificateur, Famille, Régime reconnu | Refus explicite (402), jamais une page blanche ni une erreur technique |
+| K3 | Sport › Aujourd'hui › « Générer une séance » | Écran d'offre : ce que le coach ferait, « Voir les offres », « J'ai un code d'invitation » — pas un message d'erreur |
+| K4 | Sport › Calendrier › « Planifier ma semaine » | Même écran d'offre, dans une boîte de dialogue |
+| K5 | Sport : enregistrer une activité, planifier un jour, consigner une séance à la main | Tout fonctionne : le suivi sportif reste gratuit, seule la séance *proposée* est payante |
+| K6 | Couper Ollama (ou `LLM_PROVIDER=none`) puis rejouer K3 | Toujours l'écran d'offre : le repli par règles n'ouvre pas la porte |
+| K7 | Ouvrir `/offres` sans être connecté | Trois offres, les exclusions du gratuit, et la mention honnête qu'aucune souscription en ligne n'existe encore |
+| K8 | Admin › Codes d'accès › créer un code Foyer, 3 usages | Code de 8 caractères dictables (ni O/0, ni I/1, ni S/5) |
+| K9 | Saisir ce code dans Paramètres, côté compte gratuit | Tout s'ouvre aussitôt, sans reconnexion. Rejouer K2 : les pages répondent |
+| K10 | Ressaisir le même code avec le même compte | Refus : un code ne se consomme qu'une fois par personne |
+| K11 | Admin › Codes › révoquer le code, puis l'essayer avec un autre compte | Refus. Les accès déjà accordés, eux, ne sont pas repris |
+| K12 | Se tromper de code cinq fois de suite | Le sixième essai de la minute est bloqué (429) |
+
+## L. Offre posée à la main depuis l'administration
+
+| # | Étapes | Attendu |
+|---|---|---|
+| L1 | Ouvrir `/admin` avec un compte ordinaire | Rien : l'espace se comporte comme une adresse inexistante |
+| L2 | Admin › Comptes | Colonne **Offre** : l'offre, son échéance ou « sans échéance », et le nombre de membres de foyer couverts |
+| L3 | « Changer l'offre » sur un compte gratuit → Complet, 30 jours, motif | La ligne affiche « Complet · jusqu'au … ». Le compte accède aussitôt au stock, sans reconnexion |
+| L4 | Admin › Journal | « Changement d'offre — adresse : Gratuit → Complet · jusqu'au … », avec l'adresse de l'administrateur et le motif |
+| L5 | Rouvrir « Changer l'offre » sur ce même compte | La durée est **préremplie** avec ce qu'il reste à courir, et l'en-tête rappelle l'offre du jour |
+| L6 | Vider le champ durée | L'indice annonce la date qui sera supprimée : rien ne s'efface en silence |
+| L7 | Valider sans motif, ou avec deux caractères | Le bouton reste inactif ; côté serveur, refus |
+| L8 | Choisir Gratuit | Le champ durée se désactive : une offre gratuite n'expire pas |
+| L9 | Sur un compte qui porte un foyer, choisir une offre inférieure à Foyer | Avertissement : combien de personnes perdront l'accès en même temps que lui |
+| L10 | Appliquer ce retrait, puis se connecter avec un membre du foyer | Il a bien perdu les fonctions payantes — l'avertissement disait vrai |
+| L11 | Repasser un compte payant en gratuit | L'échéance disparaît, mais ni les repas, ni le profil, ni les pesées |
+| L12 | Poser une offre Foyer à quelqu'un, puis lui faire saisir un code « Complet » | Refus du code : il ne rétrograde jamais une offre déjà meilleure |
 
 ---
 
