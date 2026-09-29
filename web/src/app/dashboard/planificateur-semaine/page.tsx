@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { ModulePayant } from "@/components/ui/offre-requise";
 import { SectionHeader } from "@/components/ui/section-header";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -32,9 +33,11 @@ const ROUTE = "/dashboard/planificateur-semaine";
 /** « Planificateur de la semaine » (brief §12 & §16.4). */
 export default function PlannerPage() {
   return (
-    <Suspense fallback={<PlannerFallback />}>
-      <PlannerContent />
-    </Suspense>
+    <ModulePayant capacite="planificateur">
+      <Suspense fallback={<PlannerFallback />}>
+        <PlannerContent />
+      </Suspense>
+    </ModulePayant>
   );
 }
 
@@ -216,7 +219,7 @@ function PlannerContent() {
         <PageHeader subtitle={subtitle} />
         {toolbar}
         <ErrorState
-          message={getErrorMessage(query.error)}
+          error={query.error}
           onRetry={() => void query.refetch()}
           retrying={query.isFetching}
         />

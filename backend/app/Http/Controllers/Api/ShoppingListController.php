@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\ShoppingSource;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Shopping\GenerateShoppingListRequest;
+use App\Http\Requests\Shopping\IndexShoppingListRequest;
 use App\Http\Requests\Shopping\StoreShoppingItemRequest;
 use App\Http\Requests\Shopping\ToStockRequest;
 use App\Http\Requests\Shopping\UpdateShoppingItemRequest;
@@ -14,6 +15,8 @@ use App\Models\ShoppingItem;
 use App\Models\Stock;
 use App\Models\StockItem;
 use App\Models\User;
+use App\Services\Magasins\ChoixMagasin;
+use App\Services\Magasins\PanierEstime;
 use App\Services\Shopping\ShoppingGenerator;
 use App\Support\Clock;
 use App\Support\OwnerScope;
@@ -32,15 +35,21 @@ class ShoppingListController extends Controller
     /** Lieux de stock utilisés par défaut pour « Mettre au stock », dans cet ordre. */
     private const DEFAULT_LOCATIONS = ['Placard', 'Frigo'];
 
-    public function __construct(private readonly ShoppingGenerator $generator)
-    {
+    public function __construct(
+        private readonly ShoppingGenerator $generator,
+        private readonly ChoixMagasin $choixMagasin,
+        private readonly PanierEstime $panier,
+    ) {
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(IndexShoppingListRequest $request): JsonResponse
     {
         $user = $request->user();
+        $validated = $request->validated();
 
-        return response()->json($this->listPayload($user));
+        // Pas de JSON_PRESERVE_ZERO_FRACTION ici : ce module rend les quantités en nombres depuis
+        // toujours, et les passer à « 200.0 » casserait les écrans qui les lisent.
+        return response()->json($this->listPayload($user, $validated['magasin_id'] ?? null, $validated['tri'] ?? null));
     }
 
     public function store(StoreShoppingItemRequest $request): JsonResponse
@@ -128,7 +137,9 @@ class ShoppingListController extends Controller
             default => $added.' articles ajoutés à la liste.',
         };
 
-        return response()->json($this->listPayload($user) + [
+        $validated = $request->validated();
+
+        return response()->json($this->listPayload($user, $validated['magasin_id'] ?? null, $validated['tri'] ?? null) + [
             'message' => $message,
             'added_count' => $added,
             'week_start' => $weekStart,
@@ -184,9 +195,15 @@ class ShoppingListController extends Controller
     }
 
     /**
-     * @return array{data: array<int, array<string, mixed>>, counts: array{total: int, checked: int}}
+     * Liste enrichie du magasin regardé, quand il y en a un.
+     *
+     * L'ordre de base ne change pas — non cochés d'abord, puis par ancienneté — et le tri par
+     * rayon s'applique par-dessus. Sans magasin, la réponse est celle d'avant, augmentée de clés
+     * nulles : un écran qui ne connaît pas les magasins continue de fonctionner.
+     *
+     * @return array<string, mixed>
      */
-    private function listPayload(User $user): array
+    private function listPayload(User $user, ?int $magasinId = null, ?string $tri = null): array
     {
         $items = $this->scoped($user)
             ->with('food')
@@ -195,8 +212,9 @@ class ShoppingListController extends Controller
             ->orderBy('id')
             ->get();
 
-        return [
-            'data' => ShoppingItemResource::collection($items)->resolve(),
+        $magasin = $this->choixMagasin->pour($user, $magasinId);
+
+        return $this->panier->composer($user, $items, $magasin, $tri ?? 'ajout') + [
             'counts' => [
                 'total' => $items->count(),
                 'checked' => $items->where('checked', true)->count(),

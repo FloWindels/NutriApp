@@ -440,6 +440,66 @@ de portée est renseignée).
 
 **Index** : `shopping_items_user_id_index`, `shopping_items_household_id_index`.
 
+### `magasins`
+
+Enseignes servies. Quatre seulement (`lidl`, `colruyt`, `delhaize`, `aldi`) : une enseigne de plus
+se décide et s'accompagne d'un assortiment, elle n'apparaît pas au détour d'un import.
+
+| Colonne | Type | Null | Défaut | Description |
+|---|---|---|---|---|
+| `id` | bigint auto | non | — | — |
+| `enseigne` | string(32) | non | — | `lidl`, `colruyt`, `delhaize`, `aldi` |
+| `nom` | string(255) | non | — | Nom affiché |
+| `pays` | string(2) | non | `BE` | — |
+| `actif` | boolean | non | `true` | Un magasin inactif disparaît du catalogue et ne peut plus être choisi |
+| `created_at`, `updated_at` | timestamp | oui | `null` | — |
+
+**Index** : unique (`enseigne`, `nom`), `magasins_actif_index`.
+
+### `magasin_produits`
+
+Assortiment d'une enseigne. `food_id` est FACULTATIF et le restera : un produit de rayon n'est pas
+un aliment, le lien n'est qu'un bonus de précision.
+
+| Colonne | Type | Null | Défaut | Description |
+|---|---|---|---|---|
+| `id` | bigint auto | non | — | — |
+| `magasin_id` | bigint FK `magasins` cascade | non | — | — |
+| `libelle` | string(255) | non | — | Libellé du rayon |
+| `libelle_normalise` | string(191) | non | — | Clé de rattachement (`LibelleProduit::normaliser`) |
+| `marque` | string(255) | oui | `null` | — |
+| `rayon` | string(32) | non | `autre` | Voir `App\Enums\Rayon` |
+| `code_barres` | string(32) | oui | `null` | Rattachement prioritaire quand il existe |
+| `prix_indicatif` | decimal(8,2) | oui | `null` | **Indicatif**, jamais le prix du jour ; `null` plutôt que `0` |
+| `unite` | string(16) | non | `piece` | `kg`, `l`, `piece` |
+| `quantite_reference` | decimal(8,3) | non | `1` | Quantité couverte par `prix_indicatif` |
+| `food_id` | bigint FK `food` nullOnDelete | oui | `null` | — |
+| `prix_maj_le` | date | oui | `null` | Date du relevé ; vide quand il n'y a pas de prix |
+| `created_at`, `updated_at` | timestamp | oui | `null` | — |
+
+**Index** : unique (`magasin_id`, `libelle_normalise`), (`magasin_id`, `rayon`), `code_barres`.
+
+### `promotions`
+
+| Colonne | Type | Null | Défaut | Description |
+|---|---|---|---|---|
+| `id` | bigint auto | non | — | — |
+| `magasin_id` | bigint FK `magasins` cascade | non | — | — |
+| `magasin_produit_id` | bigint FK `magasin_produits` nullOnDelete | oui | `null` | Une promotion peut viser un produit libre |
+| `libelle` | string(255) | non | — | — |
+| `libelle_normalise` | string(191) | non | — | — |
+| `prix_promotionnel` | decimal(8,2) | oui | `null` | — |
+| `prix_avant` | decimal(8,2) | oui | `null` | — |
+| `debut`, `fin` | date | non | — | Bornes incluses |
+| `source` | string(255) | non | — | URL de la page, ou `saisie manuelle` |
+| `verifiee` | boolean | non | `false` | Vrai seulement après un geste humain |
+| `created_at`, `updated_at` | timestamp | oui | `null` | — |
+
+**Index** : (`magasin_id`, `debut`, `fin`), `libelle_normalise`.
+
+`user_settings.magasin_prefere_id` (FK `magasins` nullOnDelete) porte le magasin préféré, réglage
+**personnel** : deux membres d'un même foyer ne font pas leurs courses au même endroit.
+
 ### `meal_plans`
 
 | Colonne | Type | Null | Défaut | Description |

@@ -161,6 +161,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   if (query.isError || !session) {
     return (
       <ErrorState
+        error={query.error}
         title="Séance introuvable"
         message={query.error ? getErrorMessage(query.error) : "Cette séance n’existe plus."}
         onRetry={() => query.refetch()}

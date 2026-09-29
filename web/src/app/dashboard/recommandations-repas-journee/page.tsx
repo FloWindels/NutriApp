@@ -17,6 +17,7 @@ import { apiDelete, apiGet, apiPost, apiPut, getErrorMessage } from "@/lib/api-c
 import { cn } from "@/lib/cn";
 import { todayIso } from "@/lib/format";
 import { messages } from "@/lib/messages";
+import { argumentaire, capaciteRequise, estOffreRequise } from "@/lib/offres-capacites";
 import { queryKeys } from "@/lib/query-keys";
 import type {
   DataEnvelope,
@@ -193,7 +194,19 @@ function CoachPageContent() {
             action: { label: "Voir la liste", onClick: () => router.push("/dashboard/liste-course") },
           });
         } catch (error) {
-          toastError("Ajout impossible", getErrorMessage(error));
+          // Le coach du jour est gratuit, la liste de courses ne l'est pas. Le conseil mène donc
+          // parfois à une porte fermée : on l'annonce comme une invitation, pas comme un échec.
+          if (estOffreRequise(error)) {
+            const invitation = argumentaire(capaciteRequise(error));
+            toast({
+              tone: "neutral",
+              title: invitation.titre,
+              description: invitation.argument,
+              action: { label: "Voir les offres", onClick: () => router.push("/offres") },
+            });
+          } else {
+            toastError("Ajout impossible", getErrorMessage(error));
+          }
         } finally {
           setPendingKey(null);
         }
@@ -269,7 +282,7 @@ function CoachPageContent() {
         </div>
       ) : query.isError ? (
         <ErrorState
-          message={getErrorMessage(query.error)}
+          error={query.error}
           onRetry={() => void query.refetch()}
           retrying={query.isFetching}
         />

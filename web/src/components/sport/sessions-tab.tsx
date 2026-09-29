@@ -10,7 +10,6 @@ import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
 import { addDays, formatRelativeDay, todayIso } from "@/lib/format";
-import { getErrorMessage } from "@/lib/api-client";
 import type { SessionStatus, WorkoutSession } from "@/lib/types/api";
 
 const FILTERS = [
@@ -62,7 +61,7 @@ export function SessionsTab() {
       {query.isPending ? <SkeletonList /> : null}
 
       {query.isError ? (
-        <ErrorState message={getErrorMessage(query.error)} onRetry={() => query.refetch()} />
+        <ErrorState error={query.error} onRetry={() => query.refetch()} />
       ) : null}
 
       {query.isSuccess && groups.length === 0 ? (

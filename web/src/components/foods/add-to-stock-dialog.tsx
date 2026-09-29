@@ -5,11 +5,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, getErrorMessage } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
 import type { DataEnvelope, ExpiryKind, Food, StockItem, StockItemInput, StocksResponse } from "@/lib/types/api";
+import { useOffre } from "@/hooks/use-offre";
 import { usePortions } from "@/hooks/use-portions";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field, SelectField } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
+import { OffreRequisePourCapacite } from "@/components/ui/offre-requise";
 import { QuantityUnitPicker, type QuantityUnitValue } from "@/components/ui/quantity-unit-picker";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -25,6 +27,7 @@ export function AddToStockDialog({ open, onClose, food }: AddToStockDialogProps)
   const queryClient = useQueryClient();
   const { success } = useToast();
   const { portions } = usePortions();
+  const { peut } = useOffre();
 
   const [stockId, setStockId] = useState<number | null>(null);
   const [value, setValue] = useState<QuantityUnitValue>({ quantity: 1, unit: "piece" });
@@ -35,7 +38,7 @@ export function AddToStockDialog({ open, onClose, food }: AddToStockDialogProps)
   const stocksQuery = useQuery({
     queryKey: queryKeys.stocks.list(),
     queryFn: () => apiGet<StocksResponse>("/stocks"),
-    enabled: open,
+    enabled: open && peut("stock"),
   });
 
   const locations = stocksQuery.data?.locations ?? [];
@@ -67,6 +70,16 @@ export function AddToStockDialog({ open, onClose, food }: AddToStockDialogProps)
       expires_at: expiresAt === "" ? null : expiresAt,
       expiry_kind: expiryKind,
     });
+  }
+
+  // La fiche aliment est gratuite, le stock ne l'est pas : le bouton reste visible, mais il
+  // ouvre l'invitation plutôt qu'un formulaire qui finirait sur un refus.
+  if (!peut("stock")) {
+    return (
+      <Modal open={open} onClose={onClose} title="Ajouter au stock" size="md">
+        <OffreRequisePourCapacite capacite="stock" compact />
+      </Modal>
+    );
   }
 
   return (

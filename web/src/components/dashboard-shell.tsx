@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMe } from "@/hooks/use-me";
+import { useOffre } from "@/hooks/use-offre";
 import { apiPost, isApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { sectionsByCategory, toneStyles } from "@/lib/dashboard-sections";
@@ -35,6 +36,11 @@ export default function DashboardShell({ children }: DashboardShellProps) {
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const me = useMe();
+  const { peut } = useOffre();
+
+  // Un cadenas discret vaut mieux qu'un clic pour rien : on ne cache pas la section, on prévient.
+  const verrouillee = (section: { capacite?: string }) =>
+    section.capacite !== undefined && !peut(section.capacite);
 
   useEffect(() => {
     if (ready && !token) router.replace("/login");
@@ -147,10 +153,12 @@ export default function DashboardShell({ children }: DashboardShellProps) {
                       {group.sections.map((section) => {
                         const href = `/dashboard/${section.slug}`;
                         const active = pathname === href || pathname.startsWith(`${href}/`);
+                        const verrou = verrouillee(section);
                         return (
                           <Link
                             key={section.slug}
                             href={href}
+                            title={verrou ? SUFFIXE_VERROU : undefined}
                             aria-current={active ? "page" : undefined}
                             className={cn(
                               "group flex h-12 w-full items-center justify-start gap-3 rounded-2xl border px-4 transition",
@@ -168,6 +176,14 @@ export default function DashboardShell({ children }: DashboardShellProps) {
                               <MenuIcon name={section.icon} className="h-4 w-4" />
                             </span>
                             <span className="truncate text-sm font-medium">{section.title}</span>
+                            {verrou ? (
+                              <CadenasIcon
+                                className={cn(
+                                  "ml-auto h-3.5 w-3.5 shrink-0",
+                                  active ? "text-white/70" : "text-slate-400",
+                                )}
+                              />
+                            ) : null}
                           </Link>
                         );
                       })}
@@ -180,11 +196,12 @@ export default function DashboardShell({ children }: DashboardShellProps) {
                 {compactSections.map((section) => {
                   const href = `/dashboard/${section.slug}`;
                   const active = pathname === href || pathname.startsWith(`${href}/`);
+                  const verrou = verrouillee(section);
                   return (
                     <Link
                       key={section.slug}
                       href={href}
-                      aria-label={section.title}
+                      aria-label={verrou ? `${section.title} — ${SUFFIXE_VERROU}` : section.title}
                       aria-current={active ? "page" : undefined}
                       className={cn(
                         "group relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition",
@@ -201,8 +218,13 @@ export default function DashboardShell({ children }: DashboardShellProps) {
                       >
                         <MenuIcon name={section.icon} className="h-4 w-4" />
                       </span>
+                      {verrou ? (
+                        <span className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full border border-slate-200 bg-white text-slate-400">
+                          <CadenasIcon className="h-2.5 w-2.5" />
+                        </span>
+                      ) : null}
                       <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-3 -translate-x-1 -translate-y-1/2 whitespace-nowrap rounded-xl border border-slate-200 bg-slate-900 px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-xl transition duration-150 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
-                        {section.title}
+                        {verrou ? `${section.title} — ${SUFFIXE_VERROU}` : section.title}
                       </span>
                     </Link>
                   );
@@ -261,6 +283,31 @@ export default function DashboardShell({ children }: DashboardShellProps) {
         </section>
       </div>
     </main>
+  );
+}
+
+/** Le menu se contente de signaler ; c'est la page qui explique ce qu'on y gagne. */
+const SUFFIXE_VERROU = "inclus dans les offres payantes";
+
+function CadenasIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <rect
+        x="4.5"
+        y="10.5"
+        width="15"
+        height="10"
+        rx="2.5"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M8 10.5V7.5C8 5.29086 9.79086 3.5 12 3.5C14.2091 3.5 16 5.29086 16 7.5V10.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

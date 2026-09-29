@@ -9,7 +9,6 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
 import { SkeletonList } from "@/components/ui/skeleton";
-import { getErrorMessage } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
 import type { Exercise } from "@/lib/types/api";
 import { EXERCISE_CATEGORY_LABELS, MATERIEL_LABELS, MUSCLE_GROUP_LABELS, labelFor } from "@/lib/vocab";
@@ -72,7 +71,7 @@ export function ExercisePickerModal({ open, onClose, onPick }: ExercisePickerPro
         ) : exercisesQuery.isError ? (
           <ErrorState
             compact
-            message={getErrorMessage(exercisesQuery.error)}
+            error={exercisesQuery.error}
             onRetry={() => void exercisesQuery.refetch()}
             retrying={exercisesQuery.isFetching}
           />

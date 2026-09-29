@@ -67,7 +67,18 @@ export const queryKeys = {
 
   shopping: {
     all: ["shopping"] as const,
-    list: ["shopping", "list"] as const,
+    // Le magasin regardé et le tri font partie de la clé : c'est la même liste, mais la réponse
+    // du serveur change (rayons, prix, total). Les confondre servirait des prix d'une autre
+    // enseigne depuis le cache.
+    list: (params?: Params) => ["shopping", "list", params ?? {}] as const,
+  },
+
+  magasins: {
+    all: ["magasins"] as const,
+    catalogue: ["magasins", "catalogue"] as const,
+    produits: (id: number | string, params?: Params) =>
+      ["magasins", "produits", String(id), params ?? {}] as const,
+    promotions: (id: number | string) => ["magasins", "promotions", String(id)] as const,
   },
 
   planner: {

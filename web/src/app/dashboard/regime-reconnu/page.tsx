@@ -9,10 +9,12 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Modal } from "@/components/ui/modal";
+import { ModulePayant } from "@/components/ui/offre-requise";
 import { Pill } from "@/components/ui/pill";
 import { SectionHeader, Overline } from "@/components/ui/section-header";
 import { SkeletonCard } from "@/components/ui/skeleton";
-import { apiGet, getErrorMessage } from "@/lib/api-client";
+import { useOffre } from "@/hooks/use-offre";
+import { apiGet } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatRelativeDay } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
@@ -32,6 +34,7 @@ const RANGES = [7, 14, 30] as const;
 export default function DietPage() {
   const [days, setDays] = useState<(typeof RANGES)[number]>(7);
   const [detail, setDetail] = useState<DietSummary | null>(null);
+  const { peut } = useOffre();
 
   const profileQuery = useQuery({
     queryKey: queryKeys.profile,
@@ -54,7 +57,8 @@ export default function DietPage() {
   const evaluationQuery = useQuery({
     queryKey: queryKeys.diets.evaluate(days),
     queryFn: () => apiGet<DataEnvelope<DietEvaluation>>("/diets/evaluate", { days }),
-    enabled: Boolean(regime),
+    // Inutile d'aller chercher un refus : sans l'offre, l'écran montre l'invitation à la place.
+    enabled: Boolean(regime) && peut("regimes"),
   });
 
   const diet = dietQuery.data?.data;
@@ -78,7 +82,7 @@ export default function DietPage() {
 
       {profileQuery.isError ? (
         <ErrorState
-          message={getErrorMessage(profileQuery.error)}
+          error={profileQuery.error}
           onRetry={() => profileQuery.refetch()}
         />
       ) : null}
@@ -157,110 +161,112 @@ export default function DietPage() {
       ) : null}
 
       {regime ? (
-        <Card padding="md">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-slate-900">Conformité de tes repas</p>
-            <div className="flex gap-1.5" role="group" aria-label="Période analysée">
-              {RANGES.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={value === days}
-                  onClick={() => setDays(value)}
-                  className={cn(
-                    "min-h-10 rounded-full border px-3 py-1.5 text-sm font-medium transition",
-                    value === days
-                      ? "border-fuchsia-600 bg-fuchsia-600 text-white"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
-                  )}
-                >
-                  {value} j
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {evaluationQuery.isPending ? <SkeletonCard /> : null}
-
-          {evaluationQuery.isError ? (
-            <ErrorState
-              message={getErrorMessage(evaluationQuery.error)}
-              onRetry={() => evaluationQuery.refetch()}
-            />
-          ) : null}
-
-          {evaluation && evaluation.statut === "donnees_insuffisantes" ? (
-            <EmptyState
-              title="Données insuffisantes"
-              message={evaluation.message}
-              action={
-                <Link href="/dashboard/historique-repas-journee">
-                  <Button>Enregistrer un repas</Button>
-                </Link>
-              }
-            />
-          ) : null}
-
-          {evaluation && evaluation.statut !== "donnees_insuffisantes" ? (
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center gap-5">
-                <DietScoreGauge
-                  scorePct={evaluation.score_pct}
-                  statut={evaluation.statut}
-                  statutLabel={DIET_STATUT_LABELS[evaluation.statut]}
-                />
-                <p className="max-w-md text-sm text-slate-600">{evaluation.mention}</p>
+        <ModulePayant capacite="regimes">
+          <Card padding="md">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-slate-900">Conformité de tes repas</p>
+              <div className="flex gap-1.5" role="group" aria-label="Période analysée">
+                {RANGES.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={value === days}
+                    onClick={() => setDays(value)}
+                    className={cn(
+                      "min-h-10 rounded-full border px-3 py-1.5 text-sm font-medium transition",
+                      value === days
+                        ? "border-fuchsia-600 bg-fuchsia-600 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
+                    )}
+                  >
+                    {value} j
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {evaluation.conseils.length > 0 ? (
-                <ul className="space-y-1.5 text-sm text-slate-700">
-                  {evaluation.conseils.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              ) : null}
+            {evaluationQuery.isPending ? <SkeletonCard /> : null}
 
-              {evaluation.ecarts.length > 0 ? (
-                <div>
-                  <Overline className="mb-2">
-                    Écarts relevés
-                  </Overline>
-                  <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
-                    {evaluation.ecarts.map((ecart, index) => (
-                      <li key={`${ecart.date}-${index}`} className="px-4 py-2.5 text-sm">
-                        <span className="font-medium text-slate-900">
-                          {formatRelativeDay(ecart.date)}
-                          {ecart.meal_type ? ` · ${MEAL_TYPE_LABELS[ecart.meal_type]}` : ""}
-                        </span>
-                        <span className="text-slate-600">
-                          {ecart.item_label ? ` — ${ecart.item_label}` : ""}
-                        </span>
-                        <p className="text-slate-600">{ecart.explication}</p>
-                      </li>
+            {evaluationQuery.isError ? (
+              <ErrorState
+                error={evaluationQuery.error}
+                onRetry={() => evaluationQuery.refetch()}
+              />
+            ) : null}
+
+            {evaluation && evaluation.statut === "donnees_insuffisantes" ? (
+              <EmptyState
+                title="Données insuffisantes"
+                message={evaluation.message}
+                action={
+                  <Link href="/dashboard/historique-repas-journee">
+                    <Button>Enregistrer un repas</Button>
+                  </Link>
+                }
+              />
+            ) : null}
+
+            {evaluation && evaluation.statut !== "donnees_insuffisantes" ? (
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-5">
+                  <DietScoreGauge
+                    scorePct={evaluation.score_pct}
+                    statut={evaluation.statut}
+                    statutLabel={DIET_STATUT_LABELS[evaluation.statut]}
+                  />
+                  <p className="max-w-md text-sm text-slate-600">{evaluation.mention}</p>
+                </div>
+
+                {evaluation.conseils.length > 0 ? (
+                  <ul className="space-y-1.5 text-sm text-slate-700">
+                    {evaluation.conseils.map((line) => (
+                      <li key={line}>{line}</li>
                     ))}
                   </ul>
-                </div>
-              ) : (
-                <p className="text-sm text-emerald-700">
-                  Aucun écart relevé sur la période : beau travail.
-                </p>
-              )}
+                ) : null}
 
-              {evaluation.regimes_proches.length > 0 ? (
-                <div>
-                  <Overline className="mb-2">
-                    Ton alimentation ressemble aussi à
-                  </Overline>
-                  <div className="flex flex-wrap gap-2">
-                    {evaluation.regimes_proches.map((proche) => (
-                      <ProcheChip key={proche.key} nom={proche.nom} score={proche.score_pct} raisons={proche.raisons} />
-                    ))}
+                {evaluation.ecarts.length > 0 ? (
+                  <div>
+                    <Overline className="mb-2">
+                      Écarts relevés
+                    </Overline>
+                    <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
+                      {evaluation.ecarts.map((ecart, index) => (
+                        <li key={`${ecart.date}-${index}`} className="px-4 py-2.5 text-sm">
+                          <span className="font-medium text-slate-900">
+                            {formatRelativeDay(ecart.date)}
+                            {ecart.meal_type ? ` · ${MEAL_TYPE_LABELS[ecart.meal_type]}` : ""}
+                          </span>
+                          <span className="text-slate-600">
+                            {ecart.item_label ? ` — ${ecart.item_label}` : ""}
+                          </span>
+                          <p className="text-slate-600">{ecart.explication}</p>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </Card>
+                ) : (
+                  <p className="text-sm text-emerald-700">
+                    Aucun écart relevé sur la période : beau travail.
+                  </p>
+                )}
+
+                {evaluation.regimes_proches.length > 0 ? (
+                  <div>
+                    <Overline className="mb-2">
+                      Ton alimentation ressemble aussi à
+                    </Overline>
+                    <div className="flex flex-wrap gap-2">
+                      {evaluation.regimes_proches.map((proche) => (
+                        <ProcheChip key={proche.key} nom={proche.nom} score={proche.score_pct} raisons={proche.raisons} />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </Card>
+        </ModulePayant>
       ) : null}
 
       <Card padding="md">
@@ -270,7 +276,7 @@ export default function DietPage() {
         {catalogQuery.isPending ? <SkeletonCard /> : null}
         {catalogQuery.isError ? (
           <ErrorState
-            message={getErrorMessage(catalogQuery.error)}
+            error={catalogQuery.error}
             onRetry={() => catalogQuery.refetch()}
           />
         ) : null}

@@ -36,6 +36,9 @@ class UpdateSettingsRequest extends FormRequest
             'langue' => ['sometimes', 'string', Rule::in(self::LANGUES)],
             'timezone' => ['sometimes', 'string', 'max:64', 'timezone'],
             'ia_seances' => ['sometimes', 'boolean'],
+            // Le magasin doit exister ET être actif : en choisir un retiré du service reviendrait
+            // à estimer son panier sur des prix qu'on ne met plus à jour.
+            'magasin_prefere_id' => ['sometimes', 'nullable', 'integer', Rule::exists('magasins', 'id')->where('actif', true)],
             'partage_profil_foyer' => ['sometimes', 'boolean'],
         ];
     }
@@ -56,6 +59,7 @@ class UpdateSettingsRequest extends FormRequest
             'langue' => 'langue',
             'timezone' => 'fuseau horaire',
             'ia_seances' => 'séances proposées par l’IA',
+            'magasin_prefere_id' => 'magasin préféré',
             'partage_profil_foyer' => 'partage du profil avec le foyer',
         ];
     }

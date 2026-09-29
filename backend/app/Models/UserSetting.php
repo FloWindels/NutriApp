@@ -24,6 +24,7 @@ class UserSetting extends Model
         'langue',
         'timezone',
         'ia_seances',
+        'magasin_prefere_id',
     ];
 
     protected $casts = [
@@ -33,6 +34,7 @@ class UserSetting extends Model
         'notif_rappel_sport' => 'boolean',
         'jours_alerte_peremption' => 'integer',
         'ia_seances' => 'boolean',
+        'magasin_prefere_id' => 'integer',
     ];
 
     protected $attributes = [
@@ -50,5 +52,10 @@ class UserSetting extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function magasinPrefere(): BelongsTo
+    {
+        return $this->belongsTo(Magasin::class, 'magasin_prefere_id');
     }
 }

@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
+import { ModulePayant } from "@/components/ui/offre-requise";
 import { Pill } from "@/components/ui/pill";
 import { SectionHeader, Overline } from "@/components/ui/section-header";
 import { SkeletonCard } from "@/components/ui/skeleton";
@@ -30,7 +31,15 @@ import type {
 const CODE_LENGTH = 8;
 
 /** « Famille » — créer ou rejoindre un foyer, membres et repas commun (§10). */
-export default function FamilyPage() {
+export default function FamilyRoute() {
+  return (
+    <ModulePayant capacite="foyer">
+      <FamilyPage />
+    </ModulePayant>
+  );
+}
+
+function FamilyPage() {
   const queryClient = useQueryClient();
   const { success, error: toastError } = useToast();
   const me = useMe();
@@ -62,7 +71,7 @@ export default function FamilyPage() {
   if (householdQuery.isError) {
     return (
       <ErrorState
-        message={getErrorMessage(householdQuery.error)}
+        error={householdQuery.error}
         onRetry={() => householdQuery.refetch()}
       />
     );

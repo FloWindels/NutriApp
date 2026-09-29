@@ -216,7 +216,7 @@ export function FoodSearchPage() {
               ))}
             </div>
           ) : isError ? (
-            <ErrorState message={getErrorMessage(activeError)} onRetry={retryActive} retrying={activeFetching} />
+            <ErrorState error={activeError} onRetry={retryActive} retrying={activeFetching} />
           ) : results.length === 0 ? (
             tab === "favoris" ? (
               <EmptyState

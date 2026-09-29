@@ -257,7 +257,7 @@ export function StockPage() {
           <SkeletonList rows={5} />
         ) : stocksQuery.isError ? (
           <ErrorState
-            message={getErrorMessage(stocksQuery.error)}
+            error={stocksQuery.error}
             onRetry={() => void stocksQuery.refetch()}
             retrying={stocksQuery.isFetching}
           />

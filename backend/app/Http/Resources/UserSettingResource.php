@@ -37,6 +37,7 @@ class UserSettingResource extends JsonResource
             'langue' => (string) $this->resource->langue,
             'timezone' => (string) $this->resource->timezone,
             'ia_seances' => (bool) $this->resource->ia_seances,
+            'magasin_prefere_id' => $this->resource->magasin_prefere_id === null ? null : (int) $this->resource->magasin_prefere_id,
             'partage_profil_foyer' => $this->partageProfilFoyer,
             'updated_at' => $this->resource->updated_at?->toISOString(),
         ];

@@ -10,7 +10,7 @@ Chaque module possède **exactement un fichier** ici (créé seulement si néces
 | M4 Repas | `meals.php` |
 | M5 Stock | `stocks.php` |
 | M6 Foyer | `household.php` |
-| M7 Courses / planificateur | `shopping.php`, `planner.php` |
+| M7 Courses / planificateur | `shopping.php`, `planner.php`, `magasins.php` |
 | M8 Sport | `sport.php` |
 | M9 Dashboard / coach / régimes | `dashboard.php`, `recommendations.php`, `diets.php` |
 
@@ -19,6 +19,18 @@ Ces fichiers sont `require`s **à l'intérieur** du groupe `auth:sanctum` de `ro
 
 Règles : routes littérales avant les routes paramétrées, paramètres contraints
 (`->whereNumber('meal')`, `->where('key', '[a-z_]+')`), jamais de `route('nom')`.
+
+## M7 Magasins — `magasins.php` (+ `../api_public/magasins.php`)
+
+| Méthode | Chemin | Contrôleur | Rôle |
+|---|---|---|---|
+| GET | `/magasins` | `MagasinController@index` | **public** : enseignes actives + catalogue des rayons |
+| GET | `/magasins/{magasin}/produits` | `MagasinController@produits` | **public** : assortiment paginé `{data, meta}`, filtres `q` et `rayon` |
+| GET | `/magasins/{magasin}/promotions` | `PromotionController@index` | promotions en cours (capacité `courses`) |
+| POST | `/magasins/{magasin}/promotions` | `PromotionController@store` | saisie manuelle, enregistrée vérifiée |
+| POST | `/magasins/{magasin}/promotions/recherche` | `PromotionController@rechercher` | relevé web + IA (`courses` **et** `ia`) |
+| PUT | `/magasins/promotions/{promotion}` | `PromotionController@update` | corriger, ou passer `verifiee` à vrai |
+| DELETE | `/magasins/promotions/{promotion}` | `PromotionController@destroy` | supprimer |
 
 ## M8 Sport — `sport.php` (+ `../api_public/sport.php`)
 

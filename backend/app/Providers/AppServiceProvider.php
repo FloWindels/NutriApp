@@ -4,18 +4,22 @@ namespace App\Providers;
 
 use App\Contracts\WebSearchClient;
 use App\Contracts\LlmPlannerClient;
+use App\Contracts\LlmPromotionsClient;
 use App\Contracts\LlmRecipeClient;
 use App\Contracts\LlmVisionClient;
 use App\Contracts\LlmWorkoutClient;
 use App\Services\Llm\AnthropicPlannerClient;
+use App\Services\Llm\AnthropicPromotionsClient;
 use App\Services\Llm\AnthropicRecipeClient;
 use App\Services\Llm\AnthropicVisionClient;
 use App\Services\Llm\AnthropicWorkoutClient;
 use App\Services\Llm\NullPlannerClient;
+use App\Services\Llm\NullPromotionsClient;
 use App\Services\Llm\NullRecipeClient;
 use App\Services\Llm\NullVisionClient;
 use App\Services\Llm\NullWorkoutClient;
 use App\Services\Llm\OllamaPlannerClient;
+use App\Services\Llm\OllamaPromotionsClient;
 use App\Services\Llm\OllamaRecipeClient;
 use App\Services\Llm\OllamaVisionClient;
 use App\Services\Llm\OllamaWorkoutClient;
@@ -66,6 +70,16 @@ class AppServiceProvider extends ServiceProvider
                 LlmProvider::ANTHROPIC => $app->make(AnthropicPlannerClient::class),
                 LlmProvider::OLLAMA => $app->make(OllamaPlannerClient::class),
                 default => $app->make(NullPlannerClient::class),
+            };
+        });
+
+        // Relever les promotions d'une enseigne, c'est LIRE des extraits de pages web : de la
+        // génération de texte, donc le même sélecteur que la recette.
+        $this->app->bind(LlmPromotionsClient::class, function ($app) {
+            return match (LlmProvider::current()) {
+                LlmProvider::ANTHROPIC => $app->make(AnthropicPromotionsClient::class),
+                LlmProvider::OLLAMA => $app->make(OllamaPromotionsClient::class),
+                default => $app->make(NullPromotionsClient::class),
             };
         });
 

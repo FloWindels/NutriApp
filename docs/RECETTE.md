@@ -120,6 +120,8 @@ Chaque scénario se déroule **sur le site web et sur l'application mobile**, sa
 |---|---|---|
 | H1 | Générer la semaine dans le planificateur | Créneaux remplis avec des recettes compatibles avec le régime |
 | H2 | Marquer un repas planifié comme réalisé | Repas créé dans le journal, plan marqué réalisé |
+| H2b | Générer la semaine, puis la suivante | Aucun plat servi deux fois dans une même semaine, et la seconde semaine ne reprend pas les plats de la première |
+| H2c | Régénérer la même semaine avec « remplacer » | Exactement le même menu : la génération ne tire rien au sort |
 | H3 | Envoyer le planning vers la liste de courses | Seuls les ingrédients absents du stock sont ajoutés |
 | H4 | Cocher un article puis « Mettre au stock » | Article transféré avec sa quantité |
 | H5 | Créer un foyer sur un compte, le rejoindre avec un second | Avertissement de fusion avant validation, stock partagé ensuite |

@@ -23,6 +23,14 @@ export type DashboardSection = {
   category: DashboardCategory;
   icon: IconName;
   tone: DashboardTone;
+  /**
+   * Capacité sans laquelle la section n'offre plus rien du tout (voir backend/config/offres.php).
+   *
+   * Seules les sections entièrement verrouillées la portent. « Sport » et « Régime reconnu »
+   * n'y figurent pas : un compte gratuit y enregistre ses activités et y lit les régimes, seule
+   * la proposition automatique lui manque. Marquer ces deux-là d'un cadenas serait un mensonge.
+   */
+  capacite?: string;
 };
 
 export const categoryOrder: DashboardCategory[] = ["Nutrition", "Planification", "Compte"];
@@ -70,6 +78,7 @@ export const dashboardSections: DashboardSection[] = [
     category: "Planification",
     icon: "fridge",
     tone: "lime",
+    capacite: "stock",
   },
   {
     slug: "planificateur-semaine",
@@ -77,6 +86,7 @@ export const dashboardSections: DashboardSection[] = [
     category: "Planification",
     icon: "planner",
     tone: "orange",
+    capacite: "planificateur",
   },
   {
     slug: "liste-course",
@@ -84,6 +94,7 @@ export const dashboardSections: DashboardSection[] = [
     category: "Planification",
     icon: "shopping",
     tone: "slate",
+    capacite: "courses",
   },
   {
     slug: "sport",
@@ -98,6 +109,7 @@ export const dashboardSections: DashboardSection[] = [
     category: "Compte",
     icon: "family",
     tone: "sky",
+    capacite: "foyer",
   },
   {
     slug: "profil",

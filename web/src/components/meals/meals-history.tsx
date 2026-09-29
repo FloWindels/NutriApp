@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { Skeleton, SkeletonCard } from "@/components/ui/skeleton";
-import { apiGet, getErrorMessage } from "@/lib/api-client";
+import { apiGet } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { addDays, capitalize, formatDay, formatKcal, formatMinutes, formatPercent } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
@@ -78,7 +78,7 @@ export function MealsHistory({ date, onSelectDay }: MealsHistoryProps) {
       <div className="space-y-4">
         {rangeChips}
         <ErrorState
-          message={getErrorMessage(query.error)}
+          error={query.error}
           onRetry={() => void query.refetch()}
           retrying={query.isFetching}
         />

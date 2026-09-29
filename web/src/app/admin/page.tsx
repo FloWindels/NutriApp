@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, getErrorMessage } from "@/lib/api-client";
 import { formatDate, formatNumber } from "@/lib/format";
 import type { DataEnvelope } from "@/lib/types/api";
+import { MagasinsTab } from "@/components/admin/magasins-tab";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -105,13 +106,14 @@ type JournalLigne = {
 
 type OffreCle = "gratuit" | "complet" | "foyer";
 
-type Onglet = "tableau" | "comptes" | "moderation" | "codes" | "journal";
+type Onglet = "tableau" | "comptes" | "moderation" | "codes" | "magasins" | "journal";
 
 const ONGLETS: { cle: Onglet; libelle: string }[] = [
   { cle: "tableau", libelle: "Tableau de bord" },
   { cle: "comptes", libelle: "Comptes" },
   { cle: "moderation", libelle: "Modération" },
   { cle: "codes", libelle: "Codes d’accès" },
+  { cle: "magasins", libelle: "Magasins" },
   { cle: "journal", libelle: "Journal" },
 ];
 
@@ -224,6 +226,7 @@ export default function AdminPage() {
       {onglet === "comptes" ? <Comptes /> : null}
       {onglet === "moderation" ? <Moderation /> : null}
       {onglet === "codes" ? <Codes /> : null}
+      {onglet === "magasins" ? <MagasinsTab /> : null}
       {onglet === "journal" ? <Journal /> : null}
     </CadreAdmin>
   );

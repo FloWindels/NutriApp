@@ -132,7 +132,7 @@ export default function DashboardPage() {
       <div className="space-y-6">
         {greeting}
         <ErrorState
-          message={getErrorMessage(query.error)}
+          error={query.error}
           onRetry={() => void query.refetch()}
           retrying={query.isFetching}
         />

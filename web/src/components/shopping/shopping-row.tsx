@@ -3,8 +3,8 @@
 import { useId } from "react";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { cn } from "@/lib/cn";
-import { formatQty } from "@/lib/format";
-import type { ShoppingItem, ShoppingSource } from "@/lib/types/api";
+import { formatDate, formatPercent, formatPrix, formatQty } from "@/lib/format";
+import type { ShoppingItemLigne, ShoppingSource } from "@/lib/types/api";
 import { SHOPPING_SOURCE_LABELS, labelFor } from "@/lib/vocab";
 import { unitLabel } from "@/lib/units";
 
@@ -17,17 +17,29 @@ const SOURCE_TONES: Record<ShoppingSource, PillTone> = {
 };
 
 export type ShoppingRowProps = {
-  item: ShoppingItem;
-  onToggle: (item: ShoppingItem, checked: boolean) => void;
-  onToStock: (item: ShoppingItem) => void;
-  onDelete: (item: ShoppingItem) => void;
+  item: ShoppingItemLigne;
+  onToggle: (item: ShoppingItemLigne, checked: boolean) => void;
+  onToStock: (item: ShoppingItemLigne) => void;
+  onDelete: (item: ShoppingItemLigne) => void;
   disabled?: boolean;
+  /** Vrai dès qu'un magasin est choisi : c'est ce qui autorise à parler de prix. */
+  avecMagasin?: boolean;
 };
 
-export function ShoppingRow({ item, onToggle, onToStock, onDelete, disabled = false }: ShoppingRowProps) {
+export function ShoppingRow({
+  item,
+  onToggle,
+  onToStock,
+  onDelete,
+  disabled = false,
+  avecMagasin = false,
+}: ShoppingRowProps) {
   const checkboxId = useId();
   const quantityLabel =
     item.quantity !== null ? formatQty(item.quantity, item.unit ? unitLabel(item.unit) : "") : null;
+
+  const produit = item.magasin_produit;
+  const promotion = produit?.promotion ?? null;
 
   return (
     <li
@@ -59,8 +71,50 @@ export function ShoppingRow({ item, onToggle, onToStock, onDelete, disabled = fa
           <Pill tone={SOURCE_TONES[item.source] ?? "slate"} dot>
             {labelFor(SHOPPING_SOURCE_LABELS, item.source)}
           </Pill>
+          {produit ? (
+            <>
+              <Pill tone="slate">{produit.rayon_libelle}</Pill>
+              <span className="truncate">
+                {produit.libelle}
+                {produit.emballages_estimes > 1 ? ` · ${produit.emballages_estimes} emballages` : ""}
+              </span>
+            </>
+          ) : null}
+          {promotion ? (
+            <Pill tone={promotion.verifiee ? "rose" : "amber"}>
+              {promotion.verifiee ? "Promo" : "Promo à vérifier"}
+              {promotion.remise_pourcent !== null ? ` −${formatPercent(promotion.remise_pourcent)}` : ""}
+            </Pill>
+          ) : null}
+          {avecMagasin && produit === null ? (
+            <span className="text-slate-400">Pas de prix pour cet article</span>
+          ) : null}
         </span>
       </label>
+
+      {produit && produit.prix_ligne_estime !== null ? (
+        <span
+          className="shrink-0 text-right"
+          title={
+            produit.prix_maj_le
+              ? `Prix estimé, relevé le ${formatDate(produit.prix_maj_le)}. Ce n’est pas le prix du jour en magasin.`
+              : "Prix estimé. Ce n’est pas le prix du jour en magasin."
+          }
+        >
+          <span className="block text-sm font-semibold tabular-nums text-slate-900">
+            <span className="text-slate-400" aria-hidden="true">
+              ≈{" "}
+            </span>
+            <span className="sr-only">Estimé </span>
+            {formatPrix(produit.prix_ligne_estime)}
+          </span>
+          {promotion && produit.prix_indicatif !== null && produit.economie_estimee !== null ? (
+            <span className="block text-[11px] tabular-nums text-slate-400 line-through">
+              {formatPrix(produit.prix_indicatif * produit.emballages_estimes)}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
 
       <button
         type="button"

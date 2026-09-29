@@ -18,7 +18,7 @@ class SettingsTest extends TestCase
     private const KEYS = [
         'notif_peremption', 'notif_rappel_repas', 'notif_rappel_sport', 'heure_rappel',
         'jours_alerte_peremption', 'unites', 'theme', 'langue', 'timezone', 'ia_seances',
-        'partage_profil_foyer', 'updated_at',
+        'magasin_prefere_id', 'partage_profil_foyer', 'updated_at',
     ];
 
     public function test_get_settings_creates_defaults_lazily(): void

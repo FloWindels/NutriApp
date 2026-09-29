@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiDelete, apiGet, getErrorMessage } from "@/lib/api-client";
+import { apiDelete, apiGet } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatGrams, formatKcal, formatMinutes } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
@@ -141,7 +141,13 @@ function RecipeCard({
 }
 
 /** « Recettes » (brief §5 et §17) : filtres, recherche, éditeur et ajout au repas. */
-export function RecipesPage() {
+export function RecipesPage({
+  /**
+   * Phrase apportée par un autre écran — les promotions de la liste de courses, par exemple.
+   * Le générateur s'ouvre dessus au premier rendu plutôt que d'obliger à la recopier.
+   */
+  demandeInitiale = "",
+}: { demandeInitiale?: string } = {}) {
   const queryClient = useQueryClient();
   const { success } = useToast();
 
@@ -152,7 +158,7 @@ export function RecipesPage() {
   const [mealType, setMealType] = useState<MealType | "">("");
   const [detail, setDetail] = useState<Recipe | null>(null);
   const [editor, setEditor] = useState<{ recipe: Recipe | null } | null>(null);
-  const [generateur, setGenerateur] = useState(false);
+  const [generateur, setGenerateur] = useState(demandeInitiale !== "");
   const [toDelete, setToDelete] = useState<Recipe | null>(null);
   const [toAdd, setToAdd] = useState<Recipe | null>(null);
 
@@ -305,7 +311,7 @@ export function RecipesPage() {
         </div>
       ) : recipesQuery.isError ? (
         <ErrorState
-          message={getErrorMessage(recipesQuery.error)}
+          error={recipesQuery.error}
           onRetry={() => void recipesQuery.refetch()}
           retrying={recipesQuery.isFetching}
         />
@@ -423,6 +429,7 @@ export function RecipesPage() {
       {generateur ? (
         <RecipeGeneratorModal
           open
+          demandeInitiale={demandeInitiale}
           onClose={() => setGenerateur(false)}
           onAccept={(proposition) => {
             // La proposition n'est pas enregistrée : elle pré-remplit l'éditeur, où elle peut

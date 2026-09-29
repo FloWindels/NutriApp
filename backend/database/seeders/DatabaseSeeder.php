@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             ExerciseSeeder::class,
             SportSeeder::class,
+            MagasinSeeder::class,
         ]);
 
         if (app()->environment() !== 'production') {

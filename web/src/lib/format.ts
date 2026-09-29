@@ -67,6 +67,26 @@ export function formatPercent(value: unknown): string {
   return `${intFormatter.format(Math.round(toNumber(value)))} %`;
 }
 
+const priceFormatters = new Map<string, Intl.NumberFormat>();
+
+/**
+ * `formatPrix(1.79)` → « 1,79 € ».
+ *
+ * Une absence de prix rend un tiret et jamais « 0,00 € » : gratuit et inconnu ne se ressemblent
+ * que sur un écran mal écrit.
+ */
+export function formatPrix(value: number | null | undefined, devise = "EUR"): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+
+  let formatter = priceFormatters.get(devise);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(LOCALE, { style: "currency", currency: devise });
+    priceFormatters.set(devise, formatter);
+  }
+
+  return formatter.format(value);
+}
+
 /** `formatSigned(105)` → « +105 », `formatSigned(-120)` → « −120 » */
 export function formatSigned(value: unknown): string {
   const n = Math.round(toNumber(value));

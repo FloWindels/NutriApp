@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { useOffre } from "@/hooks/use-offre";
 import { apiPost, getErrorMessage } from "@/lib/api-client";
 import { formatKcal, formatNumber } from "@/lib/format";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Modal } from "@/components/ui/modal";
+import { OffreRequisePourCapacite } from "@/components/ui/offre-requise";
 import { Overline } from "@/components/ui/section-header";
 import { Pill } from "@/components/ui/pill";
 
@@ -53,12 +55,16 @@ export function RecipeGeneratorModal({
   open,
   onClose,
   onAccept,
+  demandeInitiale = "",
 }: {
   open: boolean;
   onClose: () => void;
   onAccept: (proposition: Proposition) => void;
+  /** Phrase déjà écrite par l'écran appelant (les promotions de la semaine, par exemple). */
+  demandeInitiale?: string;
 }) {
-  const [demande, setDemande] = useState("");
+  const { peut } = useOffre();
+  const [demande, setDemande] = useState(demandeInitiale);
   const [proposition, setProposition] = useState<Proposition | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [internet, setInternet] = useState(false);
@@ -85,6 +91,16 @@ export function RecipeGeneratorModal({
     setProposition(null);
     setErreur(null);
     onClose();
+  }
+
+  // Le serveur répond 200 avec « source: indisponible » quand l'offre ne couvre pas l'IA. Plutôt
+  // que d'attendre ce refus après coup, on dit tout de suite ce que la génération apporte.
+  if (!peut("ia")) {
+    return (
+      <Modal open={open} onClose={fermer} title="Une recette avec ce que j’ai" size="lg">
+        <OffreRequisePourCapacite capacite="ia" compact />
+      </Modal>
+    );
   }
 
   return (

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { OffreRequise } from "@/components/ui/offre-requise";
+import { OffreRequisePourCapacite } from "@/components/ui/offre-requise";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { cn } from "@/lib/cn";
 import { formatKcal, formatMinutes, formatTime } from "@/lib/format";
@@ -162,10 +162,5 @@ export function SportGlyph({ className }: { className?: string }) {
  * sportif disparaît.
  */
 export function CoachSportifVerrouille() {
-  return (
-    <OffreRequise
-      titre="Le coach sportif fait partie des offres payantes"
-      argument="Mavi’oh construit la séance à ta place : les exercices, les séries, les charges et la durée, adaptés à ton niveau, à ton matériel et au temps dont tu disposes. Enregistrer une activité, planifier tes jours et retrouver tes séances passées restent gratuits."
-    />
-  );
+  return <OffreRequisePourCapacite capacite="seances" />;
 }

@@ -1132,6 +1132,154 @@ export type CommonMealResponse = {
 };
 
 /* ------------------------------------------------------------------ */
+/* M7 Magasins, prix indicatifs et promotions                          */
+/* ------------------------------------------------------------------ */
+
+export const ENSEIGNES = ["lidl", "colruyt", "delhaize", "aldi"] as const;
+export type Enseigne = (typeof ENSEIGNES)[number];
+
+/**
+ * Les dix rayons, dans l'ordre où on traverse réellement un magasin.
+ *
+ * L'ordre du tableau est celui du serveur : il sert à ranger la liste de courses pour qu'on ne
+ * revienne jamais sur ses pas. Ne le trie pas alphabétiquement.
+ */
+export const RAYONS = [
+  "fruits_legumes",
+  "boulangerie",
+  "boucherie",
+  "poissonnerie",
+  "cremerie",
+  "feculents",
+  "epicerie",
+  "surgeles",
+  "boissons",
+  "autre",
+] as const;
+export type RayonCle = (typeof RAYONS)[number];
+
+export type Rayon = { cle: RayonCle; libelle: string; ordre: number };
+
+/** Le magasin tel que la liste de courses le rappelle : de quoi le nommer, rien de plus. */
+export type MagasinBref = {
+  id: number;
+  enseigne: Enseigne;
+  enseigne_libelle: string;
+  nom: string;
+  pays: string;
+};
+
+export type Magasin = MagasinBref & {
+  actif: boolean;
+  produits_count?: number;
+};
+
+export type MagasinsResponse = {
+  data: Magasin[];
+  rayons: Rayon[];
+  avertissement: string;
+};
+
+export type MagasinProduit = {
+  id: number;
+  magasin_id: number;
+  libelle: string;
+  marque: string | null;
+  rayon: RayonCle;
+  rayon_libelle: string;
+  rayon_ordre: number;
+  code_barres: string | null;
+  prix_indicatif: number | null;
+  unite: string | null;
+  quantite_reference: number | null;
+  /** Prix au kilo ou au litre ; absent quand l'unité n'est ni `kg` ni `l`. */
+  prix_par_unite_base: number | null;
+  prix_maj_le: string | null;
+  prix_indicatif_avertissement: string;
+  food_id: number | null;
+};
+
+export type MagasinProduitsParams = {
+  q?: string;
+  rayon?: RayonCle | "";
+  page?: number;
+  per_page?: number;
+};
+
+export type MagasinProduitsResponse = {
+  data: MagasinProduit[];
+  magasin: Magasin;
+  rayons: Rayon[];
+  avertissement: string;
+  meta: { current_page: number; last_page: number; per_page: number; total: number };
+};
+
+/**
+ * Une promotion d'enseigne.
+ *
+ * `verifiee` commande tout : à faux, la ligne a été relevée par un modèle sur une page web et
+ * n'est qu'une piste. Aucun écran n'a le droit de l'afficher sans le dire, ni sans sa `source`.
+ */
+export type Promotion = {
+  id: number;
+  magasin_id: number;
+  libelle: string;
+  prix_promotionnel: number | null;
+  prix_avant: number | null;
+  remise_pourcent: number | null;
+  debut: string | null;
+  fin: string | null;
+  verifiee: boolean;
+  source: string | null;
+  magasin_produit_id: number | null;
+  produit: {
+    id: number;
+    libelle: string;
+    rayon: RayonCle | null;
+    rayon_libelle: string | null;
+    prix_indicatif: number | null;
+    unite: string | null;
+    quantite_reference: number | null;
+  } | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PromotionsResponse = {
+  data: Promotion[];
+  magasin_id: number;
+  jour: string;
+  avertissement: string;
+};
+
+export type PromotionInput = {
+  libelle: string;
+  magasin_produit_id?: number | null;
+  prix_promotionnel?: number | null;
+  prix_avant?: number | null;
+  debut: string;
+  fin: string;
+};
+
+export type PromotionUpdateInput = Partial<PromotionInput> & { verifiee?: boolean };
+
+export type PromotionSource = { titre: string; extrait: string; url: string; domaine: string };
+
+/**
+ * Le relevé automatique répond 200 même quand il échoue : `ia: false` signale un repli, et
+ * `message` dit lequel. Rien de ce qui arrive là ne doit être présenté comme un résultat acquis.
+ */
+export type RecherchePromotionsResponse = {
+  data: Promotion[];
+  sources: PromotionSource[];
+  enregistrees: number;
+  ia: boolean;
+  message: string;
+  avertissement: string;
+  semaine: { debut: string; fin: string };
+};
+
+/* ------------------------------------------------------------------ */
 /* §11 Shopping list                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -1149,9 +1297,76 @@ export type ShoppingItem = {
   updated_at: string;
 };
 
+/**
+ * Une ligne de liste regardée depuis un magasin.
+ *
+ * Elle vaut `null` dès qu'aucun produit d'enseigne ne correspond : l'article reste à acheter,
+ * simplement sans prix. Rien n'est deviné, aucune moyenne n'est inventée.
+ */
+export type ShoppingItemMagasinProduit = {
+  id: number;
+  libelle: string;
+  marque: string | null;
+  rayon: RayonCle;
+  rayon_libelle: string;
+  rayon_ordre: number;
+  prix_indicatif: number | null;
+  unite: string | null;
+  quantite_reference: number | null;
+  prix_par_unite_base: number | null;
+  prix_maj_le: string | null;
+  emballages_estimes: number;
+  prix_ligne_estime: number | null;
+  economie_estimee: number | null;
+  promotion: ShoppingItemPromotion | null;
+};
+
+export type ShoppingItemPromotion = {
+  id: number;
+  prix_promotionnel: number | null;
+  prix_avant: number | null;
+  remise_pourcent: number | null;
+  fin: string | null;
+  verifiee: boolean;
+  source: string | null;
+};
+
+export type ShoppingItemLigne = ShoppingItem & {
+  magasin_produit: ShoppingItemMagasinProduit | null;
+};
+
+/**
+ * Le total du panier.
+ *
+ * `total_estime` n'est pas une addition de caisse et ne doit jamais s'afficher sans
+ * `avertissement` ni sans `prix_les_plus_anciens` : c'est la différence entre une estimation et
+ * une promesse.
+ */
+export type PanierEstimation = {
+  total_estime: number | null;
+  devise: string;
+  indicatif: boolean;
+  lignes_estimees: number;
+  lignes_sans_prix: number;
+  economie_promotions_estimee: number;
+  prix_les_plus_anciens: string | null;
+  avertissement: string;
+};
+
+export type ShoppingTri = "ajout" | "rayon";
+
 export type ShoppingListResponse = {
-  data: ShoppingItem[];
+  data: ShoppingItemLigne[];
+  magasin: MagasinBref | null;
+  tri: ShoppingTri;
+  rayons: Rayon[];
+  estimation: PanierEstimation;
   counts: { total: number; checked: number };
+};
+
+export type ShoppingListParams = {
+  magasin_id?: number | null;
+  tri?: ShoppingTri;
 };
 
 export type ShoppingItemInput = {
@@ -1166,11 +1381,15 @@ export type ShoppingItemUpdateInput = Partial<{
   unit: string | null;
   label: string;
 }>;
-export type ShoppingGenerateInput = { week_start?: string };
-export type ShoppingGenerateResponse = {
+export type ShoppingGenerateInput = {
+  week_start?: string;
+  magasin_id?: number | null;
+  tri?: ShoppingTri;
+};
+export type ShoppingGenerateResponse = ShoppingListResponse & {
   message: string;
-  data: ShoppingItem[];
   added_count: number;
+  week_start: string;
 };
 export type ShoppingToStockInput = {
   stock_id?: number;
@@ -1599,6 +1818,8 @@ export type UserSettings = {
   timezone: string;
   ia_seances: boolean;
   partage_profil_foyer: boolean | null;
+  /** Réglage personnel, jamais partagé avec le foyer : chacun fait ses courses où il veut. */
+  magasin_prefere_id: number | null;
 };
 
 export type SettingsInput = Partial<UserSettings>;

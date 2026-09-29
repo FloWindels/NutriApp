@@ -62,7 +62,7 @@ class PlannerGenerateTest extends TestCase
         $this->assertSame($inRangeDinner->id, $monday['diner']->recipe_id);
     }
 
-    public function test_generate_picks_closest_to_budget_and_never_repeats_within_three_days(): void
+    public function test_generate_picks_closest_to_budget_then_a_different_dish_every_day(): void
     {
         $user = $this->login($this->userWithProfile());
 
@@ -77,16 +77,17 @@ class PlannerGenerateTest extends TestCase
         $this->assertCount(7, $plans);
         $this->assertNotContains($out->id, $plans->pluck('recipe_id')->all());
 
-        // Proximité : A (distance 0) puis B (60) puis C (80), puis rotation.
-        $this->assertSame([$a->id, $b->id, $c->id, $a->id, $b->id, $c->id, $a->id], $plans->pluck('recipe_id')->all());
+        // Proximité : A (distance 0) puis B (60) puis C (80) — tout le vivier de recettes.
+        $this->assertSame([$a->id, $b->id, $c->id], $plans->take(3)->pluck('recipe_id')->all());
 
-        foreach ($plans as $i => $plan) {
-            foreach ($plans as $j => $other) {
-                if ($i < $j && $plan->recipe_id === $other->recipe_id) {
-                    $this->assertGreaterThanOrEqual(3, abs($plan->date->diffInDays($other->date)), 'Une recette ne doit pas revenir à moins de 3 jours.');
-                }
-            }
+        // Les jours suivants ne les reprennent pas : le repli va chercher des idées de repas.
+        $ideas = collect(config('meal_ideas'))->pluck('title')->all();
+        foreach ($plans->slice(3) as $plan) {
+            $this->assertNull($plan->recipe_id, 'Le vivier de recettes est épuisé : on ne le répète pas.');
+            $this->assertContains($plan->title, $ideas);
         }
+
+        $this->assertCount(7, $plans->pluck('title')->unique(), 'Aucun plat deux fois dans la semaine.');
     }
 
     public function test_generate_falls_back_to_meal_ideas_when_no_recipe_matches(): void

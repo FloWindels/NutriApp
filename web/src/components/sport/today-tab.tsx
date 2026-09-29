@@ -15,7 +15,6 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Modal } from "@/components/ui/modal";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/stat-card";
-import { getErrorMessage } from "@/lib/api-client";
 import { useOffre } from "@/hooks/use-offre";
 import { capitalize, formatKcal, formatMinutes, formatRelativeDay, formatTime, todayIso } from "@/lib/format";
 import type { SportPlan } from "@/lib/types/api";
@@ -67,7 +66,7 @@ export function TodayTab({ autoGenerate = false }: TodayTabProps) {
   if (summaryQuery.isError || !summary) {
     return (
       <ErrorState
-        message={getErrorMessage(summaryQuery.error)}
+        error={summaryQuery.error}
         onRetry={() => void summaryQuery.refetch()}
         retrying={summaryQuery.isFetching}
       />

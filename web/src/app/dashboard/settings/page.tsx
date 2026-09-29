@@ -15,6 +15,8 @@ import { Field, SelectField } from "@/components/ui/field";
 import { SectionHeader } from "@/components/ui/section-header";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { useMagasins } from "@/hooks/use-magasins";
+import { useOffre } from "@/hooks/use-offre";
 import { apiGet, apiPost, apiPut, getErrorMessage } from "@/lib/api-client";
 import { clearSession } from "@/lib/session";
 import { queryKeys } from "@/lib/query-keys";
@@ -27,6 +29,8 @@ export default function SettingsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { success, error: toastError } = useToast();
+  const { peut } = useOffre();
+  const { magasins } = useMagasins();
 
   const [modal, setModal] = useState<AccountModal>(null);
 
@@ -86,7 +90,7 @@ export default function SettingsPage() {
   if (settingsQuery.isError || !settings) {
     return (
       <ErrorState
-        message={getErrorMessage(settingsQuery.error)}
+        error={settingsQuery.error}
         onRetry={() => settingsQuery.refetch()}
       />
     );
@@ -176,6 +180,32 @@ export default function SettingsPage() {
           ) : null}
         </div>
       </Card>
+
+      {peut("courses") ? (
+        <Card padding="md">
+          <p className="mb-3 text-sm font-semibold text-slate-900">Courses</p>
+          <SelectField
+            label="Magasin habituel"
+            hint="Ta liste de courses s’y range par rayon et affiche des prix indicatifs. C’est ton réglage à toi : les autres membres du foyer gardent le leur."
+            value={settings.magasin_prefere_id === null ? "" : String(settings.magasin_prefere_id)}
+            onChange={(event) =>
+              update.mutate({
+                magasin_prefere_id: event.target.value === "" ? null : Number(event.target.value),
+              })
+            }
+          >
+            <option value="">Aucun magasin</option>
+            {magasins
+              .filter((magasin) => magasin.actif)
+              .map((magasin) => (
+                <option key={magasin.id} value={magasin.id}>
+                  {magasin.enseigne_libelle}
+                  {magasin.nom !== magasin.enseigne_libelle ? ` · ${magasin.nom}` : ""}
+                </option>
+              ))}
+          </SelectField>
+        </Card>
+      ) : null}
 
       <Card padding="md">
         <p className="mb-3 text-sm font-semibold text-slate-900">Sport</p>

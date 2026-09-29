@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useOffre } from "@/hooks/use-offre";
 import { apiGet, apiPost, getErrorMessage } from "@/lib/api-client";
 import { dataUriBytes, resizeImage, MAX_IMAGE_BYTES } from "@/lib/image-resize";
 import { formatKcal } from "@/lib/format";
@@ -17,6 +18,7 @@ import type {
 } from "@/lib/types/api";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
+import { OffreRequisePourCapacite } from "@/components/ui/offre-requise";
 import { EstimatePill } from "@/components/ui/pill";
 import { Field } from "@/components/ui/field";
 
@@ -95,6 +97,7 @@ export type PlatePhotoPanelProps = {
 };
 
 export function PlatePhotoPanel({ date, type, onAdded }: PlatePhotoPanelProps) {
+  const { peut } = useOffre();
   const fileRef = useRef<HTMLInputElement>(null);
   const [apercu, setApercu] = useState<string | null>(null);
   const [lignes, setLignes] = useState<Ligne[] | null>(null);
@@ -163,6 +166,13 @@ export function PlatePhotoPanel({ date, type, onAdded }: PlatePhotoPanelProps) {
     }
 
     enregistrer.mutate(items);
+  }
+
+  // Le serveur répond « indisponible » aussi bien quand aucun modèle n'est branché que quand
+  // l'offre ne couvre pas l'IA. Les deux ne se disent pas pareil : l'un est une panne, l'autre
+  // une porte à ouvrir.
+  if (!peut("ia")) {
+    return <OffreRequisePourCapacite capacite="ia" compact />;
   }
 
   const indisponible = capacite.data?.data.disponible === false;

@@ -270,6 +270,7 @@ export default function ProfilPage() {
   if (profileQuery.isError) {
     return (
       <ErrorState
+        error={profileQuery.error}
         title="Profil indisponible"
         message={getErrorMessage(profileQuery.error, "Impossible de charger ton profil.")}
         onRetry={() => profileQuery.refetch()}

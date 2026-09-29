@@ -28,6 +28,9 @@ class VerrouOffreTest extends TestCase
         '/planner' => 'planificateur',
         '/recommendations' => 'coach',
         '/diets' => 'regimes',
+        // Le catalogue des magasins est public (routes/api_public) : seules les promotions, qui
+        // pèsent sur la liste et sur les propositions de repas, sont authentifiées.
+        '/magasins' => 'courses',
     ];
 
     public function test_toute_route_d_un_module_payant_porte_son_verrou(): void

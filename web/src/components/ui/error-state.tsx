@@ -1,10 +1,26 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { getErrorMessage } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { messages } from "@/lib/messages";
+import { capaciteRequise, estOffreRequise } from "@/lib/offres-capacites";
 import { Button } from "./button";
+import { OffreRequisePourCapacite } from "./offre-requise";
 
 export type ErrorStateProps = {
+  /**
+   * L'erreur telle qu'elle a été levée, pas seulement son message.
+   *
+   * Elle est obligatoire parce que c'est elle qui tranche entre une panne et une porte
+   * fermée : un 402 n'est pas un incident, c'est une fonctionnalité qui existe et qu'il faut
+   * débloquer. En exigeant l'objet, aucun écran ne peut prendre cette décision à sa place ni
+   * l'oublier. Passe `null` quand il n'y a pas d'erreur à montrer (une ressource absente,
+   * par exemple) et donne alors `message` toi-même.
+   */
+  error: unknown;
   title?: ReactNode;
+  /** Remplace le message tiré de `error`. */
   message?: ReactNode;
   onRetry?: () => void;
   retryLabel?: string;
@@ -14,14 +30,29 @@ export type ErrorStateProps = {
 };
 
 export function ErrorState({
+  error,
   title = "Oups, quelque chose s’est mal passé.",
-  message = messages.server,
+  message,
   onRetry,
   retryLabel = messages.retry,
   retrying = false,
   compact = false,
   className,
 }: ErrorStateProps) {
+  // Une porte fermée n'est pas une panne : ni bordure rose, ni triangle, ni bouton « Réessayer »,
+  // qui ne ferait que rejouer le même refus.
+  if (estOffreRequise(error)) {
+    return (
+      <OffreRequisePourCapacite
+        capacite={capaciteRequise(error)}
+        compact={compact}
+        className={className}
+      />
+    );
+  }
+
+  const texte = message ?? getErrorMessage(error);
+
   return (
     <div
       role="alert"
@@ -38,7 +69,7 @@ export function ErrorState({
         </svg>
       </div>
       <p className="text-base font-semibold text-rose-900">{title}</p>
-      {message ? <p className="mt-1 max-w-md text-sm leading-6 text-rose-800/80">{message}</p> : null}
+      {texte ? <p className="mt-1 max-w-md text-sm leading-6 text-rose-800/80">{texte}</p> : null}
       {onRetry ? (
         <Button variant="secondary" className="mt-4" onClick={onRetry} loading={retrying}>
           {retryLabel}

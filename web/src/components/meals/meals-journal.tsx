@@ -7,7 +7,7 @@ import { AddToMealDialog } from "@/components/ui/add-to-meal-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { usePortions } from "@/hooks/use-portions";
-import { apiGet, getErrorMessage } from "@/lib/api-client";
+import { apiGet } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
 import type { DataEnvelope, DaySummary, MealType } from "@/lib/types/api";
 import { MealCard } from "./meal-card";
@@ -46,7 +46,7 @@ export function MealsJournal({ date }: MealsJournalProps) {
   if (query.isError || !day) {
     return (
       <ErrorState
-        message={getErrorMessage(query.error)}
+        error={query.error}
         onRetry={() => void query.refetch()}
         retrying={query.isFetching}
       />

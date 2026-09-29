@@ -99,7 +99,7 @@ export function CalendarTab() {
 
       {calendarQuery.isError ? (
         <ErrorState
-          message={getErrorMessage(calendarQuery.error)}
+          error={calendarQuery.error}
           onRetry={() => void calendarQuery.refetch()}
           retrying={calendarQuery.isFetching}
         />

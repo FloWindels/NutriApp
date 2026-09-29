@@ -103,7 +103,7 @@ export function SportPickerModal({ open, onClose, onPick, title = "Choisir un sp
           ) : sportsQuery.isError ? (
             <ErrorState
               compact
-              message={getErrorMessage(sportsQuery.error)}
+              error={sportsQuery.error}
               onRetry={() => void sportsQuery.refetch()}
               retrying={sportsQuery.isFetching}
             />

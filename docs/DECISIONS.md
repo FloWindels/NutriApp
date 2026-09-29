@@ -63,6 +63,30 @@ renvoie que des identifiants, chacun revérifié par le serveur avant d'entrer a
 allergènes ne sont jamais confiés à sa bonne volonté. La réponse porte `generated_by`, avec les mêmes
 valeurs que le module sport, pour dire par quel moteur la semaine a été composée.
 
+## Une semaine planifiée qui ne se répète pas
+
+La génération ramenait les mêmes plats tous les deux jours, pour trois raisons cumulées : le
+classement des candidats ne dépendait pas du jour, donc la même recette gagnait toujours ; le
+garde-fou n'interdisait la répétition qu'à moins de trois jours, ce qui, sur sept, revient à servir
+chaque plat deux fois ; et le vivier était trop petit pour faire autrement — huit recettes et
+vingt-quatre idées de repas pour quatorze créneaux hebdomadaires.
+
+Le vivier compte désormais plus de cent idées de repas courants en Belgique et en France
+(`config/meal_ideas.php`) et vingt-quatre recettes publiques dans le jeu de démonstration. Un plat
+n'est plus servi deux fois dans la semaine générée tant qu'il reste de quoi choisir ; quand le vivier
+est épuisé, la génération répète le plat le plus ancien plutôt que de laisser un créneau vide. Deux
+plats de la même famille — volaille, poisson, légumineuses… — ne se suivent pas deux jours d'affilée,
+et un plat mangé dans le mois écoulé redescend au classement, ce qui évite deux semaines identiques.
+Les priorités qui avaient du sens n'ont pas bougé : mes recettes d'abord, puis celles qui consomment
+un stock qui périme.
+
+Rien de tout cela n'est tiré au sort : l'ordre tourne selon la date et la personne, et deux
+générations de la même semaine par la même personne donnent exactement le même menu.
+
+Les valeurs nutritionnelles des idées de repas sont des estimations, pas des mesures, et les plans
+qui en viennent restent marqués comme telles (`is_estimate`). Ce sont des ordres de grandeur destinés
+à choisir un plat proche du budget du repas, rien de plus.
+
 ## Ce que couvre l'offre gratuite
 
 Le partage n'est pas « les fonctions simples d'un côté, l'IA de l'autre ». Il porte sur le travail
@@ -134,6 +158,41 @@ Le premier enregistrement du profil demande un consentement explicite. Les profi
 suivent des règles adaptées, ceux de moins de 15 ans requièrent un accord parental, et les situations
 de grossesse, allaitement ou suivi médical désactivent tout objectif de perte ou de prise. Le compte
 peut être exporté et supprimé par son propriétaire.
+
+## Magasins, prix indicatifs et promotions
+
+Le choix d'un magasin repose sur un **catalogue interne**, pas sur une API commerciale ni sur
+l'aspiration du site des enseignes : elles l'interdisent dans leurs conditions, et une dépendance
+à leur HTML se casserait à la première refonte. Quatre enseignes sont servies — Lidl, Colruyt,
+Delhaize, Aldi — avec un assortiment de base commun, parce que ce sont les mêmes produits courants,
+et un positionnement tarifaire distinct.
+
+**Aucun prix n'est présenté comme réel.** Chaque produit porte sa date de relevé et sa réserve,
+le panier rend `estimation.total_estime` et jamais `total`, et un article sans correspondance dans
+l'enseigne reste dans la liste **sans prix** — jamais une moyenne, jamais un zéro qui fausserait le
+total. Le rattachement se fait par code-barres quand il existe, sinon par libellé normalisé sur des
+mots entiers : sans cette exigence, « riz » se rattacherait à « fricadelle ».
+
+Les promotions relevées automatiquement sur le web sont enregistrées **non vérifiées, avec l'URL de
+leur source**, et une source que la recherche n'a pas réellement consultée est rejetée : une
+promotion invérifiable est inutilisable. Le contenu ramené est une donnée inerte, comme pour la
+recette depuis le stock ; seul le nom de l'enseigne part sur Internet.
+
+Dans le planificateur, une promotion fait remonter une recette **à qualité égale seulement** :
+après les recettes personnelles et après le stock qui périme. Jeter un aliment déjà payé coûte plus
+cher que de rater une remise.
+
+Le propriétaire corrige et complète l'assortiment sans toucher au code :
+
+```
+php artisan mavioh:magasin-importer lidl chemin/lidl.csv --date=2026-10-05
+php artisan mavioh:magasin-importer colruyt colruyt.json --simulation
+```
+
+Le CSV attend les colonnes `libelle;rayon;prix;unite;quantite;marque;code_barres` (séparateur `;`
+ou `,`, virgule décimale acceptée) ; le JSON attend les mêmes clés. Seul `libelle` est obligatoire,
+un rayon inconnu range le produit en « autre » plutôt que de le perdre, et un prix illisible laisse
+la ligne sans prix. L'import est idempotent.
 
 ## Portions et estimations
 

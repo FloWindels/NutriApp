@@ -16,7 +16,7 @@ class ShoppingListTest extends TestCase
 
     private const ITEM_KEYS = [
         'id', 'household_id', 'food_id', 'label', 'quantity', 'unit', 'checked', 'source', 'source_label',
-        'food', 'created_at', 'updated_at',
+        'food', 'magasin_produit', 'created_at', 'updated_at',
     ];
 
     public function test_index_requires_authentication(): void

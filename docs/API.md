@@ -210,6 +210,31 @@ clients qui ignorent la pagination continuent de fonctionner.
 | PUT | `/api/shopping-list/items/{item}` | oui | ShoppingListController@update |
 | POST | `/api/shopping-list/items/{item}/to-stock` | oui | ShoppingListController@toStock |
 
+`GET /api/shopping-list` et `POST /api/shopping-list/generate` acceptent `magasin_id` et
+`tri` (`ajout` par défaut, ou `rayon`). Sans `magasin_id`, le magasin préféré des paramètres
+sert de défaut.
+
+### Magasins et promotions
+
+| Méthode | Chemin | Auth | Contrôleur |
+|---|---|---|---|
+| GET | `/api/magasins` | non | MagasinController@index |
+| PUT | `/api/magasins/promotions/{promotion}` | oui | PromotionController@update |
+| DELETE | `/api/magasins/promotions/{promotion}` | oui | PromotionController@destroy |
+| GET | `/api/magasins/{magasin}/produits` | non | MagasinController@produits |
+| GET | `/api/magasins/{magasin}/promotions` | oui | PromotionController@index |
+| POST | `/api/magasins/{magasin}/promotions` | oui | PromotionController@store |
+| POST | `/api/magasins/{magasin}/promotions/recherche` | oui | PromotionController@rechercher |
+
+Le catalogue (`/api/magasins`, `/api/magasins/{magasin}/produits`) est **public** : ce sont des
+données de référence. Les promotions relèvent de la capacité `courses` ; leur relevé automatique
+exige `courses` **et** `ia`, et répond 402 en nommant celle qui manque.
+
+**Tous les prix de ce module sont indicatifs.** Chaque produit porte `prix_maj_le` et
+`prix_indicatif_avertissement` ; le panier porte `estimation.total_estime` (jamais `total`) et
+`estimation.avertissement`. Les promotions relevées par l'IA sont enregistrées `verifiee: false`
+avec l'URL de leur source.
+
 ### Planificateur
 
 | Méthode | Chemin | Auth | Contrôleur |

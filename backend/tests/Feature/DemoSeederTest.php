@@ -55,7 +55,7 @@ class DemoSeederTest extends TestCase
         $this->assertSame(1, $first['users']);
         $this->assertSame(1, $first['profiles']);
         $this->assertGreaterThanOrEqual(25, $first['food']);
-        $this->assertSame(8, $first['recipes']);
+        $this->assertSame(24, $first['recipes']);
         $this->assertSame(3, $first['stocks']);
         $this->assertGreaterThanOrEqual(12, $first['stock_items']);
         $this->assertSame(2, $first['meals']);
