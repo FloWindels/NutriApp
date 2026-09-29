@@ -155,6 +155,17 @@ class PlannerController extends Controller
 
         $count = $this->generator->generate($user, $weekStart, $types, $replace, $ia['choix']);
 
+        // Un régime contraint laisse parfois moins de plats au répertoire que de créneaux à
+        // remplir. Le dire vaut mieux que de laisser croire que la variété promise a échoué.
+        $warnings = $ia['warnings'];
+        $repetitions = $this->generator->repetitionsForcees();
+
+        if ($repetitions > 0) {
+            $warnings[] = $repetitions === 1
+                ? 'Un plat revient deux fois cette semaine : ton régime laisse peu de choix dans notre répertoire.'
+                : $repetitions.' plats reviennent deux fois cette semaine : ton régime laisse peu de choix dans notre répertoire.';
+        }
+
         $message = match (true) {
             $count === 0 => 'Aucun créneau à compléter : ta semaine est déjà planifiée.',
             $count === 1 => '1 repas planifié.',
@@ -167,7 +178,7 @@ class PlannerController extends Controller
             'generated_count' => $count,
             'generated_by' => $ia['generated_by'],
             'explication' => $ia['explication'],
-            'warnings' => $ia['warnings'],
+            'warnings' => $warnings,
         ]);
     }
 

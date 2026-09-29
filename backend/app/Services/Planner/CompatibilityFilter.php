@@ -42,7 +42,11 @@ final class CompatibilityFilter
     ];
 
     private const HALAL = [
-        'porc', 'jambon', 'lard', 'lardon', 'bacon', 'chorizo', 'saucisson', 'alcool', 'vin', 'biere',
+        // « saucisse » et « charcuterie » sans autre precision : on ecarte par exces, ce qui est
+        // le bon sens pour une contrainte religieuse. Un plat dont la viande est nommee
+        // (« saucisse de volaille ») n'est pas concerne, le mot-cle ne s'y trouve pas seul.
+        'porc', 'jambon', 'lard', 'lardon', 'bacon', 'chorizo', 'saucisson', 'saucisse',
+        'charcuterie', 'alcool', 'vin', 'biere',
     ];
 
     private const HIGH_CARB = [

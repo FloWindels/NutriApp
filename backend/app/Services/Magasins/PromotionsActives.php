@@ -42,7 +42,7 @@ class PromotionsActives
         return Promotion::query()
             ->where('magasin_id', $magasin->id)
             ->actives($jour)
-            ->with('produit:id,libelle,rayon,prix_indicatif,unite,quantite_reference')
+            ->with('produit:id,libelle,rayon,prix_indicatif,unite,quantite_reference,libelle_normalise')
             ->orderBy('fin')
             ->orderBy('id')
             ->get();

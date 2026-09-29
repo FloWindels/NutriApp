@@ -992,13 +992,23 @@ export type RecommendationAction =
   | { kind: "ouvrir_planificateur"; date: string }
   | { kind: "supprimer_stock"; stock_item_id: number };
 
+/**
+ * Un facteur du coach : `{label, value, unit?}`, le `label` étant une clé technique.
+ * La chaîne nue reste admise — d’anciennes lignes en base en contiennent.
+ */
+export type FacteurCoach =
+  | string
+  | number
+  | { label?: string; value?: unknown; unit?: string };
+
 export type Recommendation = {
   id: number;
   date: string;
   type: RecommendationType;
   title: string;
   message: string;
-  factors: string[];
+  /** Le coach écrit `{label, value, unit?}` — passe par `texteFacteur()` pour l’afficher. */
+  factors: FacteurCoach[];
   actions: RecommendationAction[];
   priority: RecommendationPriority;
   status: RecommendationStatus;

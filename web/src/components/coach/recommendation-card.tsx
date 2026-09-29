@@ -3,6 +3,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { EstimatePill, Pill } from "@/components/ui/pill";
 import { cn } from "@/lib/cn";
+import { textesFacteurs } from "@/lib/coach-facteurs";
 import type {
   Recommendation,
   RecommendationAction,
@@ -147,27 +148,6 @@ function ChevronIcon({ open }: { open: boolean }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Factors                                                             */
-/* ------------------------------------------------------------------ */
-
-/** `factors[]` is a list of strings, but the API may also send `{label, value}`. */
-function factorText(factor: unknown): string {
-  if (typeof factor === "string") return factor;
-  if (typeof factor === "number") return String(factor);
-  if (factor && typeof factor === "object") {
-    const record = factor as Record<string, unknown>;
-    const label = record.label ?? record.name;
-    if (typeof label === "string" && record.value !== undefined) {
-      return `${label} : ${String(record.value)}`;
-    }
-    return Object.values(record)
-      .map((value) => String(value))
-      .join(" · ");
-  }
-  return "";
-}
-
-/* ------------------------------------------------------------------ */
 /* Card                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -198,7 +178,7 @@ export function RecommendationCard({
   const panelId = useId();
   const ignored = recommendation.status === "ignoree";
   const priority = recommendation.priority ?? 3;
-  const factors = (recommendation.factors ?? []).map(factorText).filter(Boolean);
+  const factors = textesFacteurs(recommendation.factors);
 
   return (
     <article

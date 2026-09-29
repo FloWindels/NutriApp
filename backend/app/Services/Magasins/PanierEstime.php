@@ -76,6 +76,7 @@ class PanierEstime
         $estimees = 0;
         $sansPrix = 0;
         $dates = [];
+        $promoNonVerifiees = 0;
         $rayons = [];
 
         foreach ($items->values() as $rang => $item) {
@@ -95,8 +96,15 @@ class PanierEstime
             $total += $detail['prix_ligne_estime'];
             $economie += $detail['economie_estimee'] ?? 0.0;
 
-            if ($detail['prix_maj_le'] !== null) {
+            // La date de relevé ne vaut que pour le prix catalogue. Quand c'est une promotion
+            // qui fixe le prix de la ligne, l'afficher dessous ferait passer un chiffre trouvé
+            // sur le web pour un prix relevé ce jour-là.
+            if ($detail['prix_maj_le'] !== null && $detail['promotion'] === null) {
                 $dates[] = $detail['prix_maj_le'];
+            }
+
+            if ($detail['promotion'] !== null && ! $detail['promotion']['verifiee']) {
+                $promoNonVerifiees++;
             }
 
             $rayons[$detail['rayon']] = true;
@@ -126,6 +134,8 @@ class PanierEstime
                 'lignes_estimees' => $estimees,
                 'lignes_sans_prix' => $sansPrix,
                 'economie_promotions_estimee' => round($economie, 2),
+                // Combien de lignes reposent sur un prix promotionnel que personne n'a confirmé.
+                'lignes_promo_non_verifiee' => $promoNonVerifiees,
                 'prix_les_plus_anciens' => $dates[0] ?? null,
                 'avertissement' => self::AVERTISSEMENT,
             ],
@@ -165,7 +175,9 @@ class PanierEstime
             'unite' => $produit->unite,
             'quantite_reference' => $produit->quantite_reference,
             'prix_par_unite_base' => $produit->prixParUniteBase(),
-            'prix_maj_le' => $produit->prix_maj_le?->format('Y-m-d'),
+            // Nulle quand une promotion fixe le prix : ce n'est plus le prix relevé ce jour-là.
+            'prix_maj_le' => $promotion === null ? $produit->prix_maj_le?->format('Y-m-d') : null,
+            'prix_catalogue_maj_le' => $produit->prix_maj_le?->format('Y-m-d'),
             'emballages_estimes' => $emballages,
             'prix_ligne_estime' => $ligne,
             'economie_estimee' => $economie,

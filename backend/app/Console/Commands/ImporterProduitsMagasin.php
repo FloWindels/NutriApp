@@ -100,25 +100,43 @@ class ImporterProduitsMagasin extends Command
             ['pays' => 'BE', 'actif' => true],
         );
 
-        [$prets, $ignorees, $sansPrix, $rayonsInconnus] = $this->preparer($lignes, $magasin->id, $date);
+        [$prets, $ignorees, $sansPrix, $rayonsInconnus, $fusionnees] = $this->preparer($lignes, $magasin->id, $date);
+
+        if ($prets === []) {
+            $this->error('Aucun produit exploitable : vérifie les en-têtes du fichier.');
+            $this->line('Attendues : libelle, marque, rayon, prix, unite, quantite, code_barres.');
+            $this->line('Lues : '.implode(', ', array_keys($lignes[0] ?? [])));
+
+            return self::FAILURE;
+        }
 
         if ($this->option('simulation')) {
-            $this->rapport($prets, $ignorees, $sansPrix, $rayonsInconnus, true);
+            $this->rapport($prets, $ignorees, $sansPrix, $rayonsInconnus, $fusionnees, true);
 
             return self::SUCCESS;
         }
 
-        DB::transaction(function () use ($prets) {
-            foreach (array_chunk($prets, 50) as $paquet) {
-                MagasinProduit::upsert(
-                    $paquet,
-                    ['magasin_id', 'libelle_normalise'],
-                    ['libelle', 'marque', 'rayon', 'code_barres', 'prix_indicatif', 'unite', 'quantite_reference', 'prix_maj_le', 'updated_at'],
-                );
+        // Deux paquets, parce que toutes les colonnes ne se mettent pas à jour dans les deux cas :
+        // un fichier sans colonne de prix décrit un assortiment, il ne dit pas que les prix
+        // relevés hier sont devenus inconnus. Les écraser à null, avec leur date, ferait perdre en
+        // silence un travail de relevé.
+        $colonnes = ['libelle', 'marque', 'rayon', 'code_barres', 'unite', 'quantite_reference', 'updated_at'];
+
+        DB::transaction(function () use ($prets, $colonnes) {
+            $avecPrix = array_values(array_filter($prets, fn (array $p) => $p['prix_indicatif'] !== null));
+            $sansPrix = array_values(array_filter($prets, fn (array $p) => $p['prix_indicatif'] === null));
+
+            foreach (array_chunk($avecPrix, 50) as $paquet) {
+                MagasinProduit::upsert($paquet, ['magasin_id', 'libelle_normalise'],
+                    array_merge($colonnes, ['prix_indicatif', 'prix_maj_le']));
+            }
+
+            foreach (array_chunk($sansPrix, 50) as $paquet) {
+                MagasinProduit::upsert($paquet, ['magasin_id', 'libelle_normalise'], $colonnes);
             }
         });
 
-        $this->rapport($prets, $ignorees, $sansPrix, $rayonsInconnus, false);
+        $this->rapport($prets, $ignorees, $sansPrix, $rayonsInconnus, $fusionnees, false);
         $this->line('Magasin : '.$magasin->nom.' (#'.$magasin->id.').');
 
         return self::SUCCESS;
@@ -134,7 +152,7 @@ class ImporterProduitsMagasin extends Command
     {
         $maintenant = now();
         $prets = [];
-        $vus = [];
+        $fusionnees = 0;
         $ignorees = 0;
         $sansPrix = 0;
         $rayonsInconnus = [];
@@ -151,10 +169,6 @@ class ImporterProduitsMagasin extends Command
                 continue;
             }
 
-            // Doublon dans le fichier : la dernière ligne l'emporte, comme dans un tableur.
-            if (isset($vus[$normalise])) {
-                unset($prets[$vus[$normalise]]);
-            }
 
             $rayonBrut = mb_strtolower(trim((string) ($ligne['rayon'] ?? '')));
             $rayon = Rayon::tryFrom($rayonBrut);
@@ -171,8 +185,11 @@ class ImporterProduitsMagasin extends Command
             $quantite = $this->nombre($ligne['quantite'] ?? null);
             $codeBarres = preg_replace('/\D+/', '', (string) ($ligne['code_barres'] ?? '')) ?: null;
 
-            $vus[$normalise] = count($prets);
-            $prets[] = [
+            // Doublon dans le fichier : la dernière ligne l'emporte, comme dans un tableur. On
+            // indexe sur la clé réelle — un index numérique se décalait dès qu'une ligne était
+            // retirée, et effaçait alors un produit sans rapport.
+            $fusionnees += isset($prets[$normalise]) ? 1 : 0;
+            $prets[$normalise] = [
                 'magasin_id' => $magasinId,
                 'libelle' => $libelle,
                 'libelle_normalise' => $normalise,
@@ -190,18 +207,23 @@ class ImporterProduitsMagasin extends Command
             ];
         }
 
-        return [array_values($prets), $ignorees, $sansPrix, $rayonsInconnus];
+        return [array_values($prets), $ignorees, $sansPrix, $rayonsInconnus, $fusionnees];
     }
 
     /**
      * @param  list<array<string, mixed>>  $prets
      * @param  list<string>  $rayonsInconnus
      */
-    private function rapport(array $prets, int $ignorees, int $sansPrix, array $rayonsInconnus, bool $simulation): void
+    private function rapport(array $prets, int $ignorees, int $sansPrix, array $rayonsInconnus, int $fusionnees, bool $simulation): void
     {
         $verbe = $simulation ? 'seraient importés' : 'importés';
 
         $this->info(count($prets).' produits '.$verbe.'.');
+
+        if ($fusionnees > 0) {
+            $this->warn($fusionnees.' ligne(s) en double dans le fichier : la dernière l’emporte. '
+                .'Deux conditionnements d’un même produit portent le même libellé normalisé.');
+        }
 
         if ($sansPrix > 0) {
             $this->warn($sansPrix.' sans prix lisible : ils restent au catalogue, sans prix indicatif.');

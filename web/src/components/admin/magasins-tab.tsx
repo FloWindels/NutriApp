@@ -361,8 +361,8 @@ function Promotions({
       };
 
       return formulaire.id === null
-        ? apiPost(`/magasins/${magasinId}/promotions`, corps)
-        : apiPut(`/magasins/promotions/${formulaire.id}`, corps);
+        ? apiPost(`/admin/magasins/${magasinId}/promotions`, corps)
+        : apiPut(`/admin/magasins/promotions/${formulaire.id}`, corps);
     },
     onSuccess: async () => {
       setErreur(null);
@@ -375,7 +375,7 @@ function Promotions({
 
   const verifier = useMutation({
     mutationFn: (promotion: Promotion) =>
-      apiPut(`/magasins/promotions/${promotion.id}`, { verifiee: true }),
+      apiPut(`/admin/magasins/promotions/${promotion.id}`, { verifiee: true }),
     onSuccess: async () => {
       await rafraichir();
       toast.success("Promotion marquée vérifiée.");
@@ -384,7 +384,7 @@ function Promotions({
   });
 
   const supprimer = useMutation({
-    mutationFn: (promotion: Promotion) => apiDelete(`/magasins/promotions/${promotion.id}`),
+    mutationFn: (promotion: Promotion) => apiDelete(`/admin/magasins/promotions/${promotion.id}`),
     onSuccess: async () => {
       await rafraichir();
       toast.success("Promotion supprimée.");

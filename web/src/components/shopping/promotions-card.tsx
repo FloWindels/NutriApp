@@ -97,12 +97,14 @@ export function PromotionsCard({ magasin }: { magasin: MagasinBref }) {
           </ul>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-            <Link
-              href={`/dashboard/recettes?demande=${encodeURIComponent(demandeRepas(lignes, magasin))}`}
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-700 bg-emerald-700 px-3 text-sm font-medium text-white transition hover:bg-emerald-800"
-            >
-              Composer un repas avec ces promos
-            </Link>
+            {demandeRepas(lignes, magasin) !== null ? (
+              <Link
+                href={`/dashboard/recettes?demande=${encodeURIComponent(demandeRepas(lignes, magasin) ?? "")}`}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-emerald-700 bg-emerald-700 px-3 text-sm font-medium text-white transition hover:bg-emerald-800"
+              >
+                Composer un repas avec ces promos
+              </Link>
+            ) : null}
             <p className="text-xs text-slate-500">
               Mavi’oh part de ces produits pour écrire une recette. Vérifie les prix en magasin
               avant de compter dessus.
@@ -233,14 +235,24 @@ function urlSure(valeur: string): URL | null {
   }
 }
 
-/** La phrase envoyée au générateur de recettes : les produits en promotion, et rien d'autre. */
-function demandeRepas(promotions: Promotion[], magasin: MagasinBref): string {
+/**
+ * La phrase envoyée au générateur de recettes : uniquement des libellés du CATALOGUE.
+ *
+ * Le libellé brut d'une promotion relevée sur le web n'a été confronté à rien. Le recopier ici le
+ * ferait entrer dans la consigne donnée au modèle, c'est-à-dire à l'endroit exact où le dépôt
+ * refuse de laisser passer du texte d'origine web — celui-ci n'est admis que comme donnée inerte,
+ * dans un champ séparé et annoncé comme tel. On n'envoie donc que les promotions rattachées à un
+ * produit connu, dont le nom vient de nous.
+ */
+function demandeRepas(promotions: Promotion[], magasin: MagasinBref): string | null {
   const produits = promotions
-    .slice(0, 6)
-    .map((promotion) => promotion.produit?.libelle ?? promotion.libelle)
-    .join(", ");
+    .map((promotion) => promotion.produit?.libelle)
+    .filter((libelle): libelle is string => typeof libelle === "string" && libelle.trim() !== "")
+    .slice(0, 6);
 
-  return `Propose-moi un repas avec ce qui est en promotion chez ${magasin.enseigne_libelle} : ${produits}.`;
+  if (produits.length === 0) return null;
+
+  return `Propose-moi un repas avec ce qui est en promotion chez ${magasin.enseigne_libelle} : ${produits.join(", ")}.`;
 }
 
 export default PromotionsCard;

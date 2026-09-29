@@ -5,6 +5,8 @@ namespace Tests\Feature\Magasins;
 use App\Contracts\LlmPromotionsClient;
 use App\Contracts\WebSearchClient;
 use App\Enums\Offre;
+use App\Services\Magasins\LibelleProduit;
+use App\Enums\UserRole;
 use App\Exceptions\LlmUnavailableException;
 use App\Models\Magasin;
 use App\Models\MealPlan;
@@ -245,13 +247,23 @@ class PromotionsTest extends TestCase
 
     // ------------------------------------------------------------------------------------
 
+    /** Ecrire une promotion est un geste d'administration : elle pese sur le panier de tous. */
+    private function admin(): User
+    {
+        $admin = User::factory()->create();
+        $admin->forceFill(['role' => UserRole::Administrateur])->save();
+        Sanctum::actingAs($admin, ['*']);
+
+        return $admin;
+    }
+
     public function test_une_promotion_saisie_a_la_main_est_verifiee_et_porte_sa_provenance(): void
     {
-        $this->login($this->userWithProfile());
+        $this->admin();
         $magasin = $this->magasin('lidl');
         $produit = $this->produit($magasin, 'Filet de poulet', ['prix_indicatif' => 9.99]);
 
-        $reponse = $this->postJson('/api/magasins/'.$magasin->id.'/promotions', [
+        $reponse = $this->postJson('/api/admin/magasins/'.$magasin->id.'/promotions', [
             'libelle' => 'Filet de poulet',
             'magasin_produit_id' => $produit->id,
             'prix_promotionnel' => 6.99,
@@ -267,17 +279,63 @@ class PromotionsTest extends TestCase
 
     public function test_un_produit_d_une_autre_enseigne_ne_peut_pas_etre_rattache_a_une_promotion(): void
     {
-        $this->login($this->userWithProfile());
+        $this->admin();
         $lidl = $this->magasin('lidl');
         $colruyt = $this->magasin('colruyt');
         $chezColruyt = $this->produit($colruyt, 'Filet de poulet');
 
-        $this->postJson('/api/magasins/'.$lidl->id.'/promotions', [
+        $this->postJson('/api/admin/magasins/'.$lidl->id.'/promotions', [
             'libelle' => 'Filet de poulet',
             'magasin_produit_id' => $chezColruyt->id,
             'debut' => now()->toDateString(),
             'fin' => now()->addDays(3)->toDateString(),
         ])->assertCreated()->assertJsonPath('data.magasin_produit_id', null);
+    }
+
+    /**
+     * Le defaut que deux relecteurs ont demontre : les ecritures n'etaient gardees que par
+     * l'offre. N'importe quel abonne inscrivait donc un prix marque « verifie » dans un catalogue
+     * partage par tous les clients de l'enseigne, ou effacait celui d'un autre.
+     */
+    public function test_un_abonne_ordinaire_ne_peut_pas_ecrire_dans_le_catalogue_partage(): void
+    {
+        $magasin = $this->magasin('lidl');
+        $promotion = Promotion::query()->create([
+            'magasin_id' => $magasin->id,
+            'libelle' => 'Saumon fume',
+            'libelle_normalise' => LibelleProduit::normaliser('Saumon fume'),
+            'prix_promotionnel' => 7.99,
+            'debut' => now()->toDateString(),
+            'fin' => now()->addDays(3)->toDateString(),
+            'source' => Promotion::SOURCE_MANUELLE,
+            'verifiee' => true,
+        ]);
+
+        Sanctum::actingAs(User::factory()->create(['offre' => Offre::Foyer->value]), ['*']);
+
+        $this->postJson('/api/admin/magasins/'.$magasin->id.'/promotions', [
+            'libelle' => 'Saumon fume a 50 centimes',
+            'prix_promotionnel' => 0.50,
+            'debut' => now()->toDateString(),
+            'fin' => now()->addDays(3)->toDateString(),
+        ])->assertNotFound();
+
+        $this->putJson('/api/admin/magasins/promotions/'.$promotion->id, ['prix_promotionnel' => 0.50])
+            ->assertNotFound();
+
+        $this->deleteJson('/api/admin/magasins/promotions/'.$promotion->id)->assertNotFound();
+
+        $this->assertSame(7.99, (float) $promotion->fresh()->prix_promotionnel);
+        $this->assertSame(1, Promotion::query()->count());
+    }
+
+    /** Lire les promotions reste un geste de consommateur : l'offre courses suffit. */
+    public function test_un_abonne_ordinaire_peut_toujours_lire_les_promotions(): void
+    {
+        $magasin = $this->magasin('lidl');
+        Sanctum::actingAs(User::factory()->create(['offre' => Offre::Complet->value]), ['*']);
+
+        $this->getJson('/api/magasins/'.$magasin->id.'/promotions')->assertOk();
     }
 
     public function test_sans_moteur_de_recherche_le_releve_tombe_proprement_en_repli(): void

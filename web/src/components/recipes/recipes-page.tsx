@@ -158,7 +158,18 @@ export function RecipesPage({
   const [mealType, setMealType] = useState<MealType | "">("");
   const [detail, setDetail] = useState<Recipe | null>(null);
   const [editor, setEditor] = useState<{ recipe: Recipe | null } | null>(null);
-  const [generateur, setGenerateur] = useState(demandeInitiale !== "");
+  // L'ouverture se déduit du rendu plutôt que d'être figée au premier : sur une page prérendue,
+  // la demande lue dans l'URL peut n'arriver qu'après l'hydratation, donc trop tard pour un
+  // `useState` qui n'est lu qu'une fois. On ne retient que la demande déjà refermée, sans quoi
+  // la fenêtre se rouvrirait toute seule à chaque rendu.
+  const [generateurManuel, setGenerateurManuel] = useState(false);
+  const [demandeFermee, setDemandeFermee] = useState<string | null>(null);
+  const generateur = generateurManuel || (demandeInitiale !== "" && demandeFermee !== demandeInitiale);
+
+  function fermerGenerateur() {
+    setGenerateurManuel(false);
+    setDemandeFermee(demandeInitiale);
+  }
   const [toDelete, setToDelete] = useState<Recipe | null>(null);
   const [toAdd, setToAdd] = useState<Recipe | null>(null);
 
@@ -216,7 +227,7 @@ export function RecipesPage({
         subtitle="Tes recettes et celles de la communauté, avec les calories et les macros par portion."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => setGenerateur(true)}>
+            <Button variant="secondary" onClick={() => setGenerateurManuel(true)}>
               Avec ce que j’ai
             </Button>
             <Button onClick={() => setEditor({ recipe: null })}>Nouvelle recette</Button>
@@ -430,11 +441,11 @@ export function RecipesPage({
         <RecipeGeneratorModal
           open
           demandeInitiale={demandeInitiale}
-          onClose={() => setGenerateur(false)}
+          onClose={fermerGenerateur}
           onAccept={(proposition) => {
             // La proposition n'est pas enregistrée : elle pré-remplit l'éditeur, où elle peut
             // encore être corrigée avant sauvegarde.
-            setGenerateur(false);
+            fermerGenerateur();
             setEditor({
               recipe: {
                 title: proposition.titre ?? "",

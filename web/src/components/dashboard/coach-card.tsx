@@ -5,6 +5,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { EstimatePill } from "@/components/ui/pill";
 import { cn } from "@/lib/cn";
+import { textesFacteurs } from "@/lib/coach-facteurs";
 import type { Recommendation, RecommendationAction, RecommendationPriority } from "@/lib/types/api";
 import { MEAL_TYPE_IN_SENTENCE } from "@/lib/vocab";
 
@@ -78,7 +79,10 @@ export function CoachCard({ recommendations, onAction, pendingKey = null }: Coac
         />
       ) : (
         <ul className="mt-4 space-y-3">
-          {recommendations.map((recommendation) => (
+          {recommendations.map((recommendation) => {
+            const facteurs = textesFacteurs(recommendation.factors);
+
+            return (
             <li
               key={recommendation.id}
               className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3"
@@ -94,14 +98,14 @@ export function CoachCard({ recommendations, onAction, pendingKey = null }: Coac
                 </div>
                 <p className="mt-1 text-sm leading-6 text-slate-600">{recommendation.message}</p>
 
-                {recommendation.factors?.length ? (
+                {facteurs.length ? (
                   <details className="mt-2">
                     <summary className="inline-flex cursor-pointer list-none items-center text-xs font-semibold text-slate-500 hover:text-slate-700">
                       Pourquoi ?
                     </summary>
                     <ul className="mt-1.5 space-y-1 text-xs leading-5 text-slate-500">
-                      {recommendation.factors.map((factor, index) => (
-                        <li key={index}>• {factor}</li>
+                      {facteurs.map((facteur, index) => (
+                        <li key={index}>• {facteur}</li>
                       ))}
                     </ul>
                   </details>
@@ -129,7 +133,8 @@ export function CoachCard({ recommendations, onAction, pendingKey = null }: Coac
                 ) : null}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </Card>

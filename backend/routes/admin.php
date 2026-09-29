@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Admin\AdminCodeController;
 use App\Http\Controllers\Api\Admin\AdminModerationController;
 use App\Http\Controllers\Api\Admin\AdminStatsController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\PromotionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -37,6 +38,12 @@ Route::middleware(['admin', 'throttle:60,1'])->group(function () {
     Route::get('/codes', [AdminCodeController::class, 'index']);
     Route::post('/codes', [AdminCodeController::class, 'store']);
     Route::post('/codes/{code}/revoke', [AdminCodeController::class, 'revoke'])->whereNumber('code');
+
+    // Le catalogue des promotions est partagé par tous les clients d'une enseigne : y écrire est
+    // un geste d'administration, pas un geste de consommateur.
+    Route::post('/magasins/{magasin}/promotions', [PromotionController::class, 'store'])->whereNumber('magasin');
+    Route::put('/magasins/promotions/{promotion}', [PromotionController::class, 'update'])->whereNumber('promotion');
+    Route::delete('/magasins/promotions/{promotion}', [PromotionController::class, 'destroy'])->whereNumber('promotion');
 
     Route::get('/journal', [AdminModerationController::class, 'journal']);
 });

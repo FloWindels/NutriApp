@@ -50,6 +50,34 @@ class PlannerGenerator
 
     public const EXPIRING_DAYS = 7;
 
+    /** Créneaux qu'on n'a pu remplir qu'en répétant un plat déjà au menu de la semaine. */
+    private int $repetitions = 0;
+
+    /**
+     * Combien de créneaux de la dernière génération ont dû répéter un plat, faute de mieux.
+     * L'appelant s'en sert pour le dire honnêtement plutôt que de laisser croire à un défaut.
+     */
+    public function repetitionsForcees(): int
+    {
+        return $this->repetitions;
+    }
+
+    /**
+     * Ce qu'un régime d'exclusion interdit, dit en allergènes tels que les idées les déclarent.
+     * Exact par construction, là où une liste de mots-clés oublie toujours un plat.
+     */
+    private const REGIME_ALLERGENES = [
+        'sans_gluten' => ['gluten'],
+        'sans_lactose' => ['lait'],
+        'vegan' => ['lait', 'œufs', 'poissons', 'crustacés', 'mollusques'],
+    ];
+
+    /**
+     * Part du plafond de glucides quotidien qu'un seul repas peut occuper. Au-delà, il ne reste
+     * plus de quoi manger le reste de la journée sans dépasser.
+     */
+    private const PART_GLUCIDES_REPAS = 0.5;
+
     /**
      * Mémoire de fraîcheur, en jours. Sans elle, deux semaines générées à la suite piochent les
      * mêmes premiers plats du classement et se ressemblent trait pour trait.
@@ -82,6 +110,8 @@ class PlannerGenerator
      */
     public function generate(User $user, string $weekStart, array $mealTypes, bool $replace = false, ?array $choix = null): int
     {
+        $this->repetitions = 0;
+
         $start = CarbonImmutable::parse($weekStart);
         $end = $start->addDays(6);
         $dates = [];
@@ -172,11 +202,16 @@ class PlannerGenerator
                         }
 
                         // Plus rien de neuf : on répète le plat le plus ancien plutôt que de
-                        // rendre une semaine trouée.
+                        // rendre une semaine trouée. On le compte, pour pouvoir le dire : un
+                        // régime contraint laisse parfois moins de plats que de créneaux, et
+                        // mieux vaut l'annoncer que laisser croire à une panne de variété.
                         if ($recette === null && $idee === null) {
                             $recette = $this->pickRecipe($recipes, $context, $type, $budget, $expiring, $user, $variete, false);
                             if ($recette === null) {
                                 $idee = $this->pickIdea($context, $type, $budget, $variete, false);
+                            }
+                            if ($recette !== null || $idee !== null) {
+                                $this->repetitions++;
                             }
                         }
                     }
@@ -504,6 +539,14 @@ class PlannerGenerator
                 continue;
             }
 
+            // Le régime se décide sur ce que l'idée DÉCLARE, pas sur ce que son titre laisse
+            // deviner. Une recherche de mots-clés ratait douze plats sur vingt-huit pour un
+            // profil sans gluten : « porridge », « wrap » ou « couscous » ne contiennent pas le
+            // mot, et annonçaient pourtant l'allergène noir sur blanc dans leur fiche.
+            if (! $this->idealSuitsRegime($idea, $context)) {
+                continue;
+            }
+
             $dates = $variete['usage'][$this->usageKey($title)] ?? [];
             $repete = $this->usedInWindow($dates, $variete['fenetre']);
             if ($strict && $repete) {
@@ -560,6 +603,44 @@ class PlannerGenerator
      * @param  array<string, mixed>  $idea
      * @return list<string>
      */
+    /**
+     * Un régime d'exclusion interdit un allergène, un régime pauvre en glucides interdit un
+     * chiffre. Les deux sont écrits dans la fiche de l'idée : on les lit au lieu de les deviner.
+     *
+     * @param  array<string, mixed>  $idea
+     * @param  array{regime: string|null, exclusions: list<string>, is_minor: bool}  $context
+     */
+    private function idealSuitsRegime(array $idea, array $context): bool
+    {
+        $regime = $context['regime'] ?? null;
+
+        if ($regime === null) {
+            return true;
+        }
+
+        $declares = array_map(
+            fn ($a) => CompatibilityFilter::fold((string) $a),
+            is_array($idea['allergenes'] ?? null) ? $idea['allergenes'] : [],
+        );
+
+        foreach (self::REGIME_ALLERGENES[$regime] ?? [] as $interdit) {
+            if (in_array(CompatibilityFilter::fold($interdit), $declares, true)) {
+                return false;
+            }
+        }
+
+        // Un seul plat à 70 g de glucides suffit à crever une journée cétogène plafonnée à 30 g :
+        // la part du repas est une borne trop lâche, on refuse dès que l'idée dépasse le plafond
+        // du jour à elle seule.
+        $plafondJour = config('diets.'.$regime.'.regles.glucides_max_g');
+
+        if ($plafondJour !== null && (float) ($idea['carbs'] ?? 0) > (float) $plafondJour * self::PART_GLUCIDES_REPAS) {
+            return false;
+        }
+
+        return true;
+    }
+
     private function ideaIngredients(array $idea): array
     {
         $names = [];

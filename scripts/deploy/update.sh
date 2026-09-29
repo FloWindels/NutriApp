@@ -23,9 +23,12 @@ composer install --no-dev --optimize-autoloader --no-interaction
 log "Backend : migrations"
 php artisan migrate --force
 
-log "Backend : catalogue exercices et sports"
+log "Backend : catalogues exercices, sports et enseignes"
 php artisan db:seed --class=Database\\Seeders\\ExerciseSeeder --force
 php artisan db:seed --class=Database\\Seeders\\SportSeeder --force
+# Catalogue des enseignes : idempotent par upsert. Attention, il repose les prix
+# indicatifs du releve d'origine : relance ton propre import ensuite si tu en as fait un.
+php artisan db:seed --class=Database\\Seeders\\MagasinSeeder --force
 
 log "Backend : caches"
 php artisan config:cache
