@@ -306,6 +306,18 @@ export type Besoins = {
   ajustement_kcal: number;
   variation_hebdo_kg: number;
   plancher_kcal: number;
+  /** Version du texte de risques que le serveur enregistre avec un consentement. */
+  rythme_avertissement_version: string;
+  /** Vrai quand consentir changerait vraiment la cible : la proposition a lieu d’être affichée. */
+  rythme_intense_possible: boolean;
+  rythme_intense_accepte: boolean;
+  /** Déficits en kcal/j (positifs) et leur équivalent hebdomadaire ; null hors perte de poids. */
+  rythme_conseille_kcal: number | null;
+  rythme_conseille_kg_semaine: number | null;
+  rythme_demande_kcal: number | null;
+  rythme_demande_kg_semaine: number | null;
+  rythme_intense_kcal: number | null;
+  rythme_intense_kg_semaine: number | null;
   poids_reference: number;
   jours_restants: number | null;
   cibles_calculees_le: string | null;
@@ -407,6 +419,11 @@ export type ProfileInput = {
   situation_particuliere?: SituationParticuliere;
   consentement_parental?: boolean;
   consentement_sante?: boolean;
+  /** Accord explicite pour perdre plus vite que le rythme conseillé ; faux le retire. */
+  rythme_intense?: boolean;
+  /** Ce que l'écran a affiché à côté de la case : le serveur refuse un accord qui ne s'y rapporte pas. */
+  rythme_intense_deficit_vu?: number | null;
+  rythme_intense_version_vue?: string;
   sport_lieu?: SportLieu | null;
   sport_zones_a_eviter?: ZoneAEviter[] | null;
   sport_focus?: SportFocus[] | null;
@@ -1212,11 +1229,16 @@ export type PlannerGenerateInput = {
   week_start: string;
   meal_types?: MealType[];
   replace?: boolean;
+  /** Contrainte dite en français ; absente, la semaine est composée par les règles Mavi’oh. */
+  demande?: string;
 };
 export type PlannerGenerateResponse = {
   message: string;
   data: Planner;
   generated_count: number;
+  generated_by: GeneratedBy;
+  explication: string[];
+  warnings: string[];
 };
 
 /* ------------------------------------------------------------------ */

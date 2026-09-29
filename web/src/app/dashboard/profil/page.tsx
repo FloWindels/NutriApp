@@ -60,6 +60,7 @@ type FormState = {
   regime: "" | Regime;
   situation: SituationParticuliere;
   consentementParental: boolean;
+  rythmeIntense: boolean;
 };
 
 const EMPTY_FORM: FormState = {
@@ -75,6 +76,7 @@ const EMPTY_FORM: FormState = {
   regime: "",
   situation: "aucune",
   consentementParental: false,
+  rythmeIntense: false,
 };
 
 function fromProfile(profile: Profile): FormState {
@@ -91,11 +93,14 @@ function fromProfile(profile: Profile): FormState {
     regime: profile.regime_alimentaire ?? "",
     situation: profile.situation_particuliere ?? "aucune",
     consentementParental: profile.consentement_parental ?? false,
+    // Le consentement enregistré se lit dans les besoins recalculés : le serveur seul sait
+    // s'il tient toujours pour l'objectif en cours.
+    rythmeIntense: profile.besoins?.rythme_intense_accepte ?? false,
   };
 }
 
 /** Corps envoyé au serveur. `objectif_calcul_auto` rend la main au calcul serveur. */
-function toInput(form: FormState): ProfileInput {
+function toInput(form: FormState, besoins?: Besoins | null): ProfileInput {
   const age = Number(form.age);
   const mineur = Number.isFinite(age) && age < 18;
   const maintien = form.objectifType === "maintenir";
@@ -113,6 +118,17 @@ function toInput(form: FormState): ProfileInput {
     regime_alimentaire: form.regime as Regime,
     situation_particuliere: form.situation,
     ...(mineur ? { consentement_parental: form.consentementParental } : {}),
+    // Toujours transmis, y compris à faux : c'est ainsi qu'on retire un accord donné.
+    rythme_intense: form.objectifType === "perdre" && form.rythmeIntense,
+    // Ce que l'écran affichait au moment du choix. Le serveur refuse l'accord si le calcul a
+    // bougé depuis : sans cela, changer son poids puis enregistrer appliquerait un rythme plus
+    // rapide que celui qu'on a lu, et la trace l'attesterait comme accepté.
+    ...(form.objectifType === "perdre" && form.rythmeIntense && besoins
+      ? {
+          rythme_intense_deficit_vu: besoins.rythme_intense_kcal,
+          rythme_intense_version_vue: besoins.rythme_avertissement_version,
+        }
+      : {}),
     objectif_calcul_auto: true,
   };
 }
@@ -203,12 +219,20 @@ export default function ProfilPage() {
     setErreursLocales((precedent) => ({ ...precedent, [champ]: undefined }));
   }
 
+  function changerRythmeIntense(accepte: boolean) {
+    const suivant = { ...form, rythmeIntense: accepte };
+    setForm(suivant);
+    // La cible dépend directement de cette case : on relance le calcul serveur pour que les
+    // chiffres affichés soient bien ceux du choix qui vient d'être fait.
+    if (simulation !== null) setSimulation(toInput(suivant, besoins));
+  }
+
   function simuler() {
     setErreurGlobale(null);
     const erreurs = champsManquants(form);
     setErreursLocales(erreurs);
     if (Object.keys(erreurs).length > 0) return;
-    setSimulation(toInput(form));
+    setSimulation(toInput(form, besoins));
   }
 
   function reinitialiser() {
@@ -229,7 +253,7 @@ export default function ProfilPage() {
       );
       return;
     }
-    const input = toInput(form);
+    const input = toInput(form, besoins);
     setSimulation(input);
     save.mutate(consentementDonne ? input : { ...input, consentement_sante: true });
   }
@@ -461,6 +485,14 @@ export default function ProfilPage() {
             </label>
           ) : null}
 
+          {besoins !== null && besoins.rythme_intense_possible && form.objectifType === "perdre" ? (
+            <RythmeIntense
+              besoins={besoins}
+              accepte={form.rythmeIntense}
+              onChange={changerRythmeIntense}
+            />
+          ) : null}
+
           <div className="flex flex-wrap gap-3">
             <Button type="button" onClick={simuler} loading={previewQuery.isFetching}>
               Calculer
@@ -494,6 +526,99 @@ export default function ProfilPage() {
           )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Proposition de rythme intense. Le serveur décide seul si elle a lieu d'être : il l'annonce par
+ * `rythme_intense_possible`, faux pour un mineur, une grossesse, un allaitement, un suivi médical
+ * ou un poids visé sous l'IMC minimal. Le texte des risques ci-dessous est celui que le serveur
+ * horodate à l'enregistrement : le réécrire oblige à changer AVERTISSEMENT_RYTHME_VERSION dans
+ * backend/app/Services/NutritionCalculator.php.
+ */
+function RythmeIntense({
+  besoins,
+  accepte,
+  onChange,
+}: {
+  besoins: Besoins;
+  accepte: boolean;
+  onChange: (accepte: boolean) => void;
+}) {
+  return (
+    <section className="rounded-2xl border-2 border-amber-300 bg-amber-50 px-4 py-4 text-amber-950">
+      <h3 className="text-base font-semibold">
+        Ce rythme de perte est plus rapide que celui que Mavi’oh conseille
+      </h3>
+
+      <dl className="mt-3 grid gap-2 sm:grid-cols-3">
+        <RythmeChiffre
+          libelle="Rythme conseillé"
+          kcal={besoins.rythme_conseille_kcal}
+          kg={besoins.rythme_conseille_kg_semaine}
+        />
+        <RythmeChiffre
+          libelle="Ce que tu demandes"
+          kcal={besoins.rythme_demande_kcal}
+          kg={besoins.rythme_demande_kg_semaine}
+        />
+        <RythmeChiffre
+          libelle="Au plus vite, avec ton accord"
+          kcal={besoins.rythme_intense_kcal}
+          kg={besoins.rythme_intense_kg_semaine}
+        />
+      </dl>
+
+      <p className="mt-3 text-sm leading-6">
+        Au-delà du rythme conseillé, une part croissante des kilos perdus vient du muscle plutôt
+        que de la graisse. Les autres effets connus d’un déficit important : carences en vitamines
+        et en minéraux, calculs biliaires, fatigue et baisse des performances, et une reprise de
+        poids fréquente dès le retour à une alimentation normale. Parles-en à un médecin ou à un
+        diététicien avant de t’y engager, en particulier si tu suis un traitement.
+      </p>
+      <p className="mt-2 text-sm leading-6">
+        Quel que soit ton choix, tes calories ne descendront pas sous ton plancher de sécurité de{" "}
+        {formatKcal(besoins.plancher_kcal)} par jour.
+      </p>
+
+      <label className="mt-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-white/70 px-3 py-2.5 text-sm">
+        <input
+          type="checkbox"
+          checked={accepte}
+          onChange={(e) => onChange(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-400 accent-amber-700"
+        />
+        <span>
+          <span className="font-semibold">J’ai lu ces risques et je choisis ce rythme.</span>
+          <span className="mt-0.5 block">
+            Case décochée, ton objectif reste au rythme conseillé, soit{" "}
+            {formatKcal(besoins.rythme_conseille_kcal)} de déficit par jour.
+          </span>
+        </span>
+      </label>
+    </section>
+  );
+}
+
+function RythmeChiffre({
+  libelle,
+  kcal,
+  kg,
+}: {
+  libelle: string;
+  kcal: number | null;
+  kg: number | null;
+}) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-white/70 px-3 py-2">
+      <dt className="text-xs font-medium text-amber-800">{libelle}</dt>
+      <dd className="mt-0.5 text-sm font-semibold">
+        −{formatKcal(kcal)} par jour
+        <span className="mt-0.5 block font-normal text-amber-800">
+          soit {formatNumber(kg, 2)} kg par semaine
+        </span>
+      </dd>
     </div>
   );
 }

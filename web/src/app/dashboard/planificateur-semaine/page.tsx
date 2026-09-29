@@ -288,15 +288,28 @@ function PlannerContent() {
         open={generateOpen}
         onClose={() => setGenerateOpen(false)}
         weekStart={weekStart}
-        onGenerated={async (count) => {
+        onAbandon={() => {
+          // Le serveur finit sa composition : on recharge dans quelques secondes pour la montrer.
+          toast({
+            title: "Mavi’oh finit de composer",
+            description: "Ta semaine s’affichera ici dès qu’elle sera prête. Recharge si besoin.",
+          });
+          void invalidatePlanner();
+        }}
+        onGenerated={async (result) => {
           await invalidatePlanner();
-          if (count === 0) {
+          if (result.generated_count === 0) {
             toast({
               title: "Rien à générer",
               description: "Les créneaux choisis sont déjà remplis ou aucune recette ne convient.",
             });
           } else {
-            success(count > 1 ? `${count} repas planifiés` : "1 repas planifié");
+            success(
+              result.generated_count > 1
+                ? `${result.generated_count} repas planifiés`
+                : "1 repas planifié",
+              result.generated_by === "ia" ? "Composée par l’IA" : "Règles Mavi’oh",
+            );
           }
         }}
       />

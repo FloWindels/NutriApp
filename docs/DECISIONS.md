@@ -55,6 +55,14 @@ dépassé, un réseau coupé ou une réponse illisible, les règles Mavi'oh pren
 automatiquement et l'utilisateur reçoit quand même une séance. Aucune donnée nominative n'est envoyée
 au modèle : seul un contexte anonymisé l'est.
 
+Le planificateur suit la même règle avec le champ `demande` de `POST /api/planner/generate`
+(« le matin je n'ai pas le temps de cuisiner »). Sans demande, la génération reste celle d'avant, par
+les règles — c'est la garantie de non-régression dont dépend l'application mobile. Avec une demande,
+le modèle ne rédige rien : il choisit parmi les recettes que les règles retiendraient déjà et ne
+renvoie que des identifiants, chacun revérifié par le serveur avant d'entrer au plan. Régime et
+allergènes ne sont jamais confiés à sa bonne volonté. La réponse porte `generated_by`, avec les mêmes
+valeurs que le module sport, pour dire par quel moteur la semaine a été composée.
+
 ## Ce que couvre l'offre gratuite
 
 Le partage n'est pas « les fonctions simples d'un côté, l'IA de l'autre ». Il porte sur le travail

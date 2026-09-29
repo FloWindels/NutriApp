@@ -186,6 +186,16 @@ créé, et un compte administrateur (`php artisan mavioh:promouvoir ton@email.fr
 | L11 | Repasser un compte payant en gratuit | L'échéance disparaît, mais ni les repas, ni le profil, ni les pesées |
 | L12 | Poser une offre Foyer à quelqu'un, puis lui faire saisir un code « Complet » | Refus du code : il ne rétrograde jamais une offre déjà meilleure |
 
+## M. Clavier dans les fenêtres modales
+
+| # | Étapes | Attendu |
+|---|---|---|
+| M1 | Recettes › « Une recette avec ce que j'ai », puis taper « poulet riz brocoli » **sans cliquer nulle part** | Le curseur est déjà dans le champ ; les espaces s'écrivent et la fenêtre reste ouverte |
+| M2 | Dans cette même fenêtre, cliquer un exemple, corriger le texte, appuyer encore sur espace | Toujours aucune fermeture : le focus ne repart plus vers la croix à chaque frappe |
+| M3 | Tabuler une dizaine de fois dans une fenêtre ouverte | Le focus tourne en boucle dans la fenêtre, sans jamais atteindre la page derrière |
+| M4 | Ouvrir une fenêtre sans champ (Sport › « Bonus sport », ou une confirmation de suppression) | Échap ferme, la tabulation reste piégée, et l'espace n'y déclenche rien tout seul |
+| M5 | Depuis le détail d'une recette, ouvrir « Ajouter à un repas », puis Échap | Seule la fenêtre du dessus se ferme ; le détail de la recette reste ouvert |
+
 ---
 
 ## Vérifications automatiques associées

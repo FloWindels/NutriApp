@@ -55,6 +55,11 @@ class Profile extends Model
         // Sécurité
         'situation_particuliere',
         'consentement_parental',
+        'rythme_intense',
+        'rythme_intense_consenti_le',
+        'rythme_intense_avertissement_version',
+        'rythme_intense_deficit_kcal',
+        'rythme_intense_kg_semaine',
     ];
 
     protected $casts = [
@@ -84,6 +89,10 @@ class Profile extends Model
         'sport_focus' => 'array',
         'sport_coef_calories' => 'integer',
         'consentement_parental' => 'boolean',
+        'rythme_intense' => 'boolean',
+        'rythme_intense_consenti_le' => 'datetime',
+        'rythme_intense_deficit_kcal' => 'integer',
+        'rythme_intense_kg_semaine' => 'float',
     ];
 
     protected $attributes = [
@@ -91,6 +100,7 @@ class Profile extends Model
         'situation_particuliere' => 'aucune',
         'consentement_parental' => false,
         'sport_coef_calories' => 100,
+        'rythme_intense' => false,
     ];
 
     public function user(): BelongsTo

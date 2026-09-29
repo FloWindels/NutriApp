@@ -72,6 +72,9 @@ class ProfileService
                 $profile->save();
             }
 
+            // En ajout seul : retirer son accord en coupe l'effet, jamais la preuve.
+            RythmeIntenseConsentement::journaliser($user, $plan['besoins']);
+
             return $profile->refresh();
         });
     }
@@ -166,6 +169,22 @@ class ProfileService
         }
 
         $besoins = $this->nutrition->compute($input);
+
+        // Un accord ne vaut que pour le déficit qui a été PRÉSENTÉ. La case cochée ne prouve rien
+        // par elle-même : le formulaire web la renvoie à chaque enregistrement, y compris quand le
+        // poids ou le délai ont changé depuis l'affichage. Sans cette vérification, on appliquerait
+        // un rythme plus rapide que celui que la personne a lu, et la trace l'attesterait comme
+        // accepté. Le client déclare donc le chiffre et la version du texte qu'il a montrés ;
+        // à défaut, seul un accord déjà enregistré et suffisant peut se reconduire.
+        if ($attributes['rythme_intense'] && ! RythmeIntenseConsentement::accepte($data, $existing, $besoins)) {
+            $attributes['rythme_intense'] = false;
+            $input['rythme_intense'] = false;
+            $besoins = $this->nutrition->compute($input);
+            $besoins['avertissements'][] = 'Tes chiffres ont changé depuis que les risques t’ont été présentés : '
+                .'le rythme conseillé s’applique. Relis l’encadré et coche à nouveau si tu veux ce rythme.';
+        }
+
+        $attributes = array_replace($attributes, RythmeIntenseConsentement::trace($existing, $besoins));
         $attributes['objectif_calcul_auto'] = $auto;
 
         if ($auto) {
@@ -219,6 +238,13 @@ class ProfileService
             $attributes['poids_souhaite_kg'] = null;
             $attributes['delai_objectif_jours'] = null;
         }
+
+        // Le consentement au rythme intense se reconduit tant que l'objectif ne s'accélère pas ;
+        // c'est plan() qui le réexamine, une fois les besoins calculés.
+        $attributes['rythme_intense'] = filter_var(
+            array_key_exists('rythme_intense', $data) ? $data['rythme_intense'] : ($existing?->rythme_intense ?? false),
+            FILTER_VALIDATE_BOOLEAN
+        );
 
         $attributes['objectif'] = $attributes['objectif'] ?? $attributes['objectif_type'];
         $attributes['situation_particuliere'] = $attributes['situation_particuliere'] ?? 'aucune';
@@ -294,6 +320,7 @@ class ProfileService
             'situation_particuliere' => $attributes['situation_particuliere'],
             'sport_jours_semaine' => $attributes['sport_jours_semaine'],
             'consentement_parental' => $attributes['consentement_parental'],
+            'rythme_intense' => $attributes['rythme_intense'],
             'today' => $today,
         ];
     }

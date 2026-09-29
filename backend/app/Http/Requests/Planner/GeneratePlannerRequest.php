@@ -23,6 +23,7 @@ class GeneratePlannerRequest extends FormRequest
             'meal_types' => ['nullable', 'array', 'min:1'],
             'meal_types.*' => ['distinct', Rule::enum(MealType::class)],
             'replace' => ['nullable', 'boolean'],
+            'demande' => ['nullable', 'string', 'max:500'],
         ];
     }
 
@@ -36,6 +37,7 @@ class GeneratePlannerRequest extends FormRequest
             'meal_types' => 'types de repas',
             'meal_types.*' => 'type de repas',
             'replace' => 'remplacement',
+            'demande' => 'demande',
         ];
     }
 }

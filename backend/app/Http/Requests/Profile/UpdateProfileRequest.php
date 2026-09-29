@@ -110,6 +110,11 @@ class UpdateProfileRequest extends FormRequest
 
             // Sécurité
             'situation_particuliere' => ['sometimes', 'nullable', Rule::in(self::SITUATIONS)],
+            'rythme_intense' => ['sometimes', 'nullable', 'boolean'],
+            // Ce que le client déclare avoir affiché à côté de la case. Sans ces deux valeurs,
+            // un accord neuf n'est pas recevable : voir RythmeIntenseConsentement.
+            'rythme_intense_deficit_vu' => ['sometimes', 'nullable', 'integer', 'between:0,3000'],
+            'rythme_intense_version_vue' => ['sometimes', 'nullable', 'string', 'max:32'],
         ];
     }
 
@@ -160,6 +165,9 @@ class UpdateProfileRequest extends FormRequest
             'sport_notes' => 'notes sportives',
             'sport_coef_calories' => 'réintégration des calories brûlées',
             'situation_particuliere' => 'situation particulière',
+            'rythme_intense' => 'rythme de perte intense',
+            'rythme_intense_deficit_vu' => 'déficit présenté',
+            'rythme_intense_version_vue' => 'version de l’avertissement',
         ];
     }
 

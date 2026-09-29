@@ -16,6 +16,7 @@ use App\Models\Recipe;
 use App\Models\User;
 use App\Services\Planner\PlanCalories;
 use App\Services\Planner\PlanLogger;
+use App\Services\Planner\PlannerAiComposer;
 use App\Services\Planner\PlannerGenerator;
 use App\Support\Clock;
 use App\Support\OwnerScope;
@@ -33,6 +34,7 @@ class PlannerController extends Controller
 
     public function __construct(
         private readonly PlannerGenerator $generator,
+        private readonly PlannerAiComposer $composer,
         private readonly PlanLogger $logger,
     ) {
     }
@@ -132,6 +134,14 @@ class PlannerController extends Controller
         return response()->json(['message' => 'Plan supprimé.']);
     }
 
+    /**
+     * POST /planner/generate — remplit les créneaux libres de la semaine.
+     *
+     * Le champ facultatif `demande` laisse dire en français comment organiser la semaine
+     * (« le matin je n'ai pas le temps de cuisiner »). Vide ou absent, ou sans offre donnant
+     * droit à l'IA, la génération reste celle d'avant, par les règles Mavi'oh — et la réponse
+     * dit toujours par quel moteur la semaine a été composée.
+     */
     public function generate(GeneratePlannerRequest $request): JsonResponse
     {
         $user = $request->user();
@@ -141,7 +151,9 @@ class PlannerController extends Controller
         $types = array_values(array_unique($data['meal_types'] ?? self::DEFAULT_GENERATE_TYPES));
         $replace = filter_var($data['replace'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
-        $count = $this->generator->generate($user, $weekStart, $types, $replace);
+        $ia = $this->composer->compose($user, $weekStart, $types, $replace, (string) ($data['demande'] ?? ''));
+
+        $count = $this->generator->generate($user, $weekStart, $types, $replace, $ia['choix']);
 
         $message = match (true) {
             $count === 0 => 'Aucun créneau à compléter : ta semaine est déjà planifiée.',
@@ -153,6 +165,9 @@ class PlannerController extends Controller
             'message' => $message,
             'data' => $this->weekPayload($user, $weekStart),
             'generated_count' => $count,
+            'generated_by' => $ia['generated_by'],
+            'explication' => $ia['explication'],
+            'warnings' => $ia['warnings'],
         ]);
     }
 

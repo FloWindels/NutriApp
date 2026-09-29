@@ -3,15 +3,19 @@
 namespace App\Providers;
 
 use App\Contracts\WebSearchClient;
+use App\Contracts\LlmPlannerClient;
 use App\Contracts\LlmRecipeClient;
 use App\Contracts\LlmVisionClient;
 use App\Contracts\LlmWorkoutClient;
+use App\Services\Llm\AnthropicPlannerClient;
 use App\Services\Llm\AnthropicRecipeClient;
 use App\Services\Llm\AnthropicVisionClient;
 use App\Services\Llm\AnthropicWorkoutClient;
+use App\Services\Llm\NullPlannerClient;
 use App\Services\Llm\NullRecipeClient;
 use App\Services\Llm\NullVisionClient;
 use App\Services\Llm\NullWorkoutClient;
+use App\Services\Llm\OllamaPlannerClient;
 use App\Services\Llm\OllamaRecipeClient;
 use App\Services\Llm\OllamaVisionClient;
 use App\Services\Llm\OllamaWorkoutClient;
@@ -52,6 +56,16 @@ class AppServiceProvider extends ServiceProvider
                 LlmProvider::ANTHROPIC => $app->make(AnthropicRecipeClient::class),
                 LlmProvider::OLLAMA => $app->make(OllamaRecipeClient::class),
                 default => $app->make(NullRecipeClient::class),
+            };
+        });
+
+        // Organiser la semaine de repas : même sélecteur encore, le modèle ne fait que choisir
+        // parmi des recettes existantes.
+        $this->app->bind(LlmPlannerClient::class, function ($app) {
+            return match (LlmProvider::current()) {
+                LlmProvider::ANTHROPIC => $app->make(AnthropicPlannerClient::class),
+                LlmProvider::OLLAMA => $app->make(OllamaPlannerClient::class),
+                default => $app->make(NullPlannerClient::class),
             };
         });
 

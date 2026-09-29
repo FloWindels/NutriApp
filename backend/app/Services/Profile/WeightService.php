@@ -137,7 +137,18 @@ class WeightService
         }
 
         if ($recompute && $this->nutrition->isComplete($profile)) {
-            $besoins = $this->nutrition->compute($this->nutrition->inputFromProfile($profile, $today));
+            $entree = $this->nutrition->inputFromProfile($profile, $today);
+            $besoins = $this->nutrition->compute($entree);
+
+            // Un poids repris élargit les plafonds : sans ce garde-fou, une pesée suffirait à
+            // creuser le déficit au-delà de ce qui a été consenti.
+            if ($besoins['rythme_intense_accepte'] && ! RythmeIntenseConsentement::couvre($profile, $besoins)) {
+                $besoins = $this->nutrition->compute(array_replace($entree, ['rythme_intense' => false]));
+            }
+
+            foreach (RythmeIntenseConsentement::trace($profile, $besoins) as $colonne => $valeur) {
+                $profile->{$colonne} = $valeur;
+            }
 
             $profile->calories_cibles = (int) $besoins['calories_recommandees'];
             $profile->proteines_cibles = (int) $besoins['proteines_g'];

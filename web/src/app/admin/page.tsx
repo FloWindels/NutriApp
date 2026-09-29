@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiPost, getErrorMessage } from "@/lib/api-client";
 import { formatDate, formatNumber } from "@/lib/format";
@@ -145,6 +145,19 @@ const ACTIONS_JOURNAL: Record<string, string> = {
   revoquer_code_acces: "Révocation d’un code d’accès",
 };
 
+/**
+ * L’espace d’administration vit hors du tableau de bord, donc hors de `DashboardShell` : c’est
+ * à lui de poser le fond opaque de l’application, faute de quoi il s’affiche à nu sur le
+ * dégradé du body.
+ */
+function CadreAdmin({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <main className="min-h-screen bg-[#f3faec] p-4 text-[#0b3f2f] sm:p-6">
+      <div className={className}>{children}</div>
+    </main>
+  );
+}
+
 export default function AdminPage() {
   const [onglet, setOnglet] = useState<Onglet>("tableau");
 
@@ -157,24 +170,26 @@ export default function AdminPage() {
 
   if (stats.isPending) {
     return (
-      <main className="mx-auto max-w-5xl p-6">
+      <CadreAdmin className="mx-auto w-full max-w-5xl">
         <SkeletonCard lines={5} />
-      </main>
+      </CadreAdmin>
     );
   }
 
   if (stats.isError) {
     // Sans droits, Laravel répond « Introuvable. » : on n'en dit pas plus.
     return (
-      <main className="mx-auto max-w-lg p-10 text-center">
-        <h1 className="text-xl font-semibold text-slate-900">Page introuvable</h1>
-        <p className="mt-2 text-sm text-slate-600">Cette adresse ne correspond à rien.</p>
-      </main>
+      <CadreAdmin className="mx-auto w-full max-w-lg py-10">
+        <div className="rounded-[1.5rem] border border-emerald-100 bg-white p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+          <h1 className="text-xl font-semibold text-slate-900">Page introuvable</h1>
+          <p className="mt-2 text-sm text-slate-600">Cette adresse ne correspond à rien.</p>
+        </div>
+      </CadreAdmin>
     );
   }
 
   return (
-    <main className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
+    <CadreAdmin className="mx-auto w-full max-w-6xl space-y-6">
       <SectionHeader
         eyebrow="Administration"
         level="page"
@@ -182,7 +197,11 @@ export default function AdminPage() {
         subtitle="Comptes, contenus publiés et statistiques. Aucune donnée de santé n’est accessible ici."
       />
 
-      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Sections">
+      <div
+        role="tablist"
+        aria-label="Sections"
+        className="flex flex-wrap gap-1 rounded-2xl border border-slate-200 bg-white p-1"
+      >
         {ONGLETS.map((item) => (
           <button
             key={item.cle}
@@ -190,10 +209,10 @@ export default function AdminPage() {
             role="tab"
             aria-selected={onglet === item.cle}
             onClick={() => setOnglet(item.cle)}
-            className={`h-9 rounded-full border px-3 text-sm font-medium transition ${
+            className={`min-h-10 rounded-xl px-4 py-2 text-sm font-medium transition ${
               onglet === item.cle
-                ? "border-slate-900 bg-slate-900 text-white"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                ? "bg-emerald-700 text-white shadow-sm"
+                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             }`}
           >
             {item.libelle}
@@ -206,7 +225,7 @@ export default function AdminPage() {
       {onglet === "moderation" ? <Moderation /> : null}
       {onglet === "codes" ? <Codes /> : null}
       {onglet === "journal" ? <Journal /> : null}
-    </main>
+    </CadreAdmin>
   );
 }
 

@@ -26,6 +26,10 @@ use Illuminate\Support\Facades\DB;
  *     tri : mes recettes d'abord, puis celles qui utilisent un article de stock
  *     périmant sous 7 jours (non périmé), puis proximité calorique, puis id ;
  *  2. repli : idée de config/meal_ideas.php (plan « titre seul »), même règles.
+ *
+ * Le paramètre `$choix` de generate() laisse l'IA imposer une recette sur un créneau, mais
+ * seulement parmi celles que ces règles retiendraient déjà (candidatesByType), et chaque recette
+ * imposée repasse par le filtre régime / allergènes avant d'entrer au plan.
  */
 class PlannerGenerator
 {
@@ -41,9 +45,10 @@ class PlannerGenerator
 
     /**
      * @param  list<string>  $mealTypes
+     * @param  array<string, int>|null  $choix  « {date}|{type} » → identifiant de recette imposé par l'IA
      * @return int nombre de plans créés
      */
-    public function generate(User $user, string $weekStart, array $mealTypes, bool $replace = false): int
+    public function generate(User $user, string $weekStart, array $mealTypes, bool $replace = false, ?array $choix = null): int
     {
         $start = CarbonImmutable::parse($weekStart);
         $end = $start->addDays(6);
@@ -54,7 +59,7 @@ class PlannerGenerator
 
         $mealTypes = array_values(array_unique($mealTypes));
 
-        return DB::transaction(function () use ($user, $start, $end, $dates, $mealTypes, $replace) {
+        return DB::transaction(function () use ($user, $start, $end, $dates, $mealTypes, $replace, $choix) {
             if ($replace) {
                 OwnerScope::apply(MealPlan::query(), $user)
                     ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
@@ -63,16 +68,7 @@ class PlannerGenerator
                     ->delete();
             }
 
-            $profile = $user->relationLoaded('profile')
-                ? $user->getRelation('profile')
-                : Profile::query()->where('user_id', $user->id)->first();
-
-            $context = CompatibilityFilter::contextFor($profile);
-
-            $budgets = [];
-            foreach ($mealTypes as $type) {
-                $budgets[$type] = $profile ? (float) $this->budget->forPlanning($user, $type) : 0.0;
-            }
+            ['context' => $context, 'budgets' => $budgets] = $this->rulesContext($user, $mealTypes);
 
             // Plans existants (fenêtre élargie de 2 jours pour la règle « pas de répétition à 3 jours »).
             $existing = OwnerScope::apply(MealPlan::query(), $user)
@@ -103,7 +99,13 @@ class PlannerGenerator
 
                     $budget = $budgets[$type] ?? 0.0;
 
-                    $recipe = $this->pickRecipe($recipes, $context, $type, $budget, $date, $usage, $expiring, $user);
+                    $impose = $choix[$date.'|'.$type] ?? null;
+
+                    $recipe = $impose === null
+                        ? null
+                        : $this->imposedRecipe($recipes, $context, $type, (int) $impose);
+
+                    $recipe ??= $this->pickRecipe($recipes, $context, $type, $budget, $date, $usage, $expiring, $user);
                     if ($recipe !== null) {
                         MealPlan::query()->forceCreate(OwnerScope::ownerAttributes($user) + [
                             'date' => $date,
@@ -145,7 +147,95 @@ class PlannerGenerator
         });
     }
 
+    /**
+     * Créneaux (date × type) que cette génération remplirait, dans l'ordre où elle les parcourt.
+     *
+     * Publié pour que l'IA sache quoi organiser sans refaire ce calcul à sa façon : les deux
+     * chemins doivent voir exactement les mêmes créneaux libres, sinon le modèle propose des
+     * repas sur des cases déjà prises.
+     *
+     * @param  list<string>  $mealTypes
+     * @return list<array{date: string, meal_type: string}>
+     */
+    public function freeSlots(User $user, string $weekStart, array $mealTypes, bool $replace = false): array
+    {
+        $start = CarbonImmutable::parse($weekStart);
+        $end = $start->addDays(6);
+        $mealTypes = array_values(array_unique($mealTypes));
+
+        $query = OwnerScope::apply(MealPlan::query(), $user)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->where('status', '!=', PlanStatus::Annule->value);
+
+        // Avec remplacement, les plans « prévu » vont être effacés : leur créneau est donc libre.
+        if ($replace) {
+            $query->where('status', '!=', PlanStatus::Prevu->value);
+        }
+
+        $occupied = [];
+        foreach ($query->get(['id', 'date', 'meal_type']) as $plan) {
+            /** @var MealPlan $plan */
+            $occupied[$plan->date->format('Y-m-d').'|'.$plan->meal_type] = true;
+        }
+
+        $slots = [];
+        for ($i = 0; $i < 7; $i++) {
+            $date = $start->addDays($i)->toDateString();
+            foreach ($mealTypes as $type) {
+                if (! isset($occupied[$date.'|'.$type])) {
+                    $slots[] = ['date' => $date, 'meal_type' => $type];
+                }
+            }
+        }
+
+        return $slots;
+    }
+
+    /**
+     * Recettes que ces règles retiendraient pour chaque type de repas, les meilleures d'abord.
+     *
+     * C'est l'ensemble dans lequel l'IA a le droit de choisir, et rien d'autre : régime,
+     * allergènes, type de repas et budget calorique y sont déjà appliqués.
+     *
+     * @param  list<string>  $mealTypes
+     * @return array<string, list<Recipe>>
+     */
+    public function candidatesByType(User $user, array $mealTypes): array
+    {
+        ['context' => $context, 'budgets' => $budgets] = $this->rulesContext($user, $mealTypes);
+
+        $recipes = $this->candidateRecipes($user);
+        $expiring = $this->expiringStock($user);
+
+        $byType = [];
+        foreach (array_values(array_unique($mealTypes)) as $type) {
+            $byType[$type] = $this->eligible($recipes, $context, $type, $budgets[$type] ?? 0.0, $expiring, $user);
+        }
+
+        return $byType;
+    }
+
     // ------------------------------------------------------------------------------------
+
+    /**
+     * Profil, contexte de compatibilité et budget calorique par type de repas.
+     *
+     * @param  list<string>  $mealTypes
+     * @return array{context: array{regime: string|null, exclusions: list<string>, is_minor: bool}, budgets: array<string, float>}
+     */
+    private function rulesContext(User $user, array $mealTypes): array
+    {
+        $profile = $user->relationLoaded('profile')
+            ? $user->getRelation('profile')
+            : Profile::query()->where('user_id', $user->id)->first();
+
+        $budgets = [];
+        foreach ($mealTypes as $type) {
+            $budgets[$type] = $profile ? (float) $this->budget->forPlanning($user, $type) : 0.0;
+        }
+
+        return ['context' => CompatibilityFilter::contextFor($profile), 'budgets' => $budgets];
+    }
 
     /**
      * Recettes visibles, ordre stable (id croissant).
@@ -210,17 +300,34 @@ class PlannerGenerator
      */
     private function pickRecipe(Collection $recipes, array $context, string $type, float $budget, string $date, array $usage, array $expiring, User $user): ?Recipe
     {
+        foreach ($this->eligible($recipes, $context, $type, $budget, $expiring, $user) as $recipe) {
+            if (! $this->recentlyUsed($usage[$this->usageKey($recipe->id, (string) $recipe->title)] ?? [], $date)) {
+                return $recipe;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Recettes acceptables pour ce type de repas, les meilleures d'abord.
+     *
+     * L'ordre ne dépend pas de la date : mes recettes, puis celles qui consomment un stock qui
+     * périme, puis la proximité calorique, puis l'identifiant. La règle « pas deux fois en trois
+     * jours », elle, dépend de la date : pickRecipe l'applique sur cette liste.
+     *
+     * @param  Collection<int, Recipe>  $recipes
+     * @param  array{regime: string|null, exclusions: list<string>, is_minor: bool}  $context
+     * @param  array{names: list<string>, eans: list<string>}  $expiring
+     * @return list<Recipe>
+     */
+    private function eligible(Collection $recipes, array $context, string $type, float $budget, array $expiring, User $user): array
+    {
         $scored = [];
 
         foreach ($recipes as $recipe) {
             /** @var Recipe $recipe */
-            $mealTypes = is_array($recipe->meal_types) ? $recipe->meal_types : [];
-            if ($mealTypes !== [] && ! in_array($type, $mealTypes, true)) {
-                continue;
-            }
-
-            $ingredients = $this->ingredientNames($recipe);
-            if (! CompatibilityFilter::isCompatible($context, (string) $recipe->title, is_array($recipe->tags) ? $recipe->tags : [], $ingredients)) {
+            if (! $this->suits($recipe, $context, $type)) {
                 continue;
             }
 
@@ -230,20 +337,12 @@ class PlannerGenerator
                 continue;
             }
 
-            if ($this->recentlyUsed($usage[$this->usageKey($recipe->id, (string) $recipe->title)] ?? [], $date)) {
-                continue;
-            }
-
             $scored[] = [
                 'recipe' => $recipe,
                 'mine' => (int) $recipe->created_by_user_id === (int) $user->id ? 1 : 0,
-                'expiring' => $this->expiringMatches($recipe, $ingredients, $expiring),
+                'expiring' => $this->expiringMatches($recipe, $this->ingredientNames($recipe), $expiring),
                 'distance' => $distance,
             ];
-        }
-
-        if ($scored === []) {
-            return null;
         }
 
         usort($scored, function (array $a, array $b) {
@@ -251,7 +350,41 @@ class PlannerGenerator
                 <=> [$a['mine'], $a['expiring'], $b['distance'], $b['recipe']->id];
         });
 
-        return $scored[0]['recipe'];
+        return array_map(fn (array $entry) => $entry['recipe'], $scored);
+    }
+
+    /**
+     * Recette imposée par l'IA : elle n'entre au plan qu'après re-vérification du type de repas,
+     * du régime et des allergènes. Une consigne dans le prompt ne suffit pas à garantir cela, et
+     * l'allergène est une contrainte de sécurité : le serveur reste seul juge.
+     *
+     * @param  Collection<int, Recipe>  $recipes
+     * @param  array{regime: string|null, exclusions: list<string>, is_minor: bool}  $context
+     */
+    private function imposedRecipe(Collection $recipes, array $context, string $type, int $recipeId): ?Recipe
+    {
+        $recipe = $recipes->first(fn (Recipe $candidate) => (int) $candidate->id === $recipeId);
+
+        return $recipe !== null && $this->suits($recipe, $context, $type) ? $recipe : null;
+    }
+
+    /**
+     * @param  array{regime: string|null, exclusions: list<string>, is_minor: bool}  $context
+     */
+    private function suits(Recipe $recipe, array $context, string $type): bool
+    {
+        $mealTypes = is_array($recipe->meal_types) ? $recipe->meal_types : [];
+
+        if ($mealTypes !== [] && ! in_array($type, $mealTypes, true)) {
+            return false;
+        }
+
+        return CompatibilityFilter::isCompatible(
+            $context,
+            (string) $recipe->title,
+            is_array($recipe->tags) ? $recipe->tags : [],
+            $this->ingredientNames($recipe),
+        );
     }
 
     /**

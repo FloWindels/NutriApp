@@ -1,6 +1,17 @@
 @import "tailwindcss";
 
 :root {
+  /*
+   * Mavi’oh n’est dessiné qu’en clair : les composants écrivent leurs couleurs en dur
+   * (bg-white, text-slate-950…) et aucun n’a de variante sombre. Un thème sombre à moitié
+   * appliqué étant pire que pas de thème du tout, on annonce le schéma clair au navigateur
+   * — sans quoi il rend les champs, les listes déroulantes et les barres de défilement en
+   * sombre par-dessus des cartes blanches. Le bloc prefers-color-scheme qui réassignait
+   * --background en noir a été retiré pour la même raison : il reviendra le jour où
+   * l’interface saura vraiment s’habiller en sombre.
+   */
+  color-scheme: light;
+
   --background: #f4faef;
   --foreground: #0b3f2f;
   --brand-deep: #005c3f;
@@ -14,13 +25,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 /*
@@ -63,10 +67,16 @@ html {
 
 body {
   min-height: 100vh;
+  /*
+   * Les teintes du dégradé sont écrites ici plutôt que tirées de --background : cette
+   * variable était réassignée en noir par la préférence sombre du système, et le fond
+   * devenait clair → noir → clair — une bande sombre en travers de toute page qui ne pose
+   * pas son propre fond opaque.
+   */
   background:
     radial-gradient(circle at 12% 8%, rgba(183, 228, 74, 0.34), transparent 34%),
     radial-gradient(circle at 88% 84%, rgba(99, 181, 26, 0.22), transparent 36%),
-    linear-gradient(180deg, #f7fcef 0%, var(--background) 55%, #eef9e3 100%);
+    linear-gradient(180deg, #f7fcef 0%, #f4faef 55%, #eef9e3 100%);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
