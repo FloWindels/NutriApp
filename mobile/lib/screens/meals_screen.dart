@@ -18,6 +18,7 @@ import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
 import '../widgets/quantity_unit_picker.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 import 'history_screen.dart';
 
 /// Share of the daily budget per meal type (`App\Services\MealBudget`, §4.2).
@@ -464,17 +465,26 @@ class _MealCard extends StatelessWidget {
                 fmtKcal(calories),
                 style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: MaviohColors.textSecondary),
               ),
-              IconButton(
-                tooltip: 'Photographier mon assiette',
-                onPressed: onAddFromPhoto,
-                icon: const Icon(Icons.photo_camera_outlined),
-                color: MaviohColors.primary,
-              ),
-              IconButton(
-                tooltip: 'Ajouter ${AppStrings.mealTypeDative(type)}',
-                onPressed: onAdd,
-                icon: const Icon(Icons.add_circle_outline_rounded),
-                color: MaviohColors.primary,
+              RepereVisite(
+                // Un repère par repas ; la visite éclaire celui du premier.
+                id: type == AppStrings.mealTypeOrder.first ? Reperes.repasAjout : 'repas.ajout-$type',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Photographier mon assiette',
+                      onPressed: onAddFromPhoto,
+                      icon: const Icon(Icons.photo_camera_outlined),
+                      color: MaviohColors.primary,
+                    ),
+                    IconButton(
+                      tooltip: 'Ajouter ${AppStrings.mealTypeDative(type)}',
+                      onPressed: onAdd,
+                      icon: const Icon(Icons.add_circle_outline_rounded),
+                      color: MaviohColors.primary,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

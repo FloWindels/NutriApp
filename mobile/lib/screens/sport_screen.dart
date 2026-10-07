@@ -19,6 +19,7 @@ import '../widgets/month_calendar.dart';
 import '../widgets/section_header.dart';
 import '../widgets/stat_tile.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 import 'sport/activity_sheet.dart';
 import 'sport/generate_sheet.dart';
 import 'sport/log_sheet.dart';
@@ -602,30 +603,33 @@ class _SportScreenState extends State<SportScreen> {
             _ProposingRow(onCancel: _cancelPropose),
             const SizedBox(height: 14),
           ],
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 50,
-                  child: FilledButton.icon(
-                    onPressed: _generate,
-                    icon: const Icon(Icons.auto_awesome_outlined, size: 19),
-                    label: const Text('Générer une séance'),
+          RepereVisite(
+            id: Reperes.sportGenerer,
+            child: Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: FilledButton.icon(
+                      onPressed: _generate,
+                      icon: const Icon(Icons.auto_awesome_outlined, size: 19),
+                      label: const Text('Générer une séance'),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SizedBox(
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _quickActivity(),
-                    icon: const Icon(Icons.bolt_outlined, size: 19),
-                    label: const Text('Activité rapide'),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _quickActivity(),
+                      icon: const Icon(Icons.bolt_outlined, size: 19),
+                      label: const Text('Activité rapide'),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 18),
           const SectionHeader(eyebrow: 'Aujourd’hui', title: 'Tes séances du jour'),

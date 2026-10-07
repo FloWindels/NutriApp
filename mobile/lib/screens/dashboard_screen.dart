@@ -22,6 +22,7 @@ import '../widgets/notification_bell.dart';
 import '../widgets/sparkline.dart';
 import '../widgets/stat_tile.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 
 /// Accueil (§16.2): greeting, budget, next meal, coach, stock alerts, sport, weight.
 class DashboardScreen extends StatefulWidget {
@@ -194,13 +195,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 16),
           ],
-          BudgetCard(
-            consumed: data.consumed,
-            targets: data.targets,
-            remaining: data.remaining,
-            caloriesBonus: data.caloriesBonus,
-            isEstimate: data.isEstimate,
-            onTap: () => _navigate('historique-repas-journee'),
+          RepereVisite(
+            id: Reperes.accueilBudget,
+            child: BudgetCard(
+              consumed: data.consumed,
+              targets: data.targets,
+              remaining: data.remaining,
+              caloriesBonus: data.caloriesBonus,
+              isEstimate: data.isEstimate,
+              onTap: () => _navigate('historique-repas-journee'),
+            ),
           ),
           const SizedBox(height: 14),
           _NextMealCard(data: data, onAdd: () => _addToMeal(), onScan: _scanAndAdd),

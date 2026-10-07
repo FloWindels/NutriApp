@@ -18,6 +18,7 @@ import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
 import '../widgets/stat_tile.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 import 'food_search/food_form_sheet.dart';
 import 'food_search/food_stock_sheet.dart';
 
@@ -357,45 +358,48 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
           ),
           if (_tab == _FoodTab.search) ...[
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focus,
-                    textInputAction: TextInputAction.search,
-                    decoration: InputDecoration(
-                      hintText: 'Nom, marque ou code-barres',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      suffixIcon: _controller.text.isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: 'Effacer la recherche',
-                              icon: const Icon(Icons.close_rounded),
-                              onPressed: () {
-                                _controller.clear();
-                                _onQueryChanged('');
-                              },
-                            ),
+            RepereVisite(
+              id: Reperes.alimentsRecherche,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focus,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        hintText: 'Nom, marque ou code-barres',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: _controller.text.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Effacer la recherche',
+                                icon: const Icon(Icons.close_rounded),
+                                onPressed: () {
+                                  _controller.clear();
+                                  _onQueryChanged('');
+                                },
+                              ),
+                      ),
+                      onChanged: (value) {
+                        setState(() {});
+                        _onQueryChanged(value);
+                      },
+                      onSubmitted: (value) {
+                        _debounce?.cancel();
+                        _search(value);
+                      },
                     ),
-                    onChanged: (value) {
-                      setState(() {});
-                      _onQueryChanged(value);
-                    },
-                    onSubmitted: (value) {
-                      _debounce?.cancel();
-                      _search(value);
-                    },
                   ),
-                ),
-                const SizedBox(width: 10),
-                IconButton.filledTonal(
-                  tooltip: 'Scanner un code-barres',
-                  onPressed: _scan,
-                  icon: const Icon(Icons.qr_code_scanner_rounded),
-                  style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  IconButton.filledTonal(
+                    tooltip: 'Scanner un code-barres',
+                    onPressed: _scan,
+                    icon: const Icon(Icons.qr_code_scanner_rounded),
+                    style: IconButton.styleFrom(minimumSize: const Size(52, 52)),
+                  ),
+                ],
+              ),
             ),
           ],
         ],

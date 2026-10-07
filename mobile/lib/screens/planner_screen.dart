@@ -16,6 +16,7 @@ import '../widgets/fm7_recipe_picker.dart';
 import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 
 /// Planificateur de la semaine (§12 + §16.4).
 ///
@@ -226,26 +227,29 @@ class _PlannerScreenState extends State<PlannerScreen> {
               margin: const EdgeInsets.only(bottom: 12),
               onClose: () => setState(() => _refreshError = null),
             ),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _generateWeek,
-                  icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-                  label: const Text('Générer la semaine'),
+          RepereVisite(
+            id: Reperes.planificateurGenerer,
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _generateWeek,
+                    icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                    label: const Text('Générer la semaine'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _sendingToShopping ? null : _sendToShoppingList,
-                  icon: _sendingToShopping
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2.2))
-                      : const Icon(Icons.shopping_cart_outlined, size: 18),
-                  label: const Text('Envoyer à la liste de courses'),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _sendingToShopping ? null : _sendToShoppingList,
+                    icon: _sendingToShopping
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2.2))
+                        : const Icon(Icons.shopping_cart_outlined, size: 18),
+                    label: const Text('Envoyer à la liste de courses'),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 14),
           if (week.plansCount == 0)

@@ -15,10 +15,13 @@ import '../widgets/confirm_dialog.dart';
 import '../widgets/error_state.dart';
 import '../widgets/loading_state.dart';
 import '../widgets/notification_bell.dart';
+import '../widgets/repere_visite.dart';
 import '../widgets/status_banner.dart';
 import 'login_screen.dart';
+import 'onboarding/accueil.dart';
 import 'settings/settings_sheets.dart';
 import 'settings/settings_tiles.dart';
+import '../services/mise_a_jour.dart';
 
 /// Paramètres (§16.4) : compte, rappels dans l’app, sport, foyer, apparence, à propos.
 ///
@@ -246,6 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onClose: () => setState(() => _saveSuccess = null),
             ),
           _accountSection(),
+          RepereVisite(id: Reperes.parametresVisite, child: _decouvrirSection()),
           _remindersSection(settings),
           _sportSection(settings),
           if (_hasHousehold(settings)) _householdSection(settings),
@@ -302,6 +306,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: Icons.delete_outline_rounded,
           danger: true,
           onTap: _deleteAccount,
+        ),
+      ],
+    );
+  }
+
+  /// Revoir l'accueil : la visite guidée, ou le questionnaire de bienvenue.
+  Widget _decouvrirSection() {
+    return SettingsSection(
+      title: 'Découvrir Mavi’oh',
+      icon: Icons.explore_outlined,
+      tone: MaviohColors.teal,
+      children: [
+        SettingsActionTile(
+          title: 'Revoir la visite guidée',
+          subtitle: 'Tout ce que tu peux faire dans l’app, en une minute',
+          icon: Icons.tour_outlined,
+          onTap: () => Accueil.montrerVisite(context, naviguer: widget.onNavigate),
+        ),
+        SettingsActionTile(
+          title: 'Refaire le questionnaire',
+          subtitle: 'Tes informations, une question à la fois',
+          icon: Icons.assignment_outlined,
+          onTap: () async {
+            final termine = await Accueil.ouvrirQuestionnaire(context);
+            if (termine && mounted) setState(() => _saveSuccess = 'Profil enregistré, tes objectifs sont recalculés.');
+          },
         ),
       ],
     );
@@ -453,6 +483,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => MiseAJour.verifier(context, manuel: true),
+              icon: const Icon(Icons.system_update_rounded, size: 18),
+              label: const Text('Rechercher une mise à jour'),
+            ),
+          ),
           const LegalLinks(),
           const SizedBox(height: 10),
           const Text(

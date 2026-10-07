@@ -17,6 +17,7 @@ import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
 import '../widgets/section_header.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 import 'shopping/to_stock_sheet.dart';
 import 'shopping/unit_chips.dart';
 
@@ -352,7 +353,7 @@ class _ShoppingListScreenState extends State<ShoppingListScreen> {
             ),
           _addCard(),
           const SizedBox(height: 12),
-          _actionsRow(checked.isNotEmpty),
+          RepereVisite(id: Reperes.coursesGenerer, child: _actionsRow(checked.isNotEmpty)),
           const SizedBox(height: 14),
           if (total == 0)
             EmptyState(

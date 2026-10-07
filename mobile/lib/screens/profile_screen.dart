@@ -15,6 +15,8 @@ import '../widgets/error_state.dart';
 import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
+import 'onboarding/accueil.dart';
 
 /// Profil (§16.4, §2, addendum §A.4/§D).
 ///
@@ -430,6 +432,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Le questionnaire de bienvenue, rouvert depuis le profil ; on recharge à son retour.
+  Future<void> _ouvrirQuestionnaire() async {
+    final termine = await Accueil.ouvrirQuestionnaire(context);
+    if (!termine || !mounted) return;
+    await _load(silent: true);
+    if (mounted) setState(() => _successMessage = 'Profil enregistré, tes objectifs sont recalculés.');
+  }
+
   // ----- Build --------------------------------------------------------------
 
   @override
@@ -450,6 +460,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               title: 'Profil incomplet',
               margin: const EdgeInsets.only(bottom: 14),
             ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _ouvrirQuestionnaire,
+              icon: const Icon(Icons.assignment_outlined, size: 18),
+              label: const Text('Répondre au questionnaire pas à pas'),
+            ),
+          ),
           if (_successMessage != null)
             StatusBanner.success(
               _successMessage!,
@@ -464,7 +482,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           _previewPanel(),
           const SizedBox(height: 14),
-          _identiteSection(),
+          RepereVisite(id: Reperes.profilFormulaire, child: _identiteSection()),
           const SizedBox(height: 14),
           _objectifSection(),
           const SizedBox(height: 14),

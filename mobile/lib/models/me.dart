@@ -27,6 +27,9 @@ class Me {
   final int? householdId;
   final bool consentementSante;
   final MeSettings settings;
+  /// Capacités de l'offre du compte (`offre.capacites`) ; null quand le serveur ne les a pas
+  /// données (réponse de connexion) : on ne prétend alors rien.
+  final List<String>? capacites;
 
   const Me({
     required this.id,
@@ -39,6 +42,7 @@ class Me {
     this.householdId,
     this.consentementSante = false,
     this.settings = const MeSettings(),
+    this.capacites,
   });
 
   /// Works for both `/me` (flat) and `/login` (`user` nested) payloads.
@@ -55,6 +59,9 @@ class Me {
       householdId: parseInt(json['household_id'] ?? user['household_id']),
       consentementSante: parseBool(json['consentement_sante'] ?? user['consentement_sante']),
       settings: MeSettings.fromJson(ApiClient.asMap(json['settings'] ?? user['settings'])),
+      capacites: json['offre'] is Map && ApiClient.asMap(json['offre'])['capacites'] is List
+          ? ApiClient.asStringList(ApiClient.asMap(json['offre'])['capacites'])
+          : null,
     );
   }
 
@@ -69,7 +76,11 @@ class Me {
         'household_id': householdId,
         'consentement_sante': consentementSante,
         'settings': settings.toJson(),
+        if (capacites != null) 'offre': {'capacites': capacites},
       };
+
+  /// Vrai sauf quand on sait que l'offre n'inclut pas [capacite].
+  bool peut(String capacite) => capacites == null || capacites!.contains(capacite);
 
   /// First name (first word of [name]).
   String get firstName {
@@ -100,6 +111,7 @@ class Me {
       householdId: clearHousehold ? null : (householdId ?? this.householdId),
       consentementSante: consentementSante ?? this.consentementSante,
       settings: settings ?? this.settings,
+      capacites: capacites,
     );
   }
 }

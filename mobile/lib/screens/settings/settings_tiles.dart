@@ -25,31 +25,36 @@ class SettingsSection extends StatelessWidget {
     return AppCard(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 20, color: tone),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: MaviohColors.text),
+      // Les ListTile peignent leurs éclaboussures sur le Material le plus proche : sans
+      // celui-ci, le fond de la carte les masquerait.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20, color: tone),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: MaviohColors.text),
+                  ),
                 ),
+              ],
+            ),
+            if (caption != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                caption!,
+                style: const TextStyle(fontSize: 12.5, color: MaviohColors.muted, height: 1.35),
               ),
             ],
-          ),
-          if (caption != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              caption!,
-              style: const TextStyle(fontSize: 12.5, color: MaviohColors.muted, height: 1.35),
-            ),
+            const SizedBox(height: 4),
+            ...children,
           ],
-          const SizedBox(height: 4),
-          ...children,
-        ],
+        ),
       ),
     );
   }

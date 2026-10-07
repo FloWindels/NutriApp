@@ -78,9 +78,14 @@ class AuthService {
     return parseString(json['message']) ?? 'Mot de passe réinitialisé.';
   }
 
-  /// `PUT /account {name, email}` → updated user in [Session].
-  Future<Me> updateAccount({required String name, required String email}) async {
-    final json = await _api.putJson('/account', body: {'name': name.trim(), 'email': email.trim()});
+  /// `PUT /account {name, email, current_password?}` → updated user in [Session].
+  /// [currentPassword] est exigé par l'API quand l'adresse change.
+  Future<Me> updateAccount({required String name, required String email, String? currentPassword}) async {
+    final json = await _api.putJson('/account', body: {
+      'name': name.trim(),
+      'email': email.trim(),
+      'current_password': ?currentPassword,
+    });
     final data = ApiClient.asMap(json['data']);
     final current = Session.instance.user;
     final updated = (current ?? Me.fromJson(data)).copyWith(

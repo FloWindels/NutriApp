@@ -21,6 +21,7 @@ import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
 import '../widgets/recipe_tile.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 
 /// Coach du jour (§16.4 « RecommendationsScreen » + §8).
 ///
@@ -328,28 +329,35 @@ class _RecommendationsScreenState extends State<RecommendationsScreen> {
               onClose: () => setState(() => _refreshError = null),
             ),
           if (visible.isEmpty)
-            SizedBox(
-              height: 340,
-              child: EmptyState(
-                icon: Icons.tips_and_updates_outlined,
-                title: 'Ton coach n’a rien à signaler aujourd’hui',
-                message: _showIgnored
-                    ? 'Aucun conseil pour cette journée. Enregistre tes repas pour que le coach puisse t’aider.'
-                    : 'Aucun conseil pour cette journée. Enregistre tes repas pour que le coach puisse t’aider.',
-                ctaLabel: 'Enregistrer un repas',
-                onCta: _logMeal,
+            RepereVisite(
+              id: Reperes.coachConseils,
+              child: SizedBox(
+                height: 340,
+                child: EmptyState(
+                  icon: Icons.tips_and_updates_outlined,
+                  title: 'Ton coach n’a rien à signaler aujourd’hui',
+                  message: _showIgnored
+                      ? 'Aucun conseil pour cette journée. Enregistre tes repas pour que le coach puisse t’aider.'
+                      : 'Aucun conseil pour cette journée. Enregistre tes repas pour que le coach puisse t’aider.',
+                  ctaLabel: 'Enregistrer un repas',
+                  onCta: _logMeal,
+                ),
               ),
             )
           else
             for (final reco in visible)
               Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _RecoCard(
-                  key: ValueKey('reco-${reco.id}'),
-                  reco: reco,
-                  onIgnore: () => _ignore(reco),
-                  onRestore: () => _restore(reco),
-                  onAction: (action) => _runAction(reco, action),
+                child: RepereVisite(
+                  // Le premier conseil suffit à montrer ce que fait le coach.
+                  id: identical(reco, visible.first) ? Reperes.coachConseils : 'coach.conseil-${reco.id}',
+                  child: _RecoCard(
+                    key: ValueKey('reco-${reco.id}'),
+                    reco: reco,
+                    onIgnore: () => _ignore(reco),
+                    onRestore: () => _restore(reco),
+                    onAction: (action) => _runAction(reco, action),
+                  ),
                 ),
               ),
           const SizedBox(height: 4),

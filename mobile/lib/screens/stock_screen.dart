@@ -16,6 +16,7 @@ import '../widgets/expiry_badge.dart';
 import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 import 'stock/add_stock_sheet.dart';
 import 'stock/stock_item_editor.dart';
 
@@ -395,12 +396,15 @@ class _StockScreenState extends State<StockScreen> {
         Positioned(
           right: 16,
           bottom: 16,
-          child: FloatingActionButton.extended(
-            heroTag: 'stock-add-fab',
-            onPressed: _openAddSheet,
-            tooltip: 'Ajouter un article au stock',
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Ajouter'),
+          child: RepereVisite(
+            id: Reperes.stockAjouter,
+            child: FloatingActionButton.extended(
+              heroTag: 'stock-add-fab',
+              onPressed: _openAddSheet,
+              tooltip: 'Ajouter un article au stock',
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Ajouter'),
+            ),
           ),
         ),
       ],

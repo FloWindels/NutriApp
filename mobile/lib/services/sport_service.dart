@@ -49,7 +49,7 @@ class SportService {
     return SportConfig.fromJson(ApiClient.asMap(json['data']));
   }
 
-  /// `GET /sport/exercises?equipment=&muscle=&level=&category=&q=&page=` (public).
+  /// `GET /sport/exercises?equipment=&muscle=&level=&category=&q=&page=` (compte requis).
   Future<Paged<Exercise>> exercises({
     String? equipment,
     String? muscle,

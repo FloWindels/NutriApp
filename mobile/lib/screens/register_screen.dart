@@ -205,7 +205,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               textInputAction: TextInputAction.next,
                               decoration: InputDecoration(
                                 labelText: 'Mot de passe',
-                                helperText: '8 caractères minimum',
+                                helperText: '10 caractères minimum',
                                 prefixIcon: const Icon(Icons.lock_outline),
                                 errorText: _fieldErrors['password'],
                                 suffixIcon: IconButton(
@@ -216,7 +216,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                               validator: (value) {
                                 if (value == null || value.isEmpty) return 'Entre un mot de passe';
-                                if (value.length < 8) return 'Minimum 8 caractères';
+                                if (value.length < 10) return 'Minimum 10 caractères';
                                 return null;
                               },
                             ),

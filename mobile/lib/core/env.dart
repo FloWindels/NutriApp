@@ -2,15 +2,20 @@
 class Env {
   Env._();
 
-  /// Base URL of the Laravel API, e.g. `https://api.mavioh.app/api`.
+  /// Base URL of the Laravel API. Par défaut le serveur public, en HTTPS : une version
+  /// construite sans `--dart-define` ne doit jamais envoyer d'identifiants en clair. En
+  /// développement, passer `--dart-define=API_BASE_URL=http://10.0.2.2:8000/api`.
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000/api',
+    defaultValue: 'https://mavioh-api.florentwindels.com/api',
   );
 
-  /// Base URL du site web, d'où sont servies les pages légales.
-  /// Déduite de l'API quand elle n'est pas fournie : `https://api.x/api` → `https://api.x`.
-  static const String webBaseUrl = String.fromEnvironment('WEB_BASE_URL');
+  /// Base URL du site web, d'où sont servies les pages légales (l'API publique ne sert que
+  /// `/api`). Déduite de l'API quand elle est vide : `https://api.x/api` → `https://api.x`.
+  static const String webBaseUrl = String.fromEnvironment(
+    'WEB_BASE_URL',
+    defaultValue: 'https://mavioh.florentwindels.com',
+  );
 
   /// URL publique d'une page légale (`/cgu`, `/confidentialite`…).
   static String legalUrl(String chemin) {

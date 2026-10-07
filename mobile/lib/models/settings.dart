@@ -13,6 +13,10 @@ class UserSettings {
   final String timezone;
   final bool iaSeances;
   final bool? partageProfilFoyer; // null without household
+  /// Questionnaire de bienvenue terminé ; null tant qu'il ne l'est pas.
+  final DateTime? onboardingTermineLe;
+  /// Visite guidée vue ou passée ; null tant qu'elle ne l'a pas été.
+  final DateTime? visiteVueLe;
 
   const UserSettings({
     this.notifPeremption = true,
@@ -26,6 +30,8 @@ class UserSettings {
     this.timezone = 'Europe/Paris',
     this.iaSeances = true,
     this.partageProfilFoyer,
+    this.onboardingTermineLe,
+    this.visiteVueLe,
   });
 
   factory UserSettings.fromJson(Map<String, dynamic> json) => UserSettings(
@@ -42,6 +48,8 @@ class UserSettings {
         partageProfilFoyer: json.containsKey('partage_profil_foyer') && json['partage_profil_foyer'] != null
             ? parseBool(json['partage_profil_foyer'])
             : null,
+        onboardingTermineLe: parseDate(json['onboarding_termine_le']),
+        visiteVueLe: parseDate(json['visite_vue_le']),
       );
 
   static String? _time(dynamic value) {
@@ -92,6 +100,8 @@ class UserSettings {
       timezone: timezone ?? this.timezone,
       iaSeances: iaSeances ?? this.iaSeances,
       partageProfilFoyer: partageProfilFoyer ?? this.partageProfilFoyer,
+      onboardingTermineLe: onboardingTermineLe,
+      visiteVueLe: visiteVueLe,
     );
   }
 }

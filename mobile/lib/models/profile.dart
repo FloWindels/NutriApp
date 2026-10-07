@@ -23,6 +23,10 @@ class Besoins {
   final List<String> etapes;
   final String mention;
   final bool isEstimate;
+  /// Durée qui respecterait le rythme conseillé, quand le délai demandé va plus vite.
+  final int? delaiConseilleJours;
+  /// Un rythme de perte plus rapide est possible avec un accord explicite (page Profil).
+  final bool rythmeIntensePossible;
 
   const Besoins({
     this.bmr,
@@ -46,6 +50,8 @@ class Besoins {
     this.etapes = const [],
     this.mention = '',
     this.isEstimate = true,
+    this.delaiConseilleJours,
+    this.rythmeIntensePossible = false,
   });
 
   factory Besoins.fromJson(Map<String, dynamic> json) => Besoins(
@@ -70,6 +76,8 @@ class Besoins {
         etapes: ApiClient.asStringList(json['etapes']),
         mention: parseString(json['mention']) ?? '',
         isEstimate: parseBool(json['is_estimate'], fallback: true),
+        delaiConseilleJours: parseInt(json['delai_conseille_jours']),
+        rythmeIntensePossible: parseBool(json['rythme_intense_possible']),
       );
 }
 

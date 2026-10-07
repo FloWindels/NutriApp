@@ -4,16 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/api_client.dart';
+import '../../core/formatters.dart';
 import '../../theme/app_theme.dart';
 import '../../models/meal.dart';
 import '../../models/plate.dart';
 import '../../services/meal_service.dart';
+import '../../widgets/add_to_meal_sheet.dart';
 
 /// Photo d'assiette sur mobile.
 ///
 /// C'est l'usage le plus naturel de la fonction : l'appareil photo est déjà dans la main. Le
 /// parcours est celui du site, et la règle est la même — l'analyse ne fait que proposer, rien
-/// n'est enregistré avant que la personne ait relu et corrigé chaque ligne.
+/// n'est enregistré avant que la personne ait relu et corrigé chaque ligne. Ce que le modèle
+/// n'a pas vu s'ajoute à la main depuis le catalogue, dans la même liste.
 class PlatePhotoSheet extends StatefulWidget {
   const PlatePhotoSheet({
     super.key,
@@ -21,12 +24,16 @@ class PlatePhotoSheet extends StatefulWidget {
     required this.type,
     this.mealService,
     this.imagePicker,
+    this.choisirAjout,
   });
 
   final DateTime date;
   final String type;
   final MealService? mealService;
   final ImagePicker? imagePicker;
+
+  /// Choix d'un aliment oublié ; par défaut [AddToMealSheet.pick]. Remplaçable en test.
+  final Future<PickedMealItem?> Function(BuildContext context)? choisirAjout;
 
   static Future<bool?> show(
     BuildContext context, {
@@ -46,11 +53,26 @@ class PlatePhotoSheet extends StatefulWidget {
 }
 
 class _LigneEditable {
-  _LigneEditable(this.ligne) : quantite = ligne.quantite.toStringAsFixed(0);
+  _LigneEditable(PlateLine this.ligne)
+      : ajout = null,
+        quantite = ligne.quantite.toStringAsFixed(0);
 
-  final PlateLine ligne;
+  /// Ligne ajoutée à la main : absente de la photo, elle se retire au lieu de se décocher.
+  _LigneEditable.ajoutee(PickedMealItem this.ajout)
+      : ligne = null,
+        quantite = _texte(ajout.input.quantity);
+
+  final PlateLine? ligne;
+  final PickedMealItem? ajout;
   String quantite;
   bool retenue = true;
+
+  static String _texte(double q) => q == q.roundToDouble() ? q.toStringAsFixed(0) : q.toString();
+
+  double? get quantiteSaisie {
+    final q = double.tryParse(quantite.replaceAll(',', '.'));
+    return q == null || q <= 0 ? null : q;
+  }
 }
 
 class _PlatePhotoSheetState extends State<PlatePhotoSheet> {
@@ -116,22 +138,35 @@ class _PlatePhotoSheetState extends State<PlatePhotoSheet> {
     for (final ligne in _lignes) {
       if (!ligne.retenue) continue;
 
-      final quantite = double.tryParse(ligne.quantite.replaceAll(',', '.'));
-      if (quantite == null || quantite <= 0) continue;
+      final quantite = ligne.quantiteSaisie;
+      if (quantite == null) continue;
 
-      final food = ligne.ligne.food;
+      final ajout = ligne.ajout?.input;
+      if (ajout != null) {
+        items.add(MealItemInput(
+          foodId: ajout.foodId,
+          recipeId: ajout.recipeId,
+          custom: ajout.custom,
+          quantity: quantite,
+          unit: ajout.unit,
+        ));
+        continue;
+      }
+
+      final plate = ligne.ligne!;
+      final food = plate.food;
       items.add(food != null
-          ? MealItemInput(foodId: food.id, quantity: quantite, unit: ligne.ligne.unite)
+          ? MealItemInput(foodId: food.id, quantity: quantite, unit: plate.unite)
           : MealItemInput(
               custom: CustomItemInput(
-                label: ligne.ligne.nom,
-                calories: ligne.ligne.valeursProposees?.calories ?? 0,
-                proteins: ligne.ligne.valeursProposees?.proteines ?? 0,
-                carbs: ligne.ligne.valeursProposees?.glucides ?? 0,
-                fat: ligne.ligne.valeursProposees?.lipides ?? 0,
+                label: plate.nom,
+                calories: plate.valeursProposees?.calories ?? 0,
+                proteins: plate.valeursProposees?.proteines ?? 0,
+                carbs: plate.valeursProposees?.glucides ?? 0,
+                fat: plate.valeursProposees?.lipides ?? 0,
               ),
               quantity: quantite,
-              unit: ligne.ligne.unite,
+              unit: plate.unite,
             ));
     }
 
@@ -156,6 +191,18 @@ class _PlatePhotoSheetState extends State<PlatePhotoSheet> {
         _erreur = e.message;
       });
     }
+  }
+
+  Future<void> _ajouter() async {
+    final choisir = widget.choisirAjout ??
+        (BuildContext context) => AddToMealSheet.pick(context, title: 'Ajouter un aliment oublié');
+    final choix = await choisir(context);
+    if (choix == null || !mounted) return;
+
+    setState(() {
+      _erreur = null;
+      _lignes = [..._lignes, _LigneEditable.ajoutee(choix)];
+    });
   }
 
   @override
@@ -228,17 +275,27 @@ class _PlatePhotoSheetState extends State<PlatePhotoSheet> {
               Text(
                 resultat.avertissements.isNotEmpty
                     ? resultat.avertissements.first
-                    : 'Aucun aliment n’a pu être identifié. Tu peux saisir ton repas à la main.',
+                    : 'Aucun aliment n’a pu être identifié. Ajoute toi-même ce que contient l’assiette.',
                 style: const TextStyle(fontSize: 13, color: MaviohColors.textSecondary),
               ),
             ],
 
-            if (_lignes.isNotEmpty) ...[
+            // La revue s'ouvre dès que l'analyse a répondu, même sans rien reconnaître.
+            if (resultat != null) ...[
               const SizedBox(height: 18),
-              for (final ligne in _lignes) _ligneWidget(ligne),
-              const SizedBox(height: 16),
+              for (final ligne in _lignes)
+                KeyedSubtree(
+                  key: ObjectKey(ligne),
+                  child: ligne.ajout != null ? _ligneAjouteeWidget(ligne) : _ligneWidget(ligne),
+                ),
+              OutlinedButton.icon(
+                onPressed: _enregistre ? null : _ajouter,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Ajouter un aliment oublié'),
+              ),
+              const SizedBox(height: 12),
               FilledButton(
-                onPressed: _enregistre ? null : _enregistrer,
+                onPressed: _enregistre || !_lignes.any((l) => l.retenue) ? null : _enregistrer,
                 child: Text(_enregistre ? 'Enregistrement…' : 'Vérifié, ajouter au repas'),
               ),
             ],
@@ -248,8 +305,56 @@ class _PlatePhotoSheetState extends State<PlatePhotoSheet> {
     );
   }
 
+  Widget _ligneAjouteeWidget(_LigneEditable ligne) {
+    final ajout = ligne.ajout!;
+    final quantite = ligne.quantiteSaisie;
+    // Les calories du choix portent sur sa quantité d'origine : on les met à l'échelle.
+    final kcal = ajout.calories == null || quantite == null || ajout.input.quantity <= 0
+        ? null
+        : ajout.calories! * quantite / ajout.input.quantity;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(width: 48, child: Icon(Icons.edit_outlined, size: 20, color: MaviohColors.muted)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(ajout.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                Text(
+                  kcal == null ? 'Ajouté par toi' : 'Ajouté par toi · ${fmtKcal(kcal)}',
+                  style: const TextStyle(fontSize: 11.5, color: MaviohColors.muted),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 72,
+            child: TextFormField(
+              initialValue: ligne.quantite,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(isDense: true),
+              onChanged: (v) => setState(() => ligne.quantite = v),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(unitLabelShort(ajout.input.unit), style: const TextStyle(color: MaviohColors.muted)),
+          IconButton(
+            tooltip: 'Retirer ${ajout.label}',
+            onPressed: _enregistre ? null : () => setState(() => _lignes = [..._lignes]..remove(ligne)),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _ligneWidget(_LigneEditable ligne) {
-    final food = ligne.ligne.food;
+    final plate = ligne.ligne!;
+    final food = plate.food;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -265,7 +370,7 @@ class _PlatePhotoSheetState extends State<PlatePhotoSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  food?.name ?? ligne.ligne.nom,
+                  food?.name ?? plate.nom,
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 Text(
@@ -285,7 +390,7 @@ class _PlatePhotoSheetState extends State<PlatePhotoSheet> {
             ),
           ),
           const SizedBox(width: 6),
-          Text(ligne.ligne.unite, style: const TextStyle(color: MaviohColors.muted)),
+          Text(plate.unite, style: const TextStyle(color: MaviohColors.muted)),
         ],
       ),
     );

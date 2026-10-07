@@ -17,6 +17,7 @@ import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
 import '../widgets/section_header.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 
 /// Famille / foyer (§10 + §16.4).
 ///
@@ -40,6 +41,10 @@ class _FamilyScreenState extends State<FamilyScreen> {
   bool _loaded = false;
   bool _loading = true;
   String? _error;
+
+  /// Compte sans offre Foyer (le serveur a répondu 402) : il ne peut pas créer de foyer, mais il
+  /// peut en rejoindre un dont le propriétaire détient l’offre Foyer, qui couvre ses membres.
+  bool _sansOffre = false;
 
   @override
   void initState() {
@@ -71,9 +76,20 @@ class _FamilyScreenState extends State<FamilyScreen> {
         _loaded = true;
         _loading = false;
         _error = null;
+        _sansOffre = false;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
+      if (e.isOffreRequise) {
+        setState(() {
+          _household = null;
+          _loaded = true;
+          _loading = false;
+          _error = null;
+          _sansOffre = true;
+        });
+        return;
+      }
       setState(() {
         _loading = false;
         if (!_loaded) {
@@ -140,6 +156,7 @@ class _FamilyScreenState extends State<FamilyScreen> {
     setState(() {
       _household = result.household;
       _loaded = true;
+      _sansOffre = false;
     });
     _snack('${result.mergedStockItems} article${result.mergedStockItems > 1 ? 's' : ''} fusionné'
         '${result.mergedStockItems > 1 ? 's' : ''}.');
@@ -283,9 +300,19 @@ class _FamilyScreenState extends State<FamilyScreen> {
         title: 'Cuisinez à plusieurs',
         subtitle: 'Un foyer partage le stock, la liste de courses et le planning des repas.',
       ),
-      _CreateHouseholdCard(initialName: firstName.isEmpty ? 'Mon foyer' : 'Foyer de $firstName', onSubmit: _create),
+      if (_sansOffre)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            'Créer un foyer fait partie de l’offre Foyer. Tu peux en revanche rejoindre le foyer '
+            'd’un proche qui en bénéficie : son offre te couvre aussi.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        )
+      else
+        _CreateHouseholdCard(initialName: firstName.isEmpty ? 'Mon foyer' : 'Foyer de $firstName', onSubmit: _create),
       const SizedBox(height: 14),
-      _JoinHouseholdCard(onSubmit: _join),
+      RepereVisite(id: Reperes.familleFoyer, child: _JoinHouseholdCard(onSubmit: _join)),
     ];
   }
 
@@ -300,10 +327,13 @@ class _FamilyScreenState extends State<FamilyScreen> {
             '${household.stockItemsCount} article${household.stockItemsCount > 1 ? 's' : ''} en stock partagé',
       ),
       if (household.isOwner && household.inviteCode != null) ...[
-        _InviteCodeCard(
-          code: household.inviteCode!,
-          onCopy: () => _copyCode(household.inviteCode!),
-          onRegenerate: _regenerateCode,
+        RepereVisite(
+          id: Reperes.familleFoyer,
+          child: _InviteCodeCard(
+            code: household.inviteCode!,
+            onCopy: () => _copyCode(household.inviteCode!),
+            onRegenerate: _regenerateCode,
+          ),
         ),
         const SizedBox(height: 14),
       ],

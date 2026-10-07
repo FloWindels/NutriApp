@@ -88,6 +88,17 @@ class AddToMealResult {
   });
 }
 
+/// Ligne choisie sans être enregistrée ([AddToMealSheet.pick]).
+class PickedMealItem {
+  final MealItemInput input;
+  final String label;
+
+  /// Calories pour [MealItemInput.quantity], à titre indicatif.
+  final double? calories;
+
+  const PickedMealItem({required this.input, required this.label, this.calories});
+}
+
 /// The single « ajouter à un repas » flow (§16.3).
 class AddToMealSheet {
   AddToMealSheet._();
@@ -127,6 +138,28 @@ class AddToMealSheet {
       _showUndoSnackBar(messenger, result);
     }
     return result;
+  }
+
+  /// Même parcours, mais rien n'est enregistré : le choix (aliment, recette, fréquent,
+  /// personnalisé) revient à l'appelant, qui l'ajoute à une liste encore à vérifier — la revue
+  /// d'une photo d'assiette, par exemple.
+  static Future<PickedMealItem?> pick(BuildContext context, {String title = 'Ajouter un aliment'}) {
+    final height = MediaQuery.sizeOf(context).height * 0.92;
+    return showModalBottomSheet<PickedMealItem>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      useRootNavigator: true,
+      builder: (_) => SizedBox(
+        height: height,
+        child: _AddToMealBody(
+          date: today(),
+          initialMealType: _defaultMealType(),
+          mode: AddToMealMode.search,
+          pickTitle: title,
+        ),
+      ),
+    );
   }
 
   static String _defaultMealType() {
@@ -186,13 +219,19 @@ class _AddToMealBody extends StatefulWidget {
   final AddToMealMode mode;
   final double? maxQuantity;
 
+  /// Non nul : mode « choix seul » ([AddToMealSheet.pick]), avec ce titre.
+  final String? pickTitle;
+
   const _AddToMealBody({
     required this.date,
     required this.initialMealType,
     this.preset,
     required this.mode,
     this.maxQuantity,
+    this.pickTitle,
   });
+
+  bool get pickOnly => pickTitle != null;
 
   @override
   State<_AddToMealBody> createState() => _AddToMealBodyState();
@@ -467,7 +506,14 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
 
   // ----- Submit -------------------------------------------------------------
 
-  Future<void> _submitItem(MealItemInput input, {double? caloriesHint}) async {
+  Future<void> _submitItem(MealItemInput input, {double? caloriesHint, String? label}) async {
+    if (widget.pickOnly) {
+      // Rien n'est écrit ici : la ligne rejoint la liste que l'appelant fera valider.
+      Navigator.of(context).pop(
+        PickedMealItem(input: input, label: label ?? input.custom?.label ?? 'Aliment', calories: caloriesHint),
+      );
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = null;
@@ -509,7 +555,16 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
     final input = item.isRecipe
         ? MealItemInput(recipeId: item.id, quantity: item.lastQuantity, unit: 'portion')
         : MealItemInput(foodId: item.id, quantity: item.lastQuantity, unit: item.lastUnit);
-    await _submitItem(input);
+    await _submitItem(input, caloriesHint: _frequentKcal(item), label: item.label);
+  }
+
+  double? _frequentKcal(FrequentItem item) {
+    if (item.isRecipe) {
+      return item.caloriesPerServing == null ? null : item.caloriesPerServing! * item.lastQuantity;
+    }
+    if (item.caloriesPer100g == null) return null;
+    final grams = Portion.toGrams(Session.instance.portions, item.lastQuantity, item.lastUnit) ?? item.lastQuantity;
+    return grams / 100 * item.caloriesPer100g!;
   }
 
   Future<void> _submitPicker() async {
@@ -526,6 +581,7 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
       await _submitItem(
         MealItemInput(recipeId: _selectedRecipe!.id, quantity: sel.quantity, unit: 'portion'),
         caloriesHint: sel.calories,
+        label: _selectedRecipe!.title,
       );
       return;
     }
@@ -533,6 +589,7 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
       await _submitItem(
         MealItemInput(foodId: _selectedFood!.id, quantity: sel.quantity, unit: sel.unit),
         caloriesHint: sel.calories,
+        label: _selectedFood!.name,
       );
     }
   }
@@ -667,10 +724,12 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
       child: Column(
         children: [
           _header(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: _MealTypeSelector(value: _mealType, onChanged: (v) => setState(() => _mealType = v)),
-          ),
+          // En mode « choix seul », le repas est déjà fixé par l'appelant.
+          if (!widget.pickOnly)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: _MealTypeSelector(value: _mealType, onChanged: (v) => setState(() => _mealType = v)),
+            ),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -696,7 +755,7 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
         title = 'Aliment personnalisé';
         break;
       default:
-        title = 'Ajouter à un repas';
+        title = widget.pickTitle ?? 'Ajouter à un repas';
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
@@ -834,16 +893,9 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
           separatorBuilder: (_, _) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             final item = _frequent[index];
-            final kcal = item.isRecipe
-                ? (item.caloriesPerServing == null ? null : item.caloriesPerServing! * item.lastQuantity)
-                : (item.caloriesPer100g == null
-                    ? null
-                    : (Portion.toGrams(Session.instance.portions, item.lastQuantity, item.lastUnit) ?? item.lastQuantity) /
-                        100 *
-                        item.caloriesPer100g!);
             return _FrequentRow(
               item: item,
-              caloriesPreview: kcal,
+              caloriesPreview: _frequentKcal(item),
               enabled: !_submitting,
               onAdd: () => _submitFrequent(item),
               onPick: () async {
@@ -1069,7 +1121,7 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
         _stickyCta(
           label: stock != null
               ? (_decrementStock && stock.foodId == null ? 'Retirer du stock' : 'Consommer')
-              : 'Ajouter ${AppStrings.mealTypeDative(_mealType)}',
+              : _addLabel,
           onPressed: _submitPicker,
         ),
       ],
@@ -1166,10 +1218,12 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
             ],
           ),
         ),
-        _stickyCta(label: 'Ajouter ${AppStrings.mealTypeDative(_mealType)}', onPressed: _submitCustom),
+        _stickyCta(label: _addLabel, onPressed: _submitCustom),
       ],
     );
   }
+
+  String get _addLabel => widget.pickOnly ? 'Ajouter à la liste' : 'Ajouter ${AppStrings.mealTypeDative(_mealType)}';
 
   Widget _macroField(TextEditingController controller, String label, String? error) {
     return TextField(

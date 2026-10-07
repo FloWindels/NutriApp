@@ -8,6 +8,7 @@ import '../navigation/app_sections.dart';
 import '../theme/app_theme.dart';
 import '../widgets/add_to_meal_sheet.dart';
 import '../widgets/notification_bell.dart';
+import '../widgets/repere_visite.dart';
 import 'dashboard_screen.dart';
 import 'diet_screen.dart';
 import 'family_screen.dart';
@@ -15,6 +16,8 @@ import 'food_search_screen.dart';
 import 'meals_screen.dart';
 import 'menu_screen.dart';
 import 'notifications_screen.dart';
+import 'onboarding/accueil.dart';
+import '../services/mise_a_jour.dart';
 import 'planner_screen.dart';
 import 'profile_screen.dart';
 import 'recipes_screen.dart';
@@ -44,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late int _tab;
   String? _plusSlug;
   bool _bannerDismissed = false;
+  // Change après le questionnaire de bienvenue : l'accueil se recharge avec le nouveau profil.
+  int _versionAccueil = 0;
 
   @override
   void initState() {
@@ -54,11 +59,27 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationBell.refresh();
       Session.instance.loadPortions();
+      // Première connexion : questionnaire de bienvenue puis visite guidée (une fois par compte).
+      if (mounted) {
+        Accueil.lancer(
+          context,
+          onProfilComplete: () {
+            if (!mounted) return;
+            setState(() => _versionAccueil++);
+            navigate('dashboard');
+          },
+          // La visite guidée ouvre chaque écran par la navigation de l'app, sans empiler de pages.
+          naviguer: navigate,
+        );
+        // Nouvelle version de l'app publiée sur le serveur ? Proposée une fois par lancement.
+        MiseAJour.verifier(context);
+      }
     });
   }
 
   /// Quick-action navigation used by children (`onNavigate(slug)`).
   void navigate(String slug) {
+    if (!mounted) return; // la visite guidée peut finir après la déconnexion
     final tabIndex = AppSections.tabIndexFor(slug);
     setState(() {
       if (tabIndex != null) {
@@ -168,7 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.arrow_back_rounded),
                 )
               : null,
-          title: Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          // Repli de la visite guidée quand l'écran n'a pas (encore) son repère.
+          title: RepereVisite(id: Reperes.barre, child: Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis)),
           actions: [
             NotificationBell(onPressed: _openNotifications),
             const SizedBox(width: 4),
@@ -185,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: IndexedStack(
                 index: _tab,
                 children: [
-                  DashboardScreen(onNavigate: navigate),
+                  DashboardScreen(key: ValueKey(_versionAccueil), onNavigate: navigate),
                   MealsScreen(onNavigate: navigate),
                   const StockScreen(),
                   SportScreen(onNavigate: navigate),
@@ -196,10 +218,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         floatingActionButton: _showFab
-            ? FloatingActionButton(
-                tooltip: 'Ajouter à un repas',
-                onPressed: _openAddToMeal,
-                child: const Icon(Icons.add_rounded),
+            ? RepereVisite(
+                id: Reperes.accueilAjouter,
+                child: FloatingActionButton(
+                  tooltip: 'Ajouter à un repas',
+                  onPressed: _openAddToMeal,
+                  child: const Icon(Icons.add_rounded),
+                ),
               )
             : null,
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

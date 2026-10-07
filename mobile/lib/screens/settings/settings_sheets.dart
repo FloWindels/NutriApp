@@ -40,15 +40,27 @@ class AccountEditSheet extends StatefulWidget {
 class _AccountEditSheetState extends State<AccountEditSheet> {
   late final TextEditingController _name = TextEditingController(text: widget.initialName);
   late final TextEditingController _email = TextEditingController(text: widget.initialEmail);
+  final TextEditingController _currentPassword = TextEditingController();
   bool _busy = false;
   String? _error;
   String? _nameError;
   String? _emailError;
+  String? _currentPasswordError;
+
+  /// Changer d'adresse exige le mot de passe actuel (le nom seul, non).
+  bool get _emailChanged => _email.text.trim().toLowerCase() != widget.initialEmail.trim().toLowerCase();
+
+  @override
+  void initState() {
+    super.initState();
+    _email.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
     _name.dispose();
     _email.dispose();
+    _currentPassword.dispose();
     super.dispose();
   }
 
@@ -58,15 +70,21 @@ class _AccountEditSheetState extends State<AccountEditSheet> {
     setState(() {
       _nameError = name.isEmpty ? 'Indique ton nom.' : null;
       _emailError = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email) ? null : 'Adresse email invalide';
+      _currentPasswordError =
+          _emailChanged && _currentPassword.text.isEmpty ? 'Requis pour changer d’adresse email.' : null;
     });
-    if (_nameError != null || _emailError != null) return;
+    if (_nameError != null || _emailError != null || _currentPasswordError != null) return;
 
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await AuthService().updateAccount(name: name, email: email);
+      await AuthService().updateAccount(
+        name: name,
+        email: email,
+        currentPassword: _emailChanged ? _currentPassword.text : null,
+      );
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } on ApiException catch (e) {
@@ -76,6 +94,7 @@ class _AccountEditSheetState extends State<AccountEditSheet> {
         _error = e.message;
         _nameError = e.fieldError('name');
         _emailError = e.fieldError('email');
+        _currentPasswordError = e.fieldError('current_password');
       });
     }
   }
@@ -108,6 +127,20 @@ class _AccountEditSheetState extends State<AccountEditSheet> {
             decoration: InputDecoration(labelText: 'Email', errorText: _emailError),
             onSubmitted: (_) => _submit(),
           ),
+          if (_emailChanged) ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: _currentPassword,
+              obscureText: true,
+              autofillHints: const [AutofillHints.password],
+              decoration: InputDecoration(
+                labelText: 'Mot de passe actuel',
+                helperText: 'Requis pour changer d’adresse email.',
+                errorText: _currentPasswordError,
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+          ],
           const SizedBox(height: 18),
           FilledButton(
             onPressed: _busy ? null : _submit,
@@ -161,7 +194,7 @@ class _PasswordChangeSheetState extends State<PasswordChangeSheet> {
   Future<void> _submit() async {
     setState(() {
       _currentError = _current.text.isEmpty ? 'Indique ton mot de passe actuel.' : null;
-      _passwordError = _password.text.length < 8 ? 'Utilise au moins 8 caractères.' : null;
+      _passwordError = _password.text.length < 10 ? 'Utilise au moins 10 caractères.' : null;
       _confirmationError = _confirmation.text == _password.text ? null : 'Les deux mots de passe ne sont pas identiques.';
     });
     if (_currentError != null || _passwordError != null || _confirmationError != null) return;

@@ -20,6 +20,7 @@ import '../widgets/macro_pill.dart';
 import '../widgets/recipe_tile.dart';
 import '../widgets/section_header.dart';
 import '../widgets/status_banner.dart';
+import '../widgets/repere_visite.dart';
 import 'recipes/recipe_editor_sheet.dart';
 
 /// Visibility filter of the list (§16.4).
@@ -376,12 +377,15 @@ class _RecipesScreenState extends State<RecipesScreen> {
         Positioned(
           right: 16,
           bottom: 16,
-          child: FloatingActionButton.extended(
-            heroTag: 'recipes-add-fab',
-            onPressed: _create,
-            tooltip: 'Créer une recette',
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Nouvelle recette'),
+          child: RepereVisite(
+            id: Reperes.recettesNouvelle,
+            child: FloatingActionButton.extended(
+              heroTag: 'recipes-add-fab',
+              onPressed: _create,
+              tooltip: 'Créer une recette',
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Nouvelle recette'),
+            ),
           ),
         ),
       ],
