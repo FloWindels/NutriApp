@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\FoodController;
+use App\Http\Controllers\Api\RechercheNutritionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -18,3 +19,8 @@ Route::get('/foods/favorites', [FoodController::class, 'favorites']);
 Route::get('/foods/{food}', [FoodController::class, 'show'])->whereNumber('food');
 Route::post('/foods/{food}/favorite', [FoodController::class, 'favorite'])->whereNumber('food');
 Route::delete('/foods/{food}/favorite', [FoodController::class, 'unfavorite'])->whereNumber('food');
+
+// Aliment introuvable : valeurs nutritionnelles cherchées sur Internet et lues par l'IA.
+// Proposition seulement, rien n'est enregistré. Réservé à l'offre qui inclut l'IA.
+Route::post('/foods/recherche-en-ligne', RechercheNutritionController::class)
+    ->middleware(['offre:ia', 'throttle:vision']);

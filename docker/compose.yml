@@ -25,6 +25,8 @@ x-backend-env: &backend-env
   LLM_PROVIDER: ollama
   OLLAMA_ENABLED: "true"
   OLLAMA_BASE_URL: http://ollama:11434
+  # Recherche web (valeurs nutritionnelles des aliments introuvables, recettes « avec Internet »).
+  WEB_SEARCH_URL: http://searxng:8080
 
 x-hardening: &hardening
   security_opt:
@@ -145,6 +147,18 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  # Moteur de recherche auto-hébergé. Non publié : seule l'API l'interroge.
+  searxng:
+    <<: *hardening
+    image: searxng/searxng:latest
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?SEARXNG_SECRET manquant dans docker/.env}
+      SEARXNG_BASE_URL: http://searxng:8080/
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    networks: [app]
     restart: unless-stopped
 
   # Télécharge le modèle au premier démarrage, puis le charge pour que la première personne

@@ -1,11 +1,12 @@
 "use client";
 
 import { PlatePhotoPanel, type AjoutPhotoPickerProps } from "@/components/ui/plate-photo-panel";
+import { AvisValeursEnLigne, RechercheEnLigne } from "@/components/foods/recherche-en-ligne";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiDelete, apiGet, apiPost, apiPut, getErrorMessage, isApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { formatGrams, formatKcal, formatNumber, formatQty, parseDecimal, todayIso } from "@/lib/format";
+import { formatDecimalInput, formatGrams, formatKcal, formatNumber, formatQty, parseDecimal, todayIso } from "@/lib/format";
 import { messages } from "@/lib/messages";
 import { MEAL_MUTATION_KEYS, queryKeys } from "@/lib/query-keys";
 import type {
@@ -20,6 +21,7 @@ import type {
   MealType,
   PaginatedEnvelope,
   Recipe,
+  RechercheEnLigneResultat,
   StockConsumeResponse,
   StockItem,
   DataEnvelope,
@@ -72,7 +74,14 @@ type Selection =
   | { kind: "recipe"; recipe: Recipe }
   | { kind: "stock"; item: StockItem }
   | { kind: "custom" }
-  | { kind: "create-food"; barcode: string | null };
+  | ({ kind: "create-food" } & CreateFoodInit);
+
+/** Point de départ du formulaire de création : code-barres, nom tapé, valeurs lues en ligne. */
+type CreateFoodInit = {
+  barcode: string | null;
+  nom?: string;
+  enLigne?: RechercheEnLigneResultat | null;
+};
 
 const MEAL_ORDER: MealType[] = ["petit_dejeuner", "dejeuner", "diner", "collation"];
 const SEARCH_DEBOUNCE_MS = 350;
@@ -343,7 +352,7 @@ export function AddToMealDialog({
               addMutation.mutate({ recipe_id: item.id, quantity: item.last_quantity, unit: "portion" });
             }
           }}
-          onCreateFood={(barcode) => select({ kind: "create-food", barcode })}
+          onCreateFood={(init) => select({ kind: "create-food", ...init })}
           busy={busy}
           customPanel={
             selection?.kind === "custom" ? (
@@ -357,6 +366,8 @@ export function AddToMealDialog({
             selection?.kind === "create-food" ? (
               <CreateFoodForm
                 barcode={selection.barcode}
+                nom={selection.nom}
+                enLigne={selection.enLigne}
                 busy={busy}
                 onCreated={(food) => select({ kind: "food", food })}
                 onCancel={() => setSelection(null)}
@@ -437,7 +448,7 @@ type SearchStepProps = {
   onPickFood: (food: Food) => void;
   onPickRecipe: (recipe: Recipe) => void;
   onPickFrequent: (item: FrequentItem) => void;
-  onCreateFood: (barcode: string | null) => void;
+  onCreateFood: (init: CreateFoodInit) => void;
   busy: boolean;
   customPanel: ReactNode;
   createFoodPanel: ReactNode;
@@ -526,7 +537,7 @@ function FoodSearch({
   onQuery: (q: string) => void;
   onPick: (food: Food) => void;
   onPickFrequent: (item: FrequentItem) => void;
-  onCreateFood: (barcode: string | null) => void;
+  onCreateFood: (init: CreateFoodInit) => void;
   busy: boolean;
 }) {
   const debounced = useDebounced(query.trim(), SEARCH_DEBOUNCE_MS);
@@ -536,6 +547,11 @@ function FoodSearch({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [barcodeMiss, setBarcodeMiss] = useState<string | null>(null);
   const isBarcode = BARCODE_RE.test(debounced);
+
+  /** Ouvre la création en reprenant ce qui a été tapé (et, s'il y en a, les valeurs lues en ligne). */
+  function creer(enLigne: RechercheEnLigneResultat | null = null) {
+    onCreateFood(isBarcode ? { barcode: debounced } : { barcode: null, nom: debounced, enLigne });
+  }
 
   useEffect(() => {
     const term = debounced;
@@ -604,10 +620,16 @@ function FoodSearch({
       ) : searchError ? (
         <Banner tone="error">{searchError}</Banner>
       ) : results.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500">
+        <div className="space-y-3 rounded-2xl border border-dashed border-slate-200 p-4 text-center text-sm text-slate-500">
           <p>{barcodeMiss ? messages.foodNotFound : messages.noResult}</p>
-          <Button variant="secondary" size="sm" className="mt-3" onClick={() => onCreateFood(isBarcode ? debounced : null)}>
-            {messages.createFood}
+          {isBarcode ? null : (
+            <>
+              <p className="text-xs">Un agent peut chercher sa fiche ou une recette type pour en tirer les calories et les macros.</p>
+              <RechercheEnLigne nom={debounced} onFood={onPick} onProposition={(enLigne) => creer(enLigne)} />
+            </>
+          )}
+          <Button variant={isBarcode ? "secondary" : "ghost"} size="sm" onClick={() => creer()}>
+            {isBarcode ? messages.createFood : "Saisir les valeurs moi-même"}
           </Button>
         </div>
       ) : (
@@ -617,10 +639,15 @@ function FoodSearch({
               <FoodRow food={food} onClick={() => onPick(food)} />
             </li>
           ))}
+          {isBarcode ? null : (
+            <li className="pt-1">
+              <RechercheEnLigne variante="lien" nom={debounced} onFood={onPick} onProposition={(enLigne) => creer(enLigne)} />
+            </li>
+          )}
           <li className="pt-1">
             <button
               type="button"
-              onClick={() => onCreateFood(isBarcode ? debounced : null)}
+              onClick={() => creer()}
               className="w-full rounded-2xl border border-dashed border-slate-200 px-4 py-2 text-sm text-slate-500 transition hover:bg-slate-50"
             >
               Pas le bon produit ? {messages.createFood}
@@ -896,6 +923,8 @@ function PhotoAjoutPicker({ onAjouter, onAnnuler }: AjoutPhotoPickerProps) {
     return (
       <CreateFoodForm
         barcode={selection.barcode}
+        nom={selection.nom}
+        enLigne={selection.enLigne}
         busy={false}
         onCreated={(food) => select({ kind: "food", food })}
         onCancel={() => setSelection(null)}
@@ -939,7 +968,7 @@ function PhotoAjoutPicker({ onAjouter, onAnnuler }: AjoutPhotoPickerProps) {
           setLocalError(null);
           frequentMutation.mutate(item);
         }}
-        onCreateFood={(barcode) => setSelection({ kind: "create-food", barcode })}
+        onCreateFood={(init) => setSelection({ kind: "create-food", ...init })}
         busy={frequentMutation.isPending}
       />
       {localError ? <Banner tone="error">{localError}</Banner> : null}
@@ -1029,21 +1058,70 @@ function CustomItemForm({ busy, onSubmit }: { busy: boolean; onSubmit: (input: M
 
 /* ------------------------------ create food ------------------------------ */
 
-type FoodDraft = { name: string; brand: string; calories: string; proteins: string; carbs: string; fat: string };
+type FoodDraft = {
+  name: string;
+  brand: string;
+  calories: string;
+  proteins: string;
+  carbs: string;
+  fat: string;
+  fiber: string;
+  sugar: string;
+  salt: string;
+  serving: string;
+};
+
+const DRAFT_VIDE: FoodDraft = {
+  name: "",
+  brand: "",
+  calories: "",
+  proteins: "",
+  carbs: "",
+  fat: "",
+  fiber: "",
+  sugar: "",
+  salt: "",
+  serving: "",
+};
+
+/** Préremplit le brouillon avec les valeurs lues en ligne ; les champs restent modifiables. */
+function draftDepuis(enLigne: RechercheEnLigneResultat | null | undefined, nom: string): FoodDraft {
+  const proposition = enLigne?.proposition;
+  if (!proposition) return { ...DRAFT_VIDE, name: nom };
+  return {
+    name: proposition.nom || nom,
+    brand: proposition.marque ?? "",
+    calories: formatDecimalInput(proposition.calories),
+    proteins: formatDecimalInput(proposition.proteins),
+    carbs: formatDecimalInput(proposition.carbs),
+    fat: formatDecimalInput(proposition.fat),
+    fiber: formatDecimalInput(proposition.fiber),
+    sugar: formatDecimalInput(proposition.sugar),
+    salt: formatDecimalInput(proposition.salt),
+    serving: formatDecimalInput(proposition.serving_size_g),
+  };
+}
 
 function CreateFoodForm({
   barcode,
+  nom = "",
+  enLigne: enLigneInitial = null,
   busy,
   onCreated,
   onCancel,
 }: {
   barcode: string | null;
+  /** Nom tapé dans la recherche, repris tel quel. */
+  nom?: string;
+  /** Valeurs déjà lues sur Internet depuis la recherche. */
+  enLigne?: RechercheEnLigneResultat | null;
   busy: boolean;
   onCreated: (food: Food) => void;
   onCancel: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<FoodDraft>({ name: "", brand: "", calories: "", proteins: "", carbs: "", fat: "" });
+  const [draft, setDraft] = useState<FoodDraft>(() => draftDepuis(enLigneInitial, nom));
+  const [enLigne, setEnLigne] = useState<RechercheEnLigneResultat | null>(enLigneInitial);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const createMutation = useMutation({
@@ -1074,6 +1152,10 @@ function CreateFoodForm({
       proteins: parseDecimal(draft.proteins) ?? 0,
       carbs: parseDecimal(draft.carbs) ?? 0,
       fat: parseDecimal(draft.fat) ?? 0,
+      fiber: parseDecimal(draft.fiber),
+      sugar: parseDecimal(draft.sugar),
+      salt: parseDecimal(draft.salt),
+      serving_size_g: parseDecimal(draft.serving),
       source_type: "manual",
     });
   }
@@ -1092,16 +1174,40 @@ function CreateFoodForm({
         <p className="text-sm font-semibold text-slate-900">{messages.createFood}</p>
         {barcode ? <Pill tone="slate">EAN {barcode}</Pill> : null}
       </div>
+      {enLigne ? <AvisValeursEnLigne resultat={enLigne} /> : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Nom" placeholder="Ex. : yaourt nature" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} autoFocus required />
         <Field label="Marque" placeholder="Facultatif" value={draft.brand} onChange={(event) => setDraft({ ...draft, brand: event.target.value })} />
       </div>
+      {enLigne ? null : (
+        <RechercheEnLigne
+          nom={draft.name}
+          marque={draft.brand}
+          disabled={pending}
+          onFood={onCreated}
+          onProposition={(resultat) => {
+            setEnLigne(resultat);
+            setDraft(draftDepuis(resultat, draft.name));
+            setLocalError(null);
+          }}
+        />
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label="kcal / 100 g" inputMode="decimal" value={draft.calories} onChange={(event) => setDraft({ ...draft, calories: event.target.value })} required />
         <Field label="Protéines (g)" inputMode="decimal" value={draft.proteins} onChange={(event) => setDraft({ ...draft, proteins: event.target.value })} />
         <Field label="Glucides (g)" inputMode="decimal" value={draft.carbs} onChange={(event) => setDraft({ ...draft, carbs: event.target.value })} />
         <Field label="Lipides (g)" inputMode="decimal" value={draft.fat} onChange={(event) => setDraft({ ...draft, fat: event.target.value })} />
       </div>
+      {enLigne ? (
+        // Les valeurs secondaires ne s'affichent que si elles ont été trouvées : la saisie à la
+        // main reste courte, et rien de ce qui a été lu en ligne n'est enregistré sans être vu.
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Field label="Fibres (g)" inputMode="decimal" value={draft.fiber} onChange={(event) => setDraft({ ...draft, fiber: event.target.value })} />
+          <Field label="Sucres (g)" inputMode="decimal" value={draft.sugar} onChange={(event) => setDraft({ ...draft, sugar: event.target.value })} />
+          <Field label="Sel (g)" inputMode="decimal" value={draft.salt} onChange={(event) => setDraft({ ...draft, salt: event.target.value })} />
+          <Field label="Portion (g)" inputMode="decimal" value={draft.serving} onChange={(event) => setDraft({ ...draft, serving: event.target.value })} />
+        </div>
+      ) : null}
       {localError ? <Banner tone="error">{localError}</Banner> : null}
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel} disabled={pending}>

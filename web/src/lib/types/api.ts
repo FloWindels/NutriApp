@@ -505,6 +505,45 @@ export type FoodInput = {
   source_type?: FoodSourceType;
 };
 
+/** `POST /foods/recherche-en-ligne` : un produit absent de la base, cherché ailleurs. */
+export type RechercheEnLigneInput = {
+  nom: string;
+  marque: string | null;
+};
+
+export type RechercheEnLigneSource = "catalogue" | "open_food_facts" | "internet" | "indisponible";
+
+/** Valeurs lues sur Internet : rien n'est enregistré, l'utilisateur les relit d'abord. */
+export type PropositionEnLigne = {
+  nom: string;
+  marque: string | null;
+  per_unit: "100g";
+  calories: number;
+  proteins: number;
+  carbs: number;
+  fat: number;
+  fiber: number | null;
+  sugar: number | null;
+  salt: number | null;
+  serving_size_g: number | null;
+  nature: "produit" | "plat";
+  /** 0 à 1. */
+  confiance: number;
+  estimation: boolean;
+};
+
+export type SourceEnLigne = { titre: string; url: string };
+
+export type RechercheEnLigneResultat = {
+  source: RechercheEnLigneSource;
+  /** Catalogue ou Open Food Facts : fiche déjà enregistrée, utilisable telle quelle. */
+  food: Food | null;
+  proposition: PropositionEnLigne | null;
+  sources: SourceEnLigne[];
+  avertissements: string[];
+  message: string | null;
+};
+
 export type FoodSearchParams = {
   q?: string;
   barcode?: string;

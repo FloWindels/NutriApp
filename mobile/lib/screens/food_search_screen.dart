@@ -16,6 +16,7 @@ import '../widgets/error_state.dart';
 import '../widgets/food_tile.dart';
 import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
+import '../widgets/recherche_en_ligne.dart';
 import '../widgets/stat_tile.dart';
 import '../widgets/status_banner.dart';
 import '../widgets/repere_visite.dart';
@@ -301,8 +302,14 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
     _snack('${food.name} ajouté au stock (${item.stockName}).');
   }
 
-  Future<void> _openForm({Food? food, String? barcode, String? name}) async {
-    final result = await FoodFormSheet.show(context, food: food, initialBarcode: barcode, initialName: name);
+  Future<void> _openForm({Food? food, String? barcode, String? name, bool rechercherEnLigne = false}) async {
+    final result = await FoodFormSheet.show(
+      context,
+      food: food,
+      initialBarcode: barcode,
+      initialName: name,
+      rechercherEnLigne: rechercherEnLigne,
+    );
     if (result == null || !mounted) return;
     setState(() {
       _selected = result.food;
@@ -438,15 +445,22 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
             EmptyState(
               icon: Icons.no_food_outlined,
               title: 'Aucun résultat',
-              message: 'Rien ne correspond à « $_lastQuery ». Tu peux créer cet aliment toi-même.',
+              message: _isBarcode(_lastQuery)
+                  ? 'Rien ne correspond à « $_lastQuery ». Tu peux créer cet aliment toi-même.'
+                  : 'Rien ne correspond à « $_lastQuery ». Mavi’oh peut chercher ses valeurs sur Internet, ou tu peux le créer toi-même.',
               ctaLabel: 'Créer un aliment',
               onCta: () => _openForm(
                 barcode: _isBarcode(_lastQuery) ? _lastQuery : null,
                 name: _isBarcode(_lastQuery) ? null : _lastQuery,
               ),
               tone: MaviohColors.emerald,
-            )
-          else ...[
+            ),
+          // Produit inconnu partout : un agent peut chercher ses valeurs sur Internet.
+          if (_hasSearched && _results.isEmpty && !_isBarcode(_lastQuery)) ...[
+            const SizedBox(height: 12),
+            _rechercheEnLigneBouton(),
+          ],
+          if (_hasSearched && _results.isNotEmpty) ...[
             if (_meta.offQueried)
               const StatusBanner.info(
                 'Résultats complétés par Open Food Facts',
@@ -488,9 +502,20 @@ class _FoodSearchScreenState extends State<FoodSearchScreen> {
               label: const Text('Aliment manquant ? Créer un aliment'),
               style: TextButton.styleFrom(minimumSize: const Size.fromHeight(48)),
             ),
+            if (!_isBarcode(_lastQuery)) ...[
+              const SizedBox(height: 8),
+              _rechercheEnLigneBouton(),
+            ],
           ],
         ],
       ),
+    );
+  }
+
+  /// Ouvre le formulaire de création et y lance la recherche des valeurs sur Internet.
+  Widget _rechercheEnLigneBouton() {
+    return RechercheEnLigneBouton(
+      onPressed: () => _openForm(name: _lastQuery, rechercherEnLigne: true),
     );
   }
 

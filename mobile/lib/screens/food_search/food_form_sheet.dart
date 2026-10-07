@@ -5,9 +5,11 @@ import '../../core/api_client.dart';
 import '../../core/formatters.dart';
 import '../../core/strings.dart';
 import '../../models/food.dart';
+import '../../models/food_lookup.dart';
 import '../../services/food_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/barcode_scanner_sheet.dart';
+import '../../widgets/recherche_en_ligne.dart';
 import '../../widgets/status_banner.dart';
 
 /// Result of the create/edit form.
@@ -24,11 +26,14 @@ class FoodFormResult {
 /// Values are per 100 g (or 100 ml). The sheet stays open on failure and maps
 /// 422 field errors to the matching inputs.
 class FoodFormSheet extends StatefulWidget {
-  const FoodFormSheet._({this.food, this.initialBarcode, this.initialName});
+  const FoodFormSheet._({this.food, this.initialBarcode, this.initialName, this.rechercherEnLigne = false});
 
   final Food? food;
   final String? initialBarcode;
   final String? initialName;
+
+  /// Lance tout de suite la recherche des valeurs sur Internet à partir de [initialName].
+  final bool rechercherEnLigne;
 
   /// Opens the sheet. [food] non-null switches to edit mode (`PUT /foods/{id}`).
   static Future<FoodFormResult?> show(
@@ -36,13 +41,19 @@ class FoodFormSheet extends StatefulWidget {
     Food? food,
     String? initialBarcode,
     String? initialName,
+    bool rechercherEnLigne = false,
   }) {
     return showModalBottomSheet<FoodFormResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       useRootNavigator: true,
-      builder: (_) => FoodFormSheet._(food: food, initialBarcode: initialBarcode, initialName: initialName),
+      builder: (_) => FoodFormSheet._(
+        food: food,
+        initialBarcode: initialBarcode,
+        initialName: initialName,
+        rechercherEnLigne: rechercherEnLigne && food == null,
+      ),
     );
   }
 
@@ -71,6 +82,12 @@ class _FoodFormSheetState extends State<FoodFormSheet> {
   String? _error;
   Map<String, String> _fieldErrors = const {};
 
+  // Recherche des valeurs sur Internet
+  bool _lookingUp = false;
+  FoodLookupResult? _lookup;
+  bool _lookupLocked = false;
+  String? _lookupInfo;
+
   bool get _isEdit => widget.food != null;
 
   @override
@@ -91,6 +108,74 @@ class _FoodFormSheetState extends State<FoodFormSheet> {
     _salt = TextEditingController(text: fmt(food?.salt));
     _servingSize = TextEditingController(text: fmt(food?.servingSizeG));
     _category = TextEditingController(text: food?.category ?? '');
+    if (widget.rechercherEnLigne) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _rechercherEnLigne();
+      });
+    }
+  }
+
+  /// Un aliment déjà connu (catalogue, Open Food Facts) ferme le formulaire et revient choisi ;
+  /// des valeurs trouvées sur Internet pré-remplissent le formulaire, à vérifier avant d'enregistrer.
+  Future<void> _rechercherEnLigne() async {
+    final nom = _name.text.trim();
+    if (nom.length < 2) {
+      setState(() => _fieldErrors = {..._fieldErrors, 'name': 'Indique au moins 2 caractères pour lancer la recherche.'});
+      return;
+    }
+    if (_lookupLocked || RechercheEnLigne.verrouillee) {
+      setState(() => _lookupLocked = true);
+      return;
+    }
+
+    setState(() {
+      _lookingUp = true;
+      _lookup = null;
+      _lookupInfo = null;
+      _error = null;
+    });
+
+    try {
+      final result = await _service.rechercherEnLigne(nom, marque: _brand.text);
+      if (!mounted) return;
+
+      final food = result.food;
+      if (food != null) {
+        Navigator.of(context).pop(FoodFormResult(food: food, message: '${result.trouveDans}.', alreadyExisted: true));
+        return;
+      }
+
+      final proposition = result.proposition;
+      setState(() {
+        _lookingUp = false;
+        if (proposition == null) {
+          _lookupInfo = result.message ?? RechercheEnLigne.indisponible;
+          return;
+        }
+        _lookup = result;
+        _fieldErrors = const {};
+        if (proposition.nom.isNotEmpty) _name.text = proposition.nom;
+        if (proposition.marque != null) _brand.text = proposition.marque!;
+        _calories.text = RechercheEnLigne.champ(proposition.calories);
+        _proteins.text = RechercheEnLigne.champ(proposition.proteins);
+        _carbs.text = RechercheEnLigne.champ(proposition.carbs);
+        _fat.text = RechercheEnLigne.champ(proposition.fat);
+        _fiber.text = RechercheEnLigne.champ(proposition.fiber);
+        _sugar.text = RechercheEnLigne.champ(proposition.sugar);
+        _salt.text = RechercheEnLigne.champ(proposition.salt);
+        _servingSize.text = RechercheEnLigne.champ(proposition.servingSizeG);
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _lookingUp = false;
+        if (e.isOffreRequise) {
+          _lookupLocked = true;
+        } else {
+          _error = e.message;
+        }
+      });
+    }
   }
 
   @override
@@ -266,6 +351,23 @@ class _FoodFormSheetState extends State<FoodFormSheet> {
                 ),
                 const SizedBox(height: 12),
                 _field(controller: _name, label: 'Nom *', errorKey: 'name', textCapitalization: TextCapitalization.sentences),
+                if (!_isEdit) ...[
+                  const SizedBox(height: 12),
+                  if (_lookingUp)
+                    const RechercheEnLigneProgression()
+                  else if (_lookup != null)
+                    PropositionEnLigneCarte(resultat: _lookup!)
+                  else ...[
+                    if (_lookupInfo != null) ...[
+                      StatusBanner.info(_lookupInfo!),
+                      const SizedBox(height: 12),
+                    ],
+                    RechercheEnLigneBouton(
+                      verrouillee: _lookupLocked,
+                      onPressed: _saving ? null : _rechercherEnLigne,
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 12),
                 _field(controller: _brand, label: 'Marque', errorKey: 'brand', textCapitalization: TextCapitalization.sentences),
                 const SizedBox(height: 12),
@@ -332,7 +434,7 @@ class _FoodFormSheetState extends State<FoodFormSheet> {
                 ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
-                  onPressed: _saving ? null : _submit,
+                  onPressed: _saving || _lookingUp ? null : _submit,
                   icon: _saving
                       ? const SizedBox(
                           width: 18,

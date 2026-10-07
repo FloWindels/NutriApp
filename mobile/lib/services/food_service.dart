@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../core/api_client.dart';
 import '../models/food.dart';
+import '../models/food_lookup.dart';
 import '../models/portion.dart';
 
 /// Result of `POST /foods` (may be an existing food, HTTP 200).
@@ -79,6 +80,21 @@ class FoodService {
       alreadyExisted: message != null && message.contains('déjà présent'),
       message: message,
     );
+  }
+
+  /// `POST /foods/recherche-en-ligne` — un agent cherche le produit (catalogue, Open Food Facts,
+  /// puis Internet). Rien n'est enregistré quand la réponse est une simple proposition.
+  ///
+  /// La lecture des pages et l'analyse par le modèle prennent jusqu'à une minute, d'où le délai
+  /// de lecture allongé.
+  Future<FoodLookupResult> rechercherEnLigne(String nom, {String? marque}) async {
+    final brand = marque?.trim();
+    final json = await _api.postJson(
+      '/foods/recherche-en-ligne',
+      body: {'nom': nom.trim(), 'marque': (brand == null || brand.isEmpty) ? null : brand},
+      receiveTimeout: const Duration(seconds: 120),
+    );
+    return FoodLookupResult.fromJson(ApiClient.asMap(json['data']));
   }
 
   /// `PUT /foods/{food}`.

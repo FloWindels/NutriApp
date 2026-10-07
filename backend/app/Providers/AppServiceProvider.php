@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\LlmNutritionClient;
 use App\Contracts\WebSearchClient;
 use App\Contracts\LlmPlannerClient;
 use App\Contracts\LlmPromotionsClient;
@@ -23,6 +24,9 @@ use App\Services\Llm\OllamaPromotionsClient;
 use App\Services\Llm\OllamaRecipeClient;
 use App\Services\Llm\OllamaVisionClient;
 use App\Services\Llm\OllamaWorkoutClient;
+use App\Services\Llm\AnthropicNutritionClient;
+use App\Services\Llm\NullNutritionClient;
+use App\Services\Llm\OllamaNutritionClient;
 use App\Services\Search\NullWebSearchClient;
 use App\Services\Search\SearxWebSearchClient;
 use App\Support\LlmProvider;
@@ -80,6 +84,16 @@ class AppServiceProvider extends ServiceProvider
                 LlmProvider::ANTHROPIC => $app->make(AnthropicPromotionsClient::class),
                 LlmProvider::OLLAMA => $app->make(OllamaPromotionsClient::class),
                 default => $app->make(NullPromotionsClient::class),
+            };
+        });
+
+        // Lire des valeurs nutritionnelles dans des pages web : de la lecture de texte, même
+        // sélecteur que les promotions.
+        $this->app->bind(LlmNutritionClient::class, function ($app) {
+            return match (LlmProvider::current()) {
+                LlmProvider::ANTHROPIC => $app->make(AnthropicNutritionClient::class),
+                LlmProvider::OLLAMA => $app->make(OllamaNutritionClient::class),
+                default => $app->make(NullNutritionClient::class),
             };
         });
 

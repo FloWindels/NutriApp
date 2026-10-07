@@ -1,0 +1,25 @@
+# Mavi'oh — SearXNG, moteur de recherche auto-hébergé, joignable seulement par l'API.
+# Sert à trouver les valeurs nutritionnelles d'un aliment absent du catalogue : seul le nom de
+# l'aliment part vers les moteurs publics, jamais rien de la personne.
+use_default_settings: true
+
+general:
+  instance_name: "Mavi'oh"
+  enable_metrics: false
+
+server:
+  # Remplacé par la variable SEARXNG_SECRET (docker/.env).
+  secret_key: "remplace-par-SEARXNG_SECRET"
+  limiter: false
+  image_proxy: false
+  public_instance: false
+
+search:
+  safe_search: 1
+  default_lang: "fr"
+  formats:
+    - html
+    - json
+
+ui:
+  query_in_title: false

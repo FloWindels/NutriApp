@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { apiPost, apiPut, getErrorMessage, isApiError } from "@/lib/api-client";
-import type { DataEnvelope, Food, FoodInput } from "@/lib/types/api";
+import type { DataEnvelope, Food, FoodInput, RechercheEnLigneResultat } from "@/lib/types/api";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { decimalOptional, numOrNull, textOrNull, toText } from "./form-helpers";
+import { AvisValeursEnLigne, RechercheEnLigne } from "./recherche-en-ligne";
 
 /**
  * Create (`POST /foods`) or edit (`PUT /foods/{id}`) a food.
@@ -68,15 +69,47 @@ export type FoodFormProps = {
   food?: Food | null;
   /** Prefilled barcode when the search term was an EAN with no result. */
   defaultBarcode?: string | null;
+  /** Nom tapé dans la recherche, repris en création. */
+  defaultName?: string | null;
+  /** Valeurs lues sur Internet : elles préremplissent la création, à relire avant d'enregistrer. */
+  enLigne?: RechercheEnLigneResultat | null;
+  /**
+   * La recherche en ligne a trouvé une fiche existante (catalogue, Open Food Facts) : rien à
+   * créer. Sans ce rappel, le bouton « Chercher les valeurs sur Internet » n'apparaît pas.
+   */
+  onFound?: (food: Food) => void;
   /** Compact layout for the mini form inside another dialog. */
   compact?: boolean;
   onSaved: (food: Food, message?: string) => void;
   onCancel?: () => void;
 };
 
-function defaultsFor(food: Food | null | undefined, barcode: string | null | undefined): FormValues {
+/** Les champs remplis par une proposition trouvée en ligne (valeurs pour 100 g). */
+function valeursEnLigne(resultat: RechercheEnLigneResultat): Partial<FormValues> {
+  const proposition = resultat.proposition;
+  if (!proposition) return {};
   return {
-    name: food?.name ?? "",
+    ...(proposition.nom.trim() ? { name: proposition.nom.trim() } : {}),
+    brand: proposition.marque ?? "",
+    calories: toText(proposition.calories),
+    proteins: toText(proposition.proteins),
+    carbs: toText(proposition.carbs),
+    fat: toText(proposition.fat),
+    fiber: toText(proposition.fiber),
+    sugar: toText(proposition.sugar),
+    salt: toText(proposition.salt),
+    serving_size_g: toText(proposition.serving_size_g),
+  };
+}
+
+function defaultsFor(
+  food: Food | null | undefined,
+  barcode: string | null | undefined,
+  name?: string | null,
+  enLigne?: RechercheEnLigneResultat | null,
+): FormValues {
+  const base: FormValues = {
+    name: food?.name ?? name ?? "",
     brand: food?.brand ?? "",
     barcode: food?.barcode ?? barcode ?? "",
     image_url: food?.image_url ?? "",
@@ -91,19 +124,42 @@ function defaultsFor(food: Food | null | undefined, barcode: string | null | und
     serving_label: food?.serving_label ?? "",
     category: food?.category ?? "",
   };
+  return enLigne && !food ? { ...base, ...valeursEnLigne(enLigne) } : base;
 }
 
-export function FoodForm({ mode, food, defaultBarcode, compact = false, onSaved, onCancel }: FoodFormProps) {
+export function FoodForm({
+  mode,
+  food,
+  defaultBarcode,
+  defaultName,
+  enLigne: enLigneInitial = null,
+  onFound,
+  compact = false,
+  onSaved,
+  onCancel,
+}: FoodFormProps) {
   const [formError, setFormError] = useState<string | null>(null);
+  const [enLigne, setEnLigne] = useState<RechercheEnLigneResultat | null>(mode === "create" ? enLigneInitial : null);
   const {
     register,
+    control,
     handleSubmit,
+    getValues,
+    reset,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: defaultsFor(food, defaultBarcode),
+    defaultValues: defaultsFor(food, defaultBarcode, defaultName, mode === "create" ? enLigneInitial : null),
   });
+  const [nomSaisi, marqueSaisie] = useWatch({ control, name: ["name", "brand"] });
+
+  function appliquerEnLigne(resultat: RechercheEnLigneResultat) {
+    setEnLigne(resultat);
+    setFormError(null);
+    // Le code-barres, la catégorie ou l'image déjà saisis sont gardés.
+    reset({ ...getValues(), ...valeursEnLigne(resultat) });
+  }
 
   const onSubmit = handleSubmit(async (values) => {
     setFormError(null);
@@ -150,6 +206,7 @@ export function FoodForm({ mode, food, defaultBarcode, compact = false, onSaved,
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4">
       {formError ? <Banner tone="error">{formError}</Banner> : null}
+      {enLigne ? <AvisValeursEnLigne resultat={enLigne} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
@@ -178,6 +235,16 @@ export function FoodForm({ mode, food, defaultBarcode, compact = false, onSaved,
           {...register("category")}
         />
       </div>
+
+      {mode === "create" && onFound && !enLigne ? (
+        <RechercheEnLigne
+          nom={nomSaisi ?? ""}
+          marque={marqueSaisie ?? ""}
+          disabled={isSubmitting}
+          onFood={onFound}
+          onProposition={appliquerEnLigne}
+        />
+      ) : null}
 
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium text-slate-700">Valeurs pour 100 g (ou 100 ml)</legend>

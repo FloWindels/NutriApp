@@ -5,7 +5,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { apiDelete, apiGet, apiPost, getErrorMessage, isApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { queryKeys } from "@/lib/query-keys";
-import type { DataEnvelope, Food, ListEnvelope, PaginatedEnvelope } from "@/lib/types/api";
+import type { DataEnvelope, Food, ListEnvelope, PaginatedEnvelope, RechercheEnLigneResultat } from "@/lib/types/api";
 import { AddToMealDialog } from "@/components/ui/add-to-meal-dialog";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { FoodCard } from "./food-card";
 import { FoodDetailPanel } from "./food-detail-panel";
 import { FoodForm } from "./food-form";
 import { isBarcode } from "./food-utils";
+import { RechercheEnLigne } from "./recherche-en-ligne";
 import { useDebounced } from "./hooks";
 
 type Tab = "recherche" | "favoris";
@@ -43,6 +44,11 @@ export function FoodSearchPage() {
   const [selected, setSelected] = useState<Food | null>(null);
   const [favoriteOverrides, setFavoriteOverrides] = useState<Record<number, boolean>>({});
   const [createOpen, setCreateOpen] = useState(false);
+  /** Ce qui préremplit la création : nom tapé, et valeurs lues sur Internet le cas échéant. */
+  const [createInit, setCreateInit] = useState<{ nom: string; enLigne: RechercheEnLigneResultat | null }>({
+    nom: "",
+    enLigne: null,
+  });
   const [editOpen, setEditOpen] = useState(false);
   const [mealDialogOpen, setMealDialogOpen] = useState(false);
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
@@ -126,6 +132,17 @@ export function FoodSearchPage() {
     else void searchQuery.refetch();
   }
 
+  function ouvrirCreation(enLigne: RechercheEnLigneResultat | null = null) {
+    setCreateInit({ nom: barcode ? "" : debouncedTerm, enLigne });
+    setCreateOpen(true);
+  }
+
+  /** Fiche trouvée par la recherche en ligne : déjà enregistrée, on l'ouvre comme un résultat. */
+  function handleFound(food: Food) {
+    setCreateOpen(false);
+    setSelected(food);
+  }
+
   function handleSaved(food: Food, message?: string) {
     setCreateOpen(false);
     setEditOpen(false);
@@ -147,7 +164,7 @@ export function FoodSearchPage() {
         title="Recherche d’aliments"
         subtitle="Cherche par nom, par marque ou tape un code-barres. Les produits manquants sont complétés par Open Food Facts côté serveur."
         actions={
-          <Button variant="secondary" onClick={() => setCreateOpen(true)}>
+          <Button variant="secondary" onClick={() => ouvrirCreation()}>
             Créer un aliment
           </Button>
         }
@@ -227,14 +244,34 @@ export function FoodSearchPage() {
             ) : searchEnabled || barcode ? (
               <EmptyState
                 title={barcode ? "Produit introuvable, même sur Open Food Facts." : "Aucun aliment ne correspond."}
-                message="Tu peux créer cet aliment toi-même : le code-barres est facultatif."
-                action={<Button onClick={() => setCreateOpen(true)}>Créer un aliment</Button>}
+                message={
+                  barcode
+                    ? "Tu peux créer cet aliment toi-même : le code-barres est facultatif."
+                    : "Un agent peut chercher sa fiche ou une recette type sur Internet pour en tirer les calories et les macros. Tu peux aussi le créer toi-même."
+                }
+                action={
+                  <div className="flex w-full max-w-sm flex-col items-center gap-3">
+                    {barcode ? null : (
+                      <RechercheEnLigne
+                        key={debouncedTerm}
+                        nom={debouncedTerm}
+                        size="md"
+                        className="w-full"
+                        onFood={handleFound}
+                        onProposition={(enLigne) => ouvrirCreation(enLigne)}
+                      />
+                    )}
+                    <Button variant={barcode ? "primary" : "ghost"} onClick={() => ouvrirCreation()}>
+                      Créer un aliment
+                    </Button>
+                  </div>
+                }
               />
             ) : (
               <EmptyState
                 title="Cherche un aliment"
                 message="Tape un nom, une marque ou un code-barres pour voir les calories et les macros pour 100 g."
-                action={<Button onClick={() => setCreateOpen(true)}>Créer un aliment</Button>}
+                action={<Button onClick={() => ouvrirCreation()}>Créer un aliment</Button>}
               />
             )
           ) : (
@@ -252,6 +289,16 @@ export function FoodSearchPage() {
                   />
                 ))}
               </div>
+              {tab === "recherche" && !barcode && !searchQuery.hasNextPage ? (
+                <RechercheEnLigne
+                  key={debouncedTerm}
+                  variante="lien"
+                  nom={debouncedTerm}
+                  className="mx-auto mt-4 max-w-md"
+                  onFood={handleFound}
+                  onProposition={(enLigne) => ouvrirCreation(enLigne)}
+                />
+              ) : null}
               {tab === "recherche" && !barcode && searchQuery.hasNextPage ? (
                 <div className="mt-4 flex justify-center">
                   <Button
@@ -292,8 +339,12 @@ export function FoodSearchPage() {
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Créer un aliment" size="lg">
         <FoodForm
+          key={`${createInit.nom}-${createInit.enLigne ? "en-ligne" : "manuel"}`}
           mode="create"
           defaultBarcode={barcode}
+          defaultName={createInit.nom}
+          enLigne={createInit.enLigne}
+          onFound={handleFound}
           onSaved={handleSaved}
           onCancel={() => setCreateOpen(false)}
         />

@@ -154,7 +154,7 @@ export default function ConfidentialitePage() {
             ],
             [
               "Moteur de recherche",
-              "Uniquement si tu demandes explicitement une recherche sur Internet pour une recette ou une séance, au cas par cas. Seule la phrase que tu as écrite est transmise au moteur : jamais ton profil, ton poids, ton objectif, ni ton identité. Cette fonction est éteinte tant qu'aucun moteur n'est configuré par l'éditeur.",
+              "Uniquement si tu demandes explicitement une recherche sur Internet — pour une recette, une séance, ou les valeurs nutritionnelles d’un aliment introuvable —, au cas par cas. La recherche passe par un moteur hébergé sur le serveur de Mavi’oh (SearXNG), qui interroge des moteurs publics ; seule la phrase que tu as écrite ou le nom de l’aliment leur est transmis : jamais ton profil, ton poids, ton objectif, ni ton identité.",
             ],
             [
               "Administrateur du service",

@@ -13,6 +13,7 @@ joignable depuis le réseau sans passer par Cloudflare.
 | `db` | PostgreSQL 16, volume `mavioh_db` | interne |
 | `ollama` | modèle local sur le GPU, volume `mavioh_ollama` | interne |
 | `ollama-init` | télécharge et charge le modèle, puis s'arrête | — |
+| `searxng` | moteur de recherche auto-hébergé (valeurs nutritionnelles des aliments introuvables, recettes « avec Internet ») | interne |
 
 ## Installation
 
@@ -135,3 +136,19 @@ cd mobile && flutter build apk --release
 
 `key.properties` et les fichiers `.jks` sont exclus de git. Sans `key.properties`, l'APK de
 version publiée sort non signé, donc non installable.
+
+## Aliment introuvable : valeurs cherchées sur Internet
+
+Depuis la recherche d'aliments ou l'ajout d'un repas, « Chercher les valeurs sur Internet » :
+
+1. le catalogue, au nom exact ;
+2. SearXNG (conteneur `searxng`) interroge les moteurs publics — seul le nom de l'aliment part ;
+   les deux premières pages sont lues sans accès possible au réseau interne (HTTPS seulement,
+   adresses privées refusées, aucune redirection suivie) ;
+3. le modèle local relève les valeurs pour 100 g, ou les estime d'après une recette type pour un
+   plat ; le serveur vérifie la cohérence énergie/macros et ramène à 100 g une valeur lue par
+   portion.
+
+Rien n'est enregistré : le formulaire « Créer un aliment » s'ouvre pré-rempli, avec les sources et
+un niveau de confiance, et la personne vérifie avant d'enregistrer. Réservé aux offres qui
+incluent l'IA.

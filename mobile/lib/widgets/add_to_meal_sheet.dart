@@ -8,6 +8,7 @@ import '../core/formatters.dart';
 import '../core/session.dart';
 import '../core/strings.dart';
 import '../models/food.dart';
+import '../models/food_lookup.dart';
 import '../models/meal.dart';
 import '../models/portion.dart';
 import '../models/recipe.dart';
@@ -23,6 +24,7 @@ import 'food_tile.dart';
 import 'loading_state.dart';
 import 'macro_pill.dart';
 import 'quantity_unit_picker.dart';
+import 'recherche_en_ligne.dart';
 import 'recipe_tile.dart';
 import 'status_banner.dart';
 
@@ -282,8 +284,19 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
   final _createP = TextEditingController();
   final _createG = TextEditingController();
   final _createL = TextEditingController();
+  final _createServing = TextEditingController();
   String? _createBarcode;
   Map<String, String> _createErrors = {};
+
+  // Recherche des valeurs sur Internet (agent côté serveur)
+  bool _lookingUp = false;
+  int _lookupRun = 0;
+  FoodLookupResult? _lookup;
+  bool _lookupLocked = false;
+  String? _lookupInfo;
+
+  /// Confirmation affichée au-dessus du choix de quantité (« Trouvé dans Open Food Facts »).
+  String? _notice;
 
   // Custom item form
   final _customLabel = TextEditingController();
@@ -315,7 +328,7 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
     _cancelToken?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
-    for (final c in [_createName, _createBrand, _createKcal, _createP, _createG, _createL, _customLabel, _customKcal, _customP, _customG, _customL]) {
+    for (final c in [_createName, _createBrand, _createKcal, _createP, _createG, _createL, _createServing, _customLabel, _customKcal, _customP, _customG, _customL]) {
       c.dispose();
     }
     super.dispose();
@@ -452,9 +465,7 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
       if (food != null) {
         _selectFood(food, quantity: food.servingSizeG != null ? 1 : 100, unit: food.servingSizeG != null ? 'portion' : 'g');
       } else {
-        _createBarcode = code;
-        _createErrors = {};
-        setState(() => _stage = _Stage.createFood);
+        _openCreateFood(barcode: code);
       }
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -494,7 +505,10 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
   String? _presetUnit;
 
   void _backToSearch() {
+    _lookupRun++;
     setState(() {
+      _lookingUp = false;
+      _notice = null;
       _stage = _Stage.search;
       _selectedFood = null;
       _selectedRecipe = null;
@@ -502,6 +516,89 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
       _error = null;
     });
     if (_tab == _SearchTab.frequent) _loadFrequent();
+  }
+
+  // ----- Create food / recherche en ligne -----------------------------------
+
+  /// Ouvre le formulaire de création, pré-rempli avec [name] (ou le code [barcode] scanné).
+  void _openCreateFood({String? name, String? barcode}) {
+    _lookupRun++;
+    setState(() {
+      _createBarcode = barcode;
+      if (name != null) _createName.text = name;
+      _createErrors = {};
+      _lookingUp = false;
+      _lookup = null;
+      _lookupInfo = null;
+      _notice = null;
+      _stage = _Stage.createFood;
+    });
+  }
+
+  /// Lance l'agent qui cherche le produit (catalogue, Open Food Facts puis Internet).
+  ///
+  /// Un aliment déjà connu est choisi directement ; des valeurs trouvées sur Internet
+  /// pré-remplissent le formulaire, qui reste à vérifier puis à enregistrer.
+  Future<void> _rechercherEnLigne({String? name}) async {
+    if (name != null) _openCreateFood(name: name);
+    final nom = _createName.text.trim();
+    if (nom.length < 2) {
+      setState(() => _createErrors = {'name': 'Indique au moins 2 caractères pour lancer la recherche.'});
+      return;
+    }
+    if (_lookupLocked || RechercheEnLigne.verrouillee) {
+      setState(() => _lookupLocked = true);
+      return;
+    }
+
+    final run = ++_lookupRun;
+    setState(() {
+      _lookingUp = true;
+      _lookup = null;
+      _lookupInfo = null;
+      _error = null;
+      _createErrors = {};
+    });
+
+    try {
+      final result = await _foodService.rechercherEnLigne(nom, marque: _createBrand.text);
+      if (!mounted || run != _lookupRun) return;
+
+      final food = result.food;
+      if (food != null) {
+        setState(() => _lookingUp = false);
+        _selectFood(food, quantity: food.servingSizeG != null ? 1 : 100, unit: food.servingSizeG != null ? 'portion' : 'g');
+        setState(() => _notice = '${result.trouveDans} : ${food.name}');
+        return;
+      }
+
+      final proposition = result.proposition;
+      setState(() {
+        _lookingUp = false;
+        if (proposition == null) {
+          _lookupInfo = result.message ?? RechercheEnLigne.indisponible;
+          return;
+        }
+        _lookup = result;
+        if (proposition.nom.isNotEmpty) _createName.text = proposition.nom;
+        if (proposition.marque != null) _createBrand.text = proposition.marque!;
+        _createKcal.text = RechercheEnLigne.champ(proposition.calories);
+        _createP.text = RechercheEnLigne.champ(proposition.proteins);
+        _createG.text = RechercheEnLigne.champ(proposition.carbs);
+        _createL.text = RechercheEnLigne.champ(proposition.fat);
+        _createServing.text = RechercheEnLigne.champ(proposition.servingSizeG);
+      });
+    } on ApiException catch (e) {
+      if (!mounted || run != _lookupRun) return;
+      setState(() {
+        _lookingUp = false;
+        if (e.isOffreRequise) {
+          _lookupLocked = true;
+        } else {
+          _error = e.message;
+        }
+      });
+    }
   }
 
   // ----- Submit -------------------------------------------------------------
@@ -671,6 +768,11 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
         'proteins': parseDecimal(_createP.text) ?? 0,
         'carbs': parseDecimal(_createG.text) ?? 0,
         'fat': parseDecimal(_createL.text) ?? 0,
+        // Valeurs secondaires trouvées sur Internet : pas de champ dédié ici, elles suivent la proposition.
+        'fiber': ?_lookup?.proposition?.fiber,
+        'sugar': ?_lookup?.proposition?.sugar,
+        'salt': ?_lookup?.proposition?.salt,
+        'serving_size_g': ?parseDecimal(_createServing.text),
         'source_type': 'manual',
       });
       if (!mounted) return;
@@ -734,6 +836,11 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: StatusBanner.error(_error!, onClose: () => setState(() => _error = null)),
+            ),
+          if (_notice != null && _stage == _Stage.picker)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: StatusBanner.success(_notice!, onClose: () => setState(() => _notice = null)),
             ),
           Expanded(child: _body()),
         ],
@@ -931,20 +1038,25 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
           );
         }
         if (_results.isEmpty) {
-          return EmptyState(
-            icon: Icons.search_off_rounded,
-            title: 'Aucun aliment trouvé',
-            message: _offQueried
-                ? 'Rien non plus sur Open Food Facts. Tu peux créer l’aliment ou saisir un aliment personnalisé.'
-                : 'Essaie un autre nom, scanne le code-barres ou crée l’aliment.',
-            ctaLabel: 'Créer l’aliment',
-            onCta: () => setState(() {
-              _createBarcode = null;
-              _createName.text = _searchController.text.trim();
-              _createErrors = {};
-              _stage = _Stage.createFood;
-            }),
-            compact: true,
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+            children: [
+              EmptyState(
+                icon: Icons.search_off_rounded,
+                title: 'Aucun aliment trouvé',
+                message: _offQueried
+                    ? 'Rien non plus sur Open Food Facts. Mavi’oh peut chercher ses valeurs sur Internet, ou tu peux créer l’aliment.'
+                    : 'Essaie un autre nom, scanne le code-barres ou crée l’aliment.',
+                ctaLabel: 'Créer l’aliment',
+                onCta: () => _openCreateFood(name: _searchController.text.trim()),
+                compact: true,
+              ),
+              const SizedBox(height: 12),
+              RechercheEnLigneBouton(
+                verrouillee: _lookupLocked,
+                onPressed: () => _rechercherEnLigne(name: _searchController.text.trim()),
+              ),
+            ],
           );
         }
         return ListView.separated(
@@ -953,17 +1065,23 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
           separatorBuilder: (_, _) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             if (index == _results.length) {
+              // Résultats peu satisfaisants : création manuelle ou recherche sur Internet.
               return Padding(
                 padding: const EdgeInsets.only(top: 6),
-                child: OutlinedButton.icon(
-                  onPressed: () => setState(() {
-                    _createBarcode = null;
-                    _createName.text = _searchController.text.trim();
-                    _createErrors = {};
-                    _stage = _Stage.createFood;
-                  }),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Je ne trouve pas : créer l’aliment'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () => _openCreateFood(name: _searchController.text.trim()),
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Je ne trouve pas : créer l’aliment'),
+                    ),
+                    const SizedBox(height: 8),
+                    RechercheEnLigneBouton(
+                      verrouillee: _lookupLocked,
+                      onPressed: () => _rechercherEnLigne(name: _searchController.text.trim()),
+                    ),
+                  ],
                 ),
               );
             }
@@ -1142,6 +1260,7 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
                   'Code $_createBarcode introuvable, même sur Open Food Facts. Renseigne les valeurs pour 100 g depuis l’emballage.',
                   margin: const EdgeInsets.only(bottom: 12),
                 ),
+              ..._lookupSection(),
               TextField(
                 controller: _createName,
                 textCapitalization: TextCapitalization.sentences,
@@ -1169,14 +1288,43 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
                   Expanded(child: _macroField(_createL, 'Lipides', _createErrors['fat'])),
                 ],
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _createServing,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(labelText: 'Portion (facultatif)', suffixText: 'g', errorText: _createErrors['serving_size_g']),
+              ),
               const SizedBox(height: 8),
               const Text('Valeurs pour 100 g. L’aliment sera partagé avec la communauté.', style: TextStyle(fontSize: 12, color: MaviohColors.muted)),
             ],
           ),
         ),
-        _stickyCta(label: 'Créer et ajouter', onPressed: _submitCreateFood),
+        _stickyCta(label: 'Créer et ajouter', onPressed: _submitCreateFood, enabled: !_lookingUp),
       ],
     );
+  }
+
+  /// Haut du formulaire de création : recherche sur Internet (bouton, attente ou résultat).
+  List<Widget> _lookupSection() {
+    const gap = SizedBox(height: 12);
+    final lookup = _lookup;
+    return [
+      if (_lookingUp)
+        const RechercheEnLigneProgression()
+      else if (lookup != null)
+        PropositionEnLigneCarte(resultat: lookup)
+      else ...[
+        if (_lookupInfo != null) ...[
+          StatusBanner.info(_lookupInfo!),
+          gap,
+        ],
+        RechercheEnLigneBouton(
+          verrouillee: _lookupLocked,
+          onPressed: _submitting ? null : () => _rechercherEnLigne(),
+        ),
+      ],
+      gap,
+    ];
   }
 
   // ----- Custom stage -------------------------------------------------------
@@ -1233,7 +1381,7 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
     );
   }
 
-  Widget _stickyCta({required String label, required VoidCallback onPressed}) {
+  Widget _stickyCta({required String label, required VoidCallback onPressed, bool enabled = true}) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       decoration: const BoxDecoration(
@@ -1244,7 +1392,7 @@ class _AddToMealBodyState extends State<_AddToMealBody> {
         width: double.infinity,
         height: 52,
         child: FilledButton(
-          onPressed: _submitting ? null : onPressed,
+          onPressed: _submitting || !enabled ? null : onPressed,
           child: _submitting
               ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white))
               : Text(label),
