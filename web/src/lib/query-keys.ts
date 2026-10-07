@@ -89,6 +89,7 @@ export const queryKeys = {
   sport: {
     all: ["sport"] as const,
     config: ["sport", "config"] as const,
+    lieux: ["sport", "lieux"] as const,
     sports: (params?: Params) => ["sport", "sports", params ?? {}] as const,
     calendar: (params?: Params) => ["sport", "calendar", params ?? {}] as const,
     summary: (date?: string) => ["sport", "summary", date ?? "today"] as const,

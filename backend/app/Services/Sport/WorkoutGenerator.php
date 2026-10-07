@@ -6,13 +6,13 @@ use App\Enums\Equipment;
 use App\Enums\ExerciseLevel;
 use App\Enums\Lieu;
 use App\Models\Exercise;
-use App\Models\Sport;
 use Illuminate\Support\Collection;
 
 /**
  * Générateur de séances par règles (brief §13.3 + addendum §C.4), repli du coach IA.
  *
- * - niveau : débutant 2 × 10–12 (repos 90 s) · intermédiaire 3 × 8–12 (60 s) · avancé 4 × 6–10 (60–90 s) ;
+ * - séries selon le niveau (débutant 2, intermédiaire 3, avancé 4) ; répétitions, repos, tempo et
+ *   répétitions en réserve selon l'objectif et le niveau (PrescriptionRules, Sport v2 §4) ;
  * - fractionné cardio : 20/40 s · 30/30 s · 40/20 s selon le niveau ;
  * - objectif (bloc principal) : perte_de_gras 50 % force / 50 % cardio · prise_de_muscle 80/20 ·
  *   endurance 30/70 · forme 60/40 + 1 mobilité · force 100 % force en 4–6 répétitions (avancé seulement) ;
@@ -20,7 +20,9 @@ use Illuminate\Support\Collection;
  * - n_exercices = clamp(floor((durée − 12) / (séries × (0,75 + repos/60))), 3, 8) ;
  * - matériel strict (« aucun » toujours permis), focus → groupes musculaires, jamais deux exercices
  *   consécutifs sur le même groupe, restrictions débutant, zones à éviter exclues (contraindications) ;
- * - types cardio (course, vélo, natation, marche, rameur) : bloc principal en fractionné ou continu ;
+ * - types cardio (course, vélo, natation, marche, rameur, elliptique, corde) : modèles d'entraînement
+ *   chiffrés (CardioTemplates), alternative la plus proche si le lieu n'a pas le matériel ;
+ * - chaque exercice reçoit une prescription structurée (cibles, zones cardiaques selon l'âge) ;
  * - déterministe pour des entrées + une graine identiques.
  */
 class WorkoutGenerator
@@ -49,15 +51,36 @@ class WorkoutGenerator
         'force' => 0.0,
     ];
 
-    /** Vitesses indicatives (km/h) par intensité pour estimer une distance. */
-    private const SPEEDS = [
-        'course_a_pied' => ['faible' => 6.0, 'moderee' => 10.0, 'elevee' => 12.5],
-        'velo' => ['faible' => 15.0, 'moderee' => 20.0, 'elevee' => 26.0],
-        'natation' => ['faible' => 1.5, 'moderee' => 2.0, 'elevee' => 2.6],
-        'marche' => ['faible' => 4.0, 'moderee' => 5.0, 'elevee' => 6.0],
+    /** Sport cardio impossible au lieu : alternatives, de la plus proche à la plus lointaine. */
+    public const ALTERNATIVES = [
+        'velo' => ['elliptique', 'rameur', 'course_a_pied', 'corde_a_sauter'],
+        'course_a_pied' => ['elliptique', 'velo', 'rameur', 'corde_a_sauter'],
+        'marche' => ['elliptique', 'velo', 'rameur'],
+        'rameur' => ['elliptique', 'velo', 'course_a_pied', 'corde_a_sauter'],
+        'elliptique' => ['velo', 'rameur', 'course_a_pied', 'corde_a_sauter'],
+        'natation' => ['rameur', 'elliptique', 'velo', 'course_a_pied', 'corde_a_sauter'],
+        'corde_a_sauter' => ['course_a_pied', 'velo', 'elliptique', 'rameur'],
     ];
 
-    public function __construct(private CaloriesEstimator $calories)
+    /** Ce qui manque, pour l'avertissement. */
+    private const BESOINS = [
+        'velo' => 'vélo',
+        'course_a_pied' => 'tapis de course',
+        'marche' => 'tapis de course',
+        'rameur' => 'rameur',
+        'elliptique' => 'vélo elliptique',
+        'natation' => 'piscine',
+        'corde_a_sauter' => 'corde à sauter',
+    ];
+
+    private const VARIANTES_TITRE = [
+        'endurance' => 'endurance',
+        'seuil' => 'seuil',
+        'fractionne' => 'fractionné',
+        'force' => 'force',
+    ];
+
+    public function __construct(private CaloriesEstimator $calories, private CardioTemplates $templates)
     {
     }
 
@@ -79,6 +102,8 @@ class WorkoutGenerator
         $zones = array_values(array_intersect((array) ($request['zones_a_eviter'] ?? []), array_keys(SportVocab::ZONES)));
         $notes = isset($request['notes']) && trim((string) $request['notes']) !== '' ? trim((string) $request['notes']) : null;
         $seed = (int) ($request['seed'] ?? 0);
+        $age = isset($request['age']) && is_numeric($request['age']) ? (int) $request['age']
+            : (isset($context['profil']['age']) && is_numeric($context['profil']['age']) ? (int) $context['profil']['age'] : null);
 
         $gentle = (bool) ($context['profil']['profil_mineur'] ?? false)
             || (($context['profil']['situation_particuliere'] ?? 'aucune') !== 'aucune');
@@ -97,11 +122,19 @@ class WorkoutGenerator
             'notes' => $notes,
             'gentle' => $gentle,
             'seed' => $seed,
+            'age' => $age,
+            // Matériel issu d'un lieu enregistré : il fait foi (alternative si le sport est impossible).
+            'strict' => ($request['lieu_id'] ?? null) !== null,
+            'lieu_nom' => $request['lieu_nom'] ?? null,
         ];
 
         $proposal = SportVocab::isCardioType($sportType)
-            ? $this->cardioSession($base, $rng)
+            ? $this->cardioSession($base, $rng, $catalog)
             : $this->strengthSession($base, $rng, $catalog ?? Exercise::query()->public()->orderBy('id')->get());
+
+        $proposal['blocks'] = self::completePrescriptions($proposal['blocks'], [
+            'goal' => $goal, 'level' => $level, 'gentle' => $gentle, 'age' => $age,
+        ]);
 
         $proposal['calories_estimate'] = $this->calories->forProposal($proposal['blocks'], $level, $duration, $weightKg);
         $proposal['is_estimate'] = true;
@@ -133,17 +166,16 @@ class WorkoutGenerator
         $duration = $b['duration_min'];
         $p = self::LEVEL_PARAMS[$level];
         $sets = $p['sets'];
-        $repsRange = $p['reps'];
-        $rest = $p['rest'];
+        // Sport v2 : répétitions et repos selon l'objectif (PrescriptionRules), séries selon le niveau.
+        $repsGoal = $goal === 'force' && $level !== 'avance' ? 'prise_de_muscle' : $goal;
+        $repsRange = PrescriptionRules::repsFor($repsGoal);
+        $rest = PrescriptionRules::restFor($repsGoal, $level);
         $explication = [];
         $warnings = [];
 
         $cardioShare = self::GOAL_CARDIO_SHARE[$goal];
         if ($goal === 'force') {
-            if ($level === 'avance') {
-                $repsRange = [4, 6];
-                $rest = 90;
-            } else {
+            if ($level !== 'avance') {
                 $cardioShare = self::GOAL_CARDIO_SHARE['prise_de_muscle'];
                 $explication[] = 'L’objectif force pur (4–6 répétitions lourdes) est réservé au niveau avancé : ta séance suit une répartition prise de muscle pour construire la base.';
             }
@@ -252,12 +284,14 @@ class WorkoutGenerator
             count($cardio)
         );
         $explication[] = sprintf(
-            'Niveau %s : %d séries de %d à %d répétitions, %d s de repos ; fractionné cardio %d s d’effort / %d s de récupération.',
+            'Niveau %s : %d séries de %d à %d répétitions en gardant %d répétition%s en réserve, %s de repos ; fractionné cardio %d s d’effort / %d s de récupération.',
             mb_strtolower(ExerciseLevel::from($level)->label()),
             $sets,
             $repsRange[0],
             $repsRange[1],
-            $rest,
+            PrescriptionRules::rirFor($level, $b['gentle']),
+            PrescriptionRules::rirFor($level, $b['gentle']) > 1 ? 's' : '',
+            PrescriptionFormatter::duree($rest),
             $p['effort'],
             $p['recovery']
         );
@@ -271,7 +305,7 @@ class WorkoutGenerator
         if ($level === 'debutant') {
             $explication[] = 'Débutant : pas d’exercice avancé ni de barre lourde (squat, soulevé de terre, développé couché) ; privilégie la technique.';
         }
-        $explication[] = sprintf('Séance pensée pour : %s.', mb_strtolower(Lieu::from($b['lieu'])->label()));
+        $explication[] = sprintf('Séance pensée pour : %s.', $b['lieu_nom'] ?? mb_strtolower(Lieu::from($b['lieu'])->label()));
 
         return [
             'title' => $this->title($b),
@@ -350,189 +384,160 @@ class WorkoutGenerator
     }
 
     // ------------------------------------------------------------------------------------
-    // Séance cardio pure (course, vélo, natation, marche, rameur)
+    // Séance cardio (modèles d'entraînement, Sport v2 §4)
     // ------------------------------------------------------------------------------------
 
-    private function cardioSession(array $b, SeededRandom $rng): array
+    /**
+     * Séance cardio construite par CardioTemplates pour l'activité possible au lieu choisi ;
+     * si le matériel manque (vélo demandé sans vélo, piscine absente…), l'alternative la plus
+     * proche est proposée et expliquée dans `warnings`, en dernier recours un circuit au poids
+     * du corps.
+     *
+     * @param  Collection<int, Exercise>|null  $catalog
+     */
+    private function cardioSession(array $b, SeededRandom $rng, ?Collection $catalog): array
     {
         $type = $b['sport_type'];
-        $level = $b['level'];
-        $duration = $b['duration_min'];
-        $met = $this->metTriplet($type);
-        $labels = $this->cardioLabels($type);
-        $equipment = $this->cardioEquipment($type, $b['lieu']);
+        [$activite, $typeRetenu] = self::activite($type, $b['lieu'], $b['equipment'], $b['strict']);
         $warnings = [];
-        $explication = [];
 
-        $warmSec = 300;
-        $coolSec = 300;
-        $mainSec = max(300, $duration * 60 - $warmSec - $coolSec);
-
-        $main = [];
-        if ($b['gentle']) {
-            $main[] = $this->cardioItem($labels['steady'], $type, $equipment, $mainSec, null, 1, 'faible', $met['faible'],
-                'Allure très confortable : tu dois pouvoir parler sans t’essouffler.');
-            $explication[] = sprintf('Séance continue de %d min à allure douce : dans ta situation, pas de fractionné intense.', (int) round($mainSec / 60));
-        } elseif ($level === 'debutant') {
-            $rounds = (int) max(3, min(12, floor($mainSec / 180)));
-            $leftover = $mainSec - $rounds * 180;
-            $coolSec += max(0, $leftover);
-            $main[] = $this->cardioItem(
-                sprintf('%s 2 min / %s 1 min', $labels['effort'], mb_strtolower($labels['recovery'])),
-                $type,
-                $equipment,
-                120,
-                60,
-                $rounds,
-                'moderee',
-                $met['moderee'],
-                sprintf('%d répétitions : 2 min de %s à allure confortable, puis 1 min de %s pour récupérer.', $rounds, mb_strtolower($labels['effort']), mb_strtolower($labels['recovery']))
-            );
-            $explication[] = sprintf('Débutant : fractionné doux %d × (2 min d’effort / 1 min de récupération) pour progresser sans t’épuiser.', $rounds);
-        } elseif ($level === 'intermediaire') {
-            $intervalSec = $mainSec >= 900 ? 480 : 0;
-            $steadySec = $mainSec - $intervalSec;
-            $main[] = $this->cardioItem($labels['steady'], $type, $equipment, $steadySec, null, 1, 'moderee', $met['moderee'],
-                'Allure régulière et confortable : respiration contrôlée, tu peux tenir une conversation courte.');
-            if ($intervalSec > 0) {
-                $main[] = $this->cardioItem(
-                    sprintf('%s rapide 1 min / %s 1 min', $labels['effort'], mb_strtolower($labels['recovery'])),
-                    $type,
-                    $equipment,
-                    60,
-                    60,
-                    4,
-                    'elevee',
-                    $met['elevee'],
-                    '4 accélérations d’une minute suivies d’une minute de récupération active.'
-                );
+        if ($activite === null) {
+            // Genoux, chevilles ou hanches à ménager : pas de course ni de corde en remplacement,
+            // la marche (sans impact, possible partout) passe devant.
+            $alternatives = self::ALTERNATIVES[$type] ?? [];
+            if (array_intersect($b['zones_a_eviter'], ['genoux', 'chevilles', 'hanches']) !== []) {
+                $alternatives = array_values(array_diff($alternatives, ['course_a_pied', 'corde_a_sauter']));
+                if ($type !== 'marche') {
+                    $alternatives[] = 'marche';
+                }
             }
-            $explication[] = sprintf('Intermédiaire : %d min en continu%s.', (int) round($steadySec / 60), $intervalSec > 0 ? ' puis 4 accélérations d’une minute' : '');
-        } else {
-            $rounds = (int) max(2, min(8, floor($mainSec * 0.4 / 180)));
-            $steadySec = $mainSec - $rounds * 180;
-            $main[] = $this->cardioItem($labels['tempo'], $type, $equipment, $steadySec, null, 1, 'moderee', $met['moderee'],
-                'Allure soutenue mais contrôlée (tempo), en gardant une marge pour le fractionné qui suit.');
-            $main[] = $this->cardioItem(
-                sprintf('%s intense 2 min / %s 1 min', $labels['effort'], mb_strtolower($labels['recovery'])),
-                $type,
-                $equipment,
-                120,
-                60,
-                $rounds,
-                'elevee',
-                $met['elevee'],
-                sprintf('%d répétitions de 2 min à haute intensité, 1 min de récupération active entre chaque.', $rounds)
+            foreach ($alternatives as $alt) {
+                [$activite, $typeRetenu] = self::activite($alt, $b['lieu'], $b['equipment'], true);
+                if ($activite !== null) {
+                    break;
+                }
+            }
+
+            $ou = $b['lieu_nom'] !== null ? sprintf(' dans « %s »', $b['lieu_nom']) : ' ici';
+            if ($activite === null) {
+                $warnings[] = sprintf('Pas de %s%s : circuit au poids du corps proposé à la place, au même objectif.', self::BESOINS[$type] ?? 'matériel adapté', $ou);
+                $circuit = $this->strengthSession(['sport_type' => 'hiit'] + $b, $rng, $catalog ?? Exercise::query()->public()->orderBy('id')->get());
+                $circuit['warnings'] = array_merge($warnings, $circuit['warnings']);
+
+                return $circuit;
+            }
+            $libelle = CardioTemplates::LIBELLES[$activite];
+            // Élision devant une voyelle ou un h muet : « séance d'elliptique », « séance de vélo ».
+            $de = preg_match('/^[aeiouyhàâéèêëîïôöûü]/iu', $libelle) ? 'd’' : 'de ';
+            $warnings[] = sprintf(
+                'Pas de %s%s : séance %s%s proposée à la place, au même objectif.',
+                self::BESOINS[$type] ?? 'matériel adapté',
+                $ou,
+                $de,
+                $libelle
             );
-            $explication[] = sprintf('Avancé : %d min à allure tempo puis %d × (2 min intenses / 1 min de récupération).', (int) round($steadySec / 60), $rounds);
         }
 
-        $warmup = [$this->cardioItem($labels['warmup'], $type, $equipment, $warmSec, null, 1, 'faible', $met['faible'],
-            'Monte progressivement en intensité pour préparer le cœur et les articulations.')];
-        $cooldown = [$this->cardioItem($labels['cooldown'], $type, $equipment, $coolSec, null, 1, 'faible', $met['faible'],
-            'Ralentis progressivement, puis étire doucement mollets, cuisses et hanches.')];
+        $built = $this->templates->build($activite, $b, $b['age']);
+        $explication = $built['explication'];
 
-        $explication[] = sprintf('Structure : 5 min d’échauffement, %d min de bloc principal, %d min de retour au calme.', (int) round($mainSec / 60), (int) round($coolSec / 60));
-        $explication[] = sprintf('Séance %s pensée pour : %s.', mb_strtolower(SportVocab::SPORT_TYPES[$type]), mb_strtolower(Lieu::from($b['lieu'])->label()));
+        $explication[] = sprintf('Séance %s pensée pour : %s.', mb_strtolower(SportVocab::SPORT_TYPES[$typeRetenu]), $b['lieu_nom'] ?? mb_strtolower(Lieu::from($b['lieu'])->label()));
+        if ($b['gentle']) {
+            $explication[] = 'Dans ta situation, pas de fractionné intense : effort continu et confortable.';
+        }
         if ($b['zones_a_eviter'] !== []) {
             $impact = array_intersect($b['zones_a_eviter'], ['genoux', 'chevilles', 'hanches']);
-            if ($impact !== [] && in_array($type, ['course_a_pied', 'marche'], true)) {
-                $warnings[] = sprintf('Tu signales %s : la %s sollicite ces zones, réduis l’allure ou préfère le vélo ou la natation en cas de gêne.', $this->zoneLabels($impact), mb_strtolower(SportVocab::SPORT_TYPES[$type]));
+            if ($impact !== [] && in_array($activite, ['course', 'course_tapis', 'marche', 'marche_tapis', 'corde'], true)) {
+                $warnings[] = sprintf('Tu signales %s : la %s sollicite ces zones, réduis l’allure ou préfère le vélo ou la natation en cas de gêne.', $this->zoneLabels($impact), CardioTemplates::LIBELLES[$activite]);
             }
-            if (in_array('dos', $b['zones_a_eviter'], true) && $type === 'rameur') {
+            if (in_array('dos', $b['zones_a_eviter'], true) && $activite === 'rameur') {
                 $warnings[] = 'Tu signales le dos : au rameur, garde le dos droit et une résistance légère ; arrête en cas de douleur.';
             }
-            if (in_array('epaules', $b['zones_a_eviter'], true) && $type === 'natation') {
+            if (in_array('epaules', $b['zones_a_eviter'], true) && $activite === 'natation') {
                 $warnings[] = 'Tu signales les épaules : en natation, évite le papillon et privilégie la brasse ou le dos crawlé souple.';
             }
         }
 
+        $equipment = $b['equipment'];
+        $besoin = CardioTemplates::ACTIVITES[$activite][0];
+        if (! in_array($besoin, $equipment, true)) {
+            $equipment[] = $besoin;
+            sort($equipment);
+        }
+
         return [
-            'title' => $this->title($b),
-            'sport_type' => $type,
+            'title' => sprintf('%s · %s · %d min', SportVocab::SPORT_TYPES[$typeRetenu], self::VARIANTES_TITRE[$built['variante']] ?? $built['variante'], $b['duration_min']),
+            'sport_type' => $typeRetenu,
             'lieu' => $b['lieu'],
             'goal' => $b['goal'],
-            'level' => $level,
-            'duration_min' => $duration,
-            'equipment' => $b['equipment'],
+            'level' => $b['level'],
+            'duration_min' => $b['duration_min'],
+            'equipment' => $b['strict'] ? $b['equipment'] : $equipment,
             'focus' => $b['focus'],
             'zones_a_eviter' => $b['zones_a_eviter'],
-            'intensity' => $b['gentle'] ? 'faible' : ($level === 'avance' ? 'elevee' : 'moderee'),
+            'intensity' => $built['intensity'],
             'explication' => $explication,
             'warnings' => $warnings,
-            'blocks' => [
-                ['key' => 'echauffement', 'name' => self::BLOCK_NAMES['echauffement'], 'exercises' => $warmup],
-                ['key' => 'principal', 'name' => self::BLOCK_NAMES['principal'], 'exercises' => $main],
-                ['key' => 'retour_au_calme', 'name' => self::BLOCK_NAMES['retour_au_calme'], 'exercises' => $cooldown],
-            ],
+            'blocks' => $built['blocks'],
         ];
     }
 
     /**
-     * @return array{faible: float, moderee: float, elevee: float}
+     * Activité de modèle possible pour un type de sport au lieu donné.
+     * `$strict` : le matériel vient d'un lieu enregistré, il fait foi ; sinon (demande sans lieu,
+     * comportement historique) le matériel du sport est présumé disponible.
+     *
+     * @param  list<string>  $equipment
+     * @return array{0: string|null, 1: string}  [activité ou null, type de sport retenu]
      */
-    private function metTriplet(string $type): array
+    public static function activite(string $type, string $lieu, array $equipment, bool $strict): array
     {
-        $slug = SportVocab::sportTypeSlug($type);
-        $sport = $slug ? Sport::query()->where('slug', $slug)->where('is_public', true)->first() : null;
+        $has = fn (string $e) => in_array($e, $equipment, true);
+        $salle = in_array($lieu, ['salle_publique', 'salle_privee'], true);
 
-        if ($sport !== null) {
-            return ['faible' => $sport->met_faible, 'moderee' => $sport->met_moderee, 'elevee' => $sport->met_elevee];
-        }
+        $activite = match ($type) {
+            'velo' => match (true) {
+                $lieu === 'exterieur' && $has('velo_route') => 'velo_route',
+                $has('velo') => 'velo_interieur',
+                $has('velo_route') => 'velo_route',
+                ! $strict => $lieu === 'exterieur' ? 'velo_route' : 'velo_interieur',
+                default => null,
+            },
+            'course_a_pied', 'marche' => match (true) {
+                $salle && $has('tapis_course') => $type === 'marche' ? 'marche_tapis' : 'course_tapis',
+                ! $salle => $type === 'marche' ? 'marche' : 'course',
+                $has('tapis_course') || ! $strict => $type === 'marche' ? 'marche_tapis' : 'course_tapis',
+                default => null,
+            },
+            'rameur' => $has('rameur') || ! $strict ? 'rameur' : null,
+            'elliptique' => $has('elliptique') || ! $strict ? 'elliptique' : null,
+            'natation' => $has('piscine') || ! $strict ? 'natation' : null,
+            'corde_a_sauter' => $has('corde_a_sauter') || ! $strict ? 'corde' : null,
+            default => null,
+        };
 
-        return SportVocab::metTripletForType($type);
+        return [$activite, $type];
     }
 
     /**
-     * @return array{effort: string, recovery: string, steady: string, tempo: string, warmup: string, cooldown: string}
+     * Donne une prescription à chaque exercice qui n'en a pas (PrescriptionRules) et recalcule
+     * les fréquences cardiaques pour l'âge donné.
+     *
+     * @param  list<array<string, mixed>>  $blocks
+     * @param  array{goal?: string, level?: string, gentle?: bool, age?: int|null}  $ctx
+     * @return list<array<string, mixed>>
      */
-    private function cardioLabels(string $type): array
+    public static function completePrescriptions(array $blocks, array $ctx): array
     {
-        return match ($type) {
-            'course_a_pied' => ['effort' => 'Course', 'recovery' => 'Marche', 'steady' => 'Course continue', 'tempo' => 'Course tempo', 'warmup' => 'Marche rapide puis trot léger', 'cooldown' => 'Marche de récupération'],
-            'velo' => ['effort' => 'Vélo', 'recovery' => 'Pédalage souple', 'steady' => 'Vélo en continu', 'tempo' => 'Vélo tempo', 'warmup' => 'Pédalage souple', 'cooldown' => 'Pédalage souple de récupération'],
-            'natation' => ['effort' => 'Nage', 'recovery' => 'Nage lente', 'steady' => 'Nage continue', 'tempo' => 'Nage tempo', 'warmup' => 'Nage lente d’échauffement', 'cooldown' => 'Nage lente de récupération'],
-            'marche' => ['effort' => 'Marche rapide', 'recovery' => 'Marche lente', 'steady' => 'Marche rapide continue', 'tempo' => 'Marche rapide soutenue', 'warmup' => 'Marche lente', 'cooldown' => 'Marche lente de récupération'],
-            default => ['effort' => 'Rameur', 'recovery' => 'Rame souple', 'steady' => 'Rameur en continu', 'tempo' => 'Rameur tempo', 'warmup' => 'Rame souple d’échauffement', 'cooldown' => 'Rame souple de récupération'],
-        };
-    }
-
-    private function cardioEquipment(string $type, string $lieu): string
-    {
-        $indoor = in_array($lieu, ['maison', 'salle_publique', 'salle_privee'], true);
-
-        return match ($type) {
-            'course_a_pied', 'marche' => $indoor && $lieu !== 'maison' ? 'tapis' : 'aucun',
-            'velo' => $indoor ? 'velo' : 'aucun',
-            'rameur' => 'machine',
-            default => 'aucun',
-        };
-    }
-
-    private function cardioItem(string $name, string $type, string $equipment, int $durationSec, ?int $restSec, int $sets, string $intensity, float $met, string $instructions): array
-    {
-        $distance = null;
-        if (isset(self::SPEEDS[$type])) {
-            $speedEffort = self::SPEEDS[$type][$intensity];
-            $speedRecovery = self::SPEEDS[$type]['faible'];
-            $distance = round($sets * ($durationSec * $speedEffort + ($restSec ?? 0) * $speedRecovery) / 3600, 1);
+        foreach ($blocks as &$block) {
+            foreach ($block['exercises'] as &$ex) {
+                $ex = PrescriptionRules::complete($ex, $ctx + ['block' => $block['key'] ?? 'principal']);
+            }
+            unset($ex);
         }
+        unset($block);
 
-        return [
-            'exercise_id' => null,
-            'name' => $name,
-            'category' => 'cardio',
-            'muscle_group' => 'cardio',
-            'equipment' => $equipment,
-            'sets' => $sets,
-            'reps' => null,
-            'duration_sec' => $durationSec,
-            'rest_sec' => $restSec,
-            'distance_km' => $distance,
-            'intensity' => $intensity,
-            'instructions' => $instructions,
-            'met' => round($met, 1),
-        ];
+        return $blocks;
     }
 
     // ------------------------------------------------------------------------------------

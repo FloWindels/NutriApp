@@ -52,12 +52,25 @@ abstract class SportFormRequest extends FormRequest
     }
 
     /**
+     * Lieu d'entraînement du compte (Sport v2) : celui d'un autre compte est refusé comme
+     * inexistant, sans rien révéler.
+     *
+     * @return array<int, mixed>
+     */
+    protected function lieuIdRules(): array
+    {
+        $userId = (int) ($this->user()?->id ?? 0);
+
+        return ['nullable', 'integer', Rule::exists('sport_lieux', 'id')->where('user_id', $userId)];
+    }
+
+    /**
      * @return array<string, array<int, mixed>>
      */
     protected function vocabularyRules(): array
     {
         return [
-            'equipment' => ['nullable', 'array', 'max:12'],
+            'equipment' => ['nullable', 'array', 'max:30'],
             'equipment.*' => ['string', Rule::in(Equipment::values())],
             'focus' => ['nullable', 'array', 'max:8'],
             'focus.*' => ['string', Rule::in(SportVocab::focusValues())],
@@ -90,6 +103,7 @@ abstract class SportFormRequest extends FormRequest
             'planned_at' => 'heure prévue',
             'duration_min' => 'durée',
             'lieu' => 'lieu',
+            'lieu_id' => 'lieu d’entraînement',
             'notes' => 'notes',
             'status' => 'statut',
             'weekday' => 'jour de la semaine',

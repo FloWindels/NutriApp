@@ -222,6 +222,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Lieux d'entraînement (Sport v2) : chacun porte son matériel.
+     */
+    public function sportLieux(): HasMany
+    {
+        return $this->hasMany(SportLieu::class);
+    }
+
+    /**
      * Sports personnalisés créés par l'utilisateur.
      */
     public function sports(): HasMany

@@ -23,6 +23,7 @@ class UpdatePlanRequest extends SportFormRequest
             'planned_duration_min' => ['sometimes', 'required', 'integer', 'between:'.self::DUREE_MIN.','.self::DUREE_MAX],
             'planned_at' => ['sometimes', 'nullable', 'date_format:H:i'],
             'lieu' => ['sometimes', 'nullable', 'string', Rule::enum(Lieu::class)],
+            'lieu_id' => array_merge(['sometimes'], $this->lieuIdRules()),
             'notes' => ['sometimes', 'nullable', 'string', 'max:500'],
             'status' => ['sometimes', 'required', 'string', Rule::enum(PlanStatus::class)],
         ];

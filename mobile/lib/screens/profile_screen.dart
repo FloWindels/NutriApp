@@ -17,6 +17,7 @@ import '../widgets/macro_pill.dart';
 import '../widgets/status_banner.dart';
 import '../widgets/repere_visite.dart';
 import 'onboarding/accueil.dart';
+import 'sport/lieux_sheet.dart';
 
 /// Profil (§16.4, §2, addendum §A.4/§D).
 ///
@@ -885,6 +886,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             setState(() => _sportLieu = value);
             _onChanged();
           },
+        ),
+        const SizedBox(height: 8),
+        // Sport v2 : chaque lieu a son matériel ; la séance se génère pour le lieu choisi.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: () => LieuxSheet.show(context),
+            icon: const Icon(Icons.place_outlined, size: 18),
+            label: const Text('Mes lieux d’entraînement'),
+          ),
         ),
         const SizedBox(height: 14),
         _chipGroup(

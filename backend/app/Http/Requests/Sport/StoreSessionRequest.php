@@ -11,6 +11,7 @@ use App\Enums\MuscleGroup;
 use App\Enums\SessionKind;
 use App\Enums\SessionSource;
 use App\Services\Sport\ExerciseMovement;
+use App\Services\Sport\Prescription;
 use App\Services\Sport\SportVocab;
 use App\Services\Sport\WorkoutProposalSchema;
 use Illuminate\Validation\Rule;
@@ -43,6 +44,7 @@ class StoreSessionRequest extends SportFormRequest
             'planned_at' => ['nullable', 'date_format:H:i'],
             'started_at' => ['nullable', 'date'],
             'lieu' => ['nullable', 'string', Rule::enum(Lieu::class)],
+            'lieu_id' => $this->lieuIdRules(),
             'intensity' => ['nullable', 'string', Rule::enum(Intensity::class)],
             'distance_km' => ['nullable', 'numeric', 'between:0,1000'],
             'calories_burned' => ['nullable', 'numeric', 'between:0,10000'],
@@ -87,16 +89,26 @@ class StoreSessionRequest extends SportFormRequest
             'muscle_group' => ['nullable', 'string', Rule::enum(MuscleGroup::class)],
             'equipment' => ['nullable', 'string', Rule::in(Equipment::values())],
             'movement' => ['nullable', 'string', Rule::in(ExerciseMovement::MOVEMENTS)],
-            'sets' => ['nullable', 'integer', 'between:1,10'],
+            // Sport v2 : jusqu'à 30 répétitions d'intervalles, des blocs continus de 3 h, 30 min de récup.
+            'sets' => ['nullable', 'integer', 'between:1,30'],
             'reps' => ['nullable', 'integer', 'between:1,50'],
-            'duration_sec' => ['nullable', 'integer', 'between:5,3600'],
-            'rest_sec' => ['nullable', 'integer', 'between:0,600'],
+            'duration_sec' => ['nullable', 'integer', 'between:5,10800'],
+            'rest_sec' => ['nullable', 'integer', 'between:0,1800'],
             'weight_kg' => ['nullable', 'numeric', 'between:0,500'],
             'met' => ['nullable', 'numeric', 'between:1,20'],
             'instructions' => ['nullable', 'string', 'max:1000'],
             'intensity' => ['nullable', 'string', Rule::enum(Intensity::class)],
             'distance_km' => ['nullable', 'numeric', 'between:0,1000'],
             'notes' => ['nullable', 'string', 'max:500'],
+            // Prescription structurée : type contrôlé ici, tout le reste filtré et borné par
+            // Prescription::sanitize (fc_bpm recalculé, jamais repris du client).
+            'prescription' => ['nullable', 'array'],
+            'prescription.type' => ['nullable', 'string', Rule::in(Prescription::TYPES)],
+            'prescription.cible' => ['nullable', 'array'],
+            'prescription.recup_cible' => ['nullable', 'array'],
+            'prescription.consigne' => ['nullable', 'string', 'max:300'],
+            'prescription.charge_conseil' => ['nullable', 'string', 'max:200'],
+            'prescription.tempo' => ['nullable', 'string', 'max:12'],
         ];
     }
 

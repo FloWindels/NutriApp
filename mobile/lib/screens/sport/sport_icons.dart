@@ -104,9 +104,29 @@ IconData equipmentIcon(String? equipment) {
     case 'machine':
       return Icons.precision_manufacturing;
     case 'tapis':
+      return Icons.self_improvement;
+    case 'tapis_course':
       return Icons.directions_run;
     case 'velo':
+    case 'velo_route':
       return Icons.directions_bike;
+    case 'elliptique':
+      return Icons.directions_walk;
+    case 'rameur':
+      return Icons.rowing;
+    case 'piscine':
+      return Icons.pool;
+    case 'corde_a_sauter':
+      return Icons.cable;
+    case 'trx':
+      return Icons.drag_handle;
+    case 'swiss_ball':
+    case 'medecine_ball':
+      return Icons.sports_volleyball_outlined;
+    case 'step':
+      return Icons.stairs_outlined;
+    case 'poulie':
+      return Icons.sync_alt;
     default:
       return Icons.fitness_center;
   }

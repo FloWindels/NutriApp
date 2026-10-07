@@ -93,7 +93,12 @@ class ExerciseMovement
     /** Motifs déduits du seul matériel, quand aucun mot-clé ne ressort. */
     private const EQUIPMENT_FALLBACK = [
         'velo' => 'velo',
-        'tapis' => 'course',
+        'velo_route' => 'velo',
+        'elliptique' => 'velo',
+        'tapis_course' => 'course',
+        'rameur' => 'rameur',
+        'piscine' => 'nage',
+        'corde_a_sauter' => 'saut',
         'barre_traction' => 'tirage_vertical',
     ];
 

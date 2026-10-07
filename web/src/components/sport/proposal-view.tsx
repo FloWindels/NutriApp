@@ -6,7 +6,9 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Disclosure } from "@/components/sport/chips";
 import { ExercisePickerModal } from "@/components/sport/exercise-picker";
-import { describeSets, sportApi, useInvalidateSport } from "@/components/sport/sport-api";
+import { unlockAudio } from "@/components/sport/guided-audio";
+import { PrescriptionDetails } from "@/components/sport/prescription-view";
+import { sportApi, useInvalidateSport } from "@/components/sport/sport-api";
 import { GeneratedByBadge } from "@/components/sport/shared";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
@@ -99,7 +101,8 @@ export function ProposalView({
     },
     onSuccess: async (session) => {
       await invalidate();
-      router.push(`/dashboard/sport/${session.id}`);
+      // La page de la séance ouvre directement le mode guidé.
+      router.push(`/dashboard/sport/${session.id}?guide=1`);
     },
     onError: (error) => toastError("Impossible de démarrer la séance", getErrorMessage(error)),
   });
@@ -129,6 +132,10 @@ export function ProposalView({
                       duration_sec: row.duration_sec ?? exercise.default_duration_sec,
                       instructions: exercise.instructions,
                       met: exercise.met,
+                      // La prescription visait l’ancien exercice : le serveur la recalculera.
+                      prescription: null,
+                      resume: null,
+                      etapes: null,
                     } satisfies ProposalExercise),
               ),
             },
@@ -147,7 +154,7 @@ export function ProposalView({
           title={proposal.title}
           subtitle={[
             formatMinutes(proposal.duration_min),
-            proposal.lieu ? labelFor(SPORT_LIEU_LABELS, proposal.lieu) : null,
+            proposal.lieu_nom ?? (proposal.lieu ? labelFor(SPORT_LIEU_LABELS, proposal.lieu) : null),
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -188,8 +195,16 @@ export function ProposalView({
         ) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button onClick={() => startMutation.mutate()} loading={startMutation.isPending} disabled={busy}>
-            Commencer
+          <Button
+            onClick={() => {
+              // Déverrouille le son pendant le geste (Safari iPhone) pour la séance guidée.
+              unlockAudio();
+              startMutation.mutate();
+            }}
+            loading={startMutation.isPending}
+            disabled={busy}
+          >
+            Démarrer la séance
           </Button>
           <Button variant="secondary" onClick={() => setPlanOpen(true)} disabled={busy}>
             Planifier…
@@ -225,8 +240,6 @@ export function ProposalView({
                     <p className="text-sm font-medium text-slate-900">{exercise.name}</p>
                     <p className="mt-0.5 text-xs text-slate-500">
                       {[
-                        describeSets(exercise),
-                        exercise.rest_sec ? `repos ${exercise.rest_sec} s` : null,
                         labelFor(EXERCISE_CATEGORY_LABELS, exercise.category),
                         exercise.muscle_group ? labelFor(MUSCLE_GROUP_LABELS, exercise.muscle_group) : null,
                       ]
@@ -243,7 +256,8 @@ export function ProposalView({
                     Remplacer
                   </Button>
                 </div>
-                <Disclosure label="Voir les consignes" className="mt-2">
+                <PrescriptionDetails exercise={exercise} className="mt-3" />
+                <Disclosure label="Comment faire ?" className="mt-2">
                   {exercise.instructions || "Aucune consigne détaillée pour cet exercice."}
                 </Disclosure>
               </li>

@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { CalendarTab } from "@/components/sport/calendar-tab";
+import { LieuxModal } from "@/components/sport/lieux-modal";
 import { SessionsTab } from "@/components/sport/sessions-tab";
 import { TodayTab } from "@/components/sport/today-tab";
+import { Button } from "@/components/ui/button";
 import { SectionHeader } from "@/components/ui/section-header";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
@@ -39,6 +41,7 @@ function SportPageContent() {
   const raw = params.get("onglet");
   const tab: TabKey = isTab(raw) ? raw : "aujourdhui";
   const autoGenerate = params.get("generer") === "1";
+  const [lieuxOpen, setLieuxOpen] = useState(false);
 
   function selectTab(next: TabKey) {
     const query = new URLSearchParams(params.toString());
@@ -54,7 +57,14 @@ function SportPageContent() {
         title="Tes séances"
         subtitle="Planifie tes jours d’entraînement, enregistre ce que tu fais, et récupère les calories brûlées dans ton budget."
         tone="amber"
+        actions={
+          <Button variant="secondary" size="sm" onClick={() => setLieuxOpen(true)}>
+            Mes lieux
+          </Button>
+        }
       />
+
+      <LieuxModal open={lieuxOpen} onClose={() => setLieuxOpen(false)} />
 
       <div
         role="tablist"

@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/confirm_dialog.dart';
 import '../../widgets/macro_pill.dart';
 import '../../widgets/status_banner.dart';
+import 'prescription_view.dart';
 import 'sport_icons.dart';
 
 /// What the caller must do after [SessionDetailSheet] closed.
@@ -291,7 +292,10 @@ class _SessionDetailSheetState extends State<SessionDetailSheet> {
                   ),
                 ],
               ),
-            if (session.sportName != null || session.lieu != null || session.distanceKm != null) ...[
+            if (session.sportName != null ||
+                session.lieu != null ||
+                session.lieuNom != null ||
+                session.distanceKm != null) ...[
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
@@ -299,9 +303,9 @@ class _SessionDetailSheetState extends State<SessionDetailSheet> {
                 children: [
                   if (session.sportName != null)
                     TonePill(label: session.sportName!, tone: MaviohColors.primary, icon: sportIconFor(null)),
-                  if (session.lieu != null)
+                  if (session.lieuNom != null || session.lieu != null)
                     TonePill(
-                      label: AppStrings.vocabLabel(AppStrings.sportLieux, session.lieu),
+                      label: session.lieuNom ?? AppStrings.vocabLabel(AppStrings.sportLieux, session.lieu),
                       tone: MaviohColors.sky,
                       icon: Icons.place_outlined,
                     ),
@@ -331,28 +335,42 @@ class _SessionDetailSheetState extends State<SessionDetailSheet> {
                 const SizedBox(height: 4),
                 for (final exercise in entry.value)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    padding: const EdgeInsets.symmetric(vertical: 5),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          exercise.completed ? Icons.check_circle_rounded : Icons.circle_outlined,
-                          size: 16,
-                          color: exercise.completed ? MaviohColors.primary : MaviohColors.border,
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Icon(
+                            exercise.completed ? Icons.check_circle_rounded : Icons.circle_outlined,
+                            size: 16,
+                            color: exercise.completed ? MaviohColors.primary : MaviohColors.border,
+                          ),
                         ),
                         const SizedBox(width: 8),
                         // Le motif de mouvement, envoyé par l'API : il distingue un squat d'un
                         // tirage sans avoir à lire le nom.
-                        Icon(movementIcon(exercise.movement), size: 16, color: MaviohColors.primary),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Icon(movementIcon(exercise.movement), size: 16, color: MaviohColors.primary),
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
-                          child: Text(
-                            exercise.name,
-                            style: const TextStyle(fontSize: 13.5, color: MaviohColors.textSecondary),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                exercise.name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: MaviohColors.text,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              PrescriptionView(resume: exercise.resume, prescription: exercise.prescriptionV2),
+                            ],
                           ),
-                        ),
-                        Text(
-                          exercise.prescription,
-                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: MaviohColors.muted),
                         ),
                       ],
                     ),
@@ -368,7 +386,7 @@ class _SessionDetailSheetState extends State<SessionDetailSheet> {
                 child: FilledButton.icon(
                   onPressed: _busy ? null : _start,
                   icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Commencer'),
+                  label: Text(session.hasGuidedSteps ? 'Démarrer la séance' : 'Commencer'),
                 ),
               )
             else if (session.isInProgress)

@@ -49,6 +49,50 @@ class SportService {
     return SportConfig.fromJson(ApiClient.asMap(json['data']));
   }
 
+  // ----- Sport v2 : lieux d'entraînement -----------------------------------
+
+  /// `GET /sport/lieux` (par défaut en premier, puis par nom).
+  Future<List<SportLieu>> lieux() async {
+    final json = await _api.getJson('/sport/lieux');
+    return ApiClient.asList(json['data']).map(SportLieu.fromJson).toList();
+  }
+
+  /// `POST /sport/lieux {nom, type, materiel, par_defaut?}` → 201.
+  Future<SportLieu> createLieu({
+    required String nom,
+    required String type,
+    required List<String> materiel,
+    bool? parDefaut,
+  }) async {
+    final json = await _api.postJson('/sport/lieux', body: {
+      'nom': nom.trim(),
+      'type': type,
+      'materiel': materiel,
+      'par_defaut': ?parDefaut,
+    });
+    return SportLieu.fromJson(ApiClient.asMap(json['data']));
+  }
+
+  /// `PUT /sport/lieux/{id}` (mêmes champs).
+  Future<SportLieu> updateLieu(
+    int id, {
+    required String nom,
+    required String type,
+    required List<String> materiel,
+    bool? parDefaut,
+  }) async {
+    final json = await _api.putJson('/sport/lieux/$id', body: {
+      'nom': nom.trim(),
+      'type': type,
+      'materiel': materiel,
+      'par_defaut': ?parDefaut,
+    });
+    return SportLieu.fromJson(ApiClient.asMap(json['data']));
+  }
+
+  /// `DELETE /sport/lieux/{id}` (le plus ancien restant devient le lieu par défaut).
+  Future<void> deleteLieu(int id) => _api.deleteJson('/sport/lieux/$id');
+
   /// `GET /sport/exercises?equipment=&muscle=&level=&category=&q=&page=` (compte requis).
   Future<Paged<Exercise>> exercises({
     String? equipment,

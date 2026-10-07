@@ -3,6 +3,8 @@
 namespace App\Http\Resources\Sport;
 
 use App\Services\Sport\ExerciseMovement;
+use App\Services\Sport\Prescription;
+use App\Services\Sport\PrescriptionFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -33,6 +35,8 @@ class ProposalResource extends JsonResource
             'sport_id' => isset($proposal['sport_id']) && $proposal['sport_id'] !== null ? (int) $proposal['sport_id'] : null,
             'sport_name' => $proposal['sport_name'] ?? null,
             'lieu' => $proposal['lieu'] ?? null,
+            'lieu_id' => isset($proposal['lieu_id']) && $proposal['lieu_id'] !== null ? (int) $proposal['lieu_id'] : null,
+            'lieu_nom' => $proposal['lieu_nom'] ?? null,
             'goal' => $proposal['goal'] ?? null,
             'level' => $proposal['level'] ?? null,
             'duration_min' => (int) ($proposal['duration_min'] ?? 0),
@@ -52,7 +56,10 @@ class ProposalResource extends JsonResource
             'blocks' => array_map(static fn (array $block): array => [
                 'key' => (string) ($block['key'] ?? 'principal'),
                 'name' => (string) ($block['name'] ?? ''),
-                'exercises' => array_map(static fn (array $ex): array => self::exercise($ex), array_values((array) ($block['exercises'] ?? []))),
+                'exercises' => array_map(
+                    static fn (array $ex): array => self::exercise($ex, (string) ($block['key'] ?? 'principal')),
+                    array_values((array) ($block['exercises'] ?? []))
+                ),
             ], array_values((array) ($proposal['blocks'] ?? []))),
         ];
     }
@@ -61,8 +68,13 @@ class ProposalResource extends JsonResource
      * @param  array<string, mixed>  $ex
      * @return array<string, mixed>
      */
-    private static function exercise(array $ex): array
+    private static function exercise(array $ex, string $block = 'principal'): array
     {
+        // Sport v2 : prescription (fc_bpm déjà calculé par le générateur), phrase et étapes.
+        $ex['prescription'] = is_array($ex['prescription'] ?? null) && in_array($ex['prescription']['type'] ?? null, Prescription::TYPES, true)
+            ? $ex['prescription']
+            : null;
+
         return [
             'exercise_id' => isset($ex['exercise_id']) && $ex['exercise_id'] !== null ? (int) $ex['exercise_id'] : null,
             'name' => (string) ($ex['name'] ?? ''),
@@ -81,6 +93,9 @@ class ProposalResource extends JsonResource
             'intensity' => $ex['intensity'] ?? null,
             'instructions' => (string) ($ex['instructions'] ?? ''),
             'met' => isset($ex['met']) && $ex['met'] !== null ? (float) $ex['met'] : null,
+            'prescription' => $ex['prescription'],
+            'resume' => PrescriptionFormatter::resume($ex),
+            'etapes' => PrescriptionFormatter::etapes($ex, null, $block),
         ];
     }
 }

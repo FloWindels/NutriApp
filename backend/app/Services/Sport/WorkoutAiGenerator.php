@@ -10,6 +10,7 @@ use App\Enums\Lieu;
 use App\Exceptions\LlmBusyException;
 use App\Models\Profile;
 use App\Models\Sport;
+use App\Models\SportLieu;
 use App\Models\SportPlan;
 use App\Models\User;
 use App\Models\UserSetting;
@@ -23,15 +24,26 @@ use Throwable;
  * mode « ia » quand une clé Anthropic est configurée ET que l'utilisateur a activé « Séances proposées
  * par l'IA » ET que la demande ne force pas « regles » ; toute exception (LlmUnavailableException,
  * refus, JSON invalide…) bascule sur le générateur par règles avec un avertissement.
+ *
+ * Sport v2 :
+ * - la séance se génère pour un lieu (`lieu_id`, sinon le lieu du plan, sinon le lieu par défaut
+ *   du compte quand la demande ne précise ni lieu ni matériel) : son type et son matériel font foi ;
+ * - les sports cardio passent TOUJOURS par les modèles d'entraînement (CardioTemplates), même
+ *   en mode IA : cadences, résistances, zones et temps au 500 m doivent être justes, et un petit
+ *   modèle local les invente. `generated_by` reste honnête (« regles ») et l'explication le dit ;
+ * - chaque exercice sort avec une prescription complète (PrescriptionRules) : l'IA fournit au
+ *   plus `rir`, `tempo` et `consigne`, le serveur complète et calcule les zones cardiaques.
  */
 class WorkoutAiGenerator
 {
     public const WARNING_FALLBACK = 'Génération IA indisponible : séance proposée par les règles Mavi’oh.';
 
+    public const EXPLICATION_CARDIO = 'Séance d’endurance construite sur des modèles d’entraînement éprouvés : cadences, résistances et zones y sont plus fiables qu’une proposition de l’IA.';
+
     public const WARNING_BUSY = 'L’IA est très demandée en ce moment : séance proposée par les règles Mavi’oh. Réessaie dans une minute pour une séance par l’IA.';
 
-    /** Matériel présumé en salle quand le profil n'en précise pas. */
-    public const GYM_EQUIPMENT = ['machine', 'barre', 'halteres', 'banc', 'tapis', 'velo', 'barre_traction', 'kettlebell', 'elastiques', 'aucun'];
+    /** Matériel présumé en salle quand ni lieu ni profil n'en précisent (préréglage salle publique). */
+    public const GYM_EQUIPMENT = ['aucun', 'tapis', 'elastiques', 'corde_a_sauter', 'trx', 'swiss_ball', 'medecine_ball', 'step', 'halteres', 'kettlebell', 'barre', 'banc', 'barre_traction', 'machine', 'poulie', 'velo', 'tapis_course', 'rameur', 'elliptique'];
 
     public function __construct(
         private LlmWorkoutClient $client,
@@ -75,7 +87,7 @@ class WorkoutAiGenerator
      * @param  array<string, mixed>  $input  Corps validé
      * @return array<string, mixed>
      */
-    public function resolveRequest(array $input, ?Profile $profile, ?SportPlan $plan = null): array
+    public function resolveRequest(array $input, ?Profile $profile, ?SportPlan $plan = null, ?SportLieu $lieuEntrainement = null): array
     {
         $sport = null;
         $sportId = $input['sport_id'] ?? $plan?->sport_id;
@@ -92,10 +104,10 @@ class WorkoutAiGenerator
                 : ($plan?->sport_name ? SportVocab::sportTypeFor($plan->sport_name) : 'musculation');
         }
 
-        $lieu = $input['lieu'] ?? $plan?->lieu ?? $profile?->sport_lieu ?? 'maison';
+        $lieu = $lieuEntrainement?->type ?? $input['lieu'] ?? $plan?->lieu ?? $profile?->sport_lieu ?? 'maison';
         $lieu = in_array($lieu, Lieu::values(), true) ? $lieu : 'maison';
 
-        $equipment = $input['equipment'] ?? $profile?->sport_materiel;
+        $equipment = $lieuEntrainement?->equipement() ?? $input['equipment'] ?? $profile?->sport_materiel;
         if ($equipment === null || $equipment === []) {
             $equipment = in_array($lieu, ['salle_publique', 'salle_privee'], true) ? self::GYM_EQUIPMENT : ['aucun'];
         }
@@ -117,6 +129,9 @@ class WorkoutAiGenerator
             'sport_id' => $sport?->id,
             'sport_name' => $sport?->name ?? $plan?->sport_name,
             'lieu' => $lieu,
+            'lieu_id' => $lieuEntrainement?->id,
+            'lieu_nom' => $lieuEntrainement?->nom,
+            'age' => $profile?->age !== null ? (int) $profile->age : null,
             'equipment' => $equipment,
             'focus' => array_values(array_intersect((array) ($input['focus'] ?? $profile?->sport_focus ?? []), SportVocab::focusValues())),
             'zones_a_eviter' => array_values(array_intersect((array) ($input['zones_a_eviter'] ?? $profile?->sport_zones_a_eviter ?? []), array_keys(SportVocab::ZONES))),
@@ -140,13 +155,14 @@ class WorkoutAiGenerator
             ? $user->getRelation('profile')
             : Profile::query()->where('user_id', $user->id)->first();
 
-        $request = $this->resolveRequest($input, $profile, $plan);
+        $request = $this->resolveRequest($input, $profile, $plan, $this->lieuPour($user, $input, $plan));
         $date = $request['date'] ?? Clock::today($user);
         $weight = $this->calories->weightFor($user, $date);
         $context = $this->context->build($user, $request, $profile, $plan);
 
         $warning = null;
-        if (($request['mode'] ?? 'ia') === 'ia' && $this->iaDisponible($user)) {
+        $cardio = SportVocab::isCardioType($request['sport_type']);
+        if (($request['mode'] ?? 'ia') === 'ia' && ! $cardio && $this->iaDisponible($user)) {
             try {
                 $candidates = $this->context->candidates($request);
                 $catalog = $this->context->catalog($request, $candidates);
@@ -167,7 +183,15 @@ class WorkoutAiGenerator
 
                 $raw = $this->client->generate($context, $this->promptRequest($request), $catalog);
 
-                return $this->decorate($this->schema->normalize($raw, $request, $catalog, $weight, $this->llmModel()), $request);
+                $proposal = $this->schema->normalize($raw, $request, $catalog, $weight, $this->llmModel());
+                $proposal['blocks'] = WorkoutGenerator::completePrescriptions($proposal['blocks'], [
+                    'goal' => $request['goal'],
+                    'level' => $request['level'],
+                    'gentle' => (bool) ($context['profil']['profil_mineur'] ?? false) || (($context['profil']['situation_particuliere'] ?? 'aucune') !== 'aucune'),
+                    'age' => $request['age'],
+                ]);
+
+                return $this->decorate($proposal, $request);
             } catch (Throwable $e) {
                 Log::warning('Coach IA indisponible : repli sur les règles Mavi’oh.', [
                     'exception' => get_class($e),
@@ -181,8 +205,40 @@ class WorkoutAiGenerator
         if ($warning !== null) {
             array_unshift($proposal['warnings'], $warning);
         }
+        if ($cardio && ($request['mode'] ?? 'ia') === 'ia' && $this->iaDisponible($user)) {
+            array_unshift($proposal['explication'], self::EXPLICATION_CARDIO);
+        }
 
         return $this->decorate($proposal, $request);
+    }
+
+    /**
+     * Lieu d'entraînement de la génération : `lieu_id` demandé (déjà validé comme appartenant
+     * au compte), sinon celui du plan, sinon le lieu par défaut — seulement si la demande ne
+     * précise ni `lieu` ni `equipment` (les anciennes applications envoient les leurs).
+     *
+     * @param  array<string, mixed>  $input
+     */
+    private function lieuPour(User $user, array $input, ?SportPlan $plan): ?SportLieu
+    {
+        $lieux = fn () => SportLieu::query()->where('user_id', $user->id);
+
+        if (! empty($input['lieu_id'])) {
+            return $lieux()->find((int) $input['lieu_id']);
+        }
+        if ($plan?->lieu_id !== null) {
+            $lieu = $lieux()->find($plan->lieu_id);
+            if ($lieu !== null) {
+                return $lieu;
+            }
+        }
+        if (array_key_exists('lieu', $input) && $input['lieu'] !== null
+            || array_key_exists('equipment', $input) && $input['equipment'] !== null
+            || ($plan?->lieu !== null && $plan->lieu !== '')) {
+            return null;
+        }
+
+        return $lieux()->where('par_defaut', true)->orderBy('id')->first();
     }
 
     /**
@@ -217,8 +273,14 @@ class WorkoutAiGenerator
      */
     private function decorate(array $proposal, array $request): array
     {
-        $proposal['sport_id'] = $request['sport_id'];
-        $proposal['sport_name'] = $request['sport_name'] ?? SportVocab::SPORT_TYPES[$proposal['sport_type']] ?? null;
+        // Sport remplacé faute de matériel (vélo → elliptique…) : le nom suit la séance réelle.
+        $remplace = ($proposal['sport_type'] ?? null) !== $request['sport_type'] && SportVocab::isCardioType($request['sport_type']);
+        $proposal['sport_id'] = $remplace ? null : $request['sport_id'];
+        $proposal['sport_name'] = $remplace
+            ? (SportVocab::SPORT_TYPES[$proposal['sport_type']] ?? null)
+            : ($request['sport_name'] ?? SportVocab::SPORT_TYPES[$proposal['sport_type']] ?? null);
+        $proposal['lieu_id'] = $request['lieu_id'] ?? null;
+        $proposal['lieu_nom'] = $request['lieu_nom'] ?? null;
         $proposal['sport_plan_id'] = $request['sport_plan_id'];
         $proposal['date'] = $request['date'];
         $proposal['planned_at'] = $request['planned_at'];

@@ -48,6 +48,9 @@ class SportConfigController extends SportController
                     'categories_sport' => SportVocab::options(SportCategory::labels()),
                     'types_sport' => SportVocab::options(SportVocab::SPORT_TYPES),
                 ],
+                // Sport v2 : matériel par catégorie et préréglages proposés à la création d'un lieu.
+                'materiel_catalogue' => Equipment::catalogue(),
+                'materiel_par_type' => Equipment::presets(),
             ],
         ]);
     }

@@ -12,7 +12,9 @@ use Illuminate\Database\Seeder;
  * Vocabulaire (brief §13.1) :
  * - category : force | cardio | mobilite | gainage
  * - muscle_group : jambes | fessiers | dos | pectoraux | epaules | bras | abdos | corps_entier | cardio | mobilite
- * - equipment : aucun | halteres | barre | kettlebell | elastiques | banc | barre_traction | machine | tapis | velo
+ * - equipment : valeurs de l'enum Equipment (aucun, tapis de sol, élastiques, corde, TRX, swiss ball,
+ *   médecine-ball, step, haltères, kettlebell, barre, banc, barre de traction, machines, poulie,
+ *   vélo, vélo de route, tapis de course, rameur, elliptique, piscine)
  * - level : debutant | intermediaire | avance
  * - contraindications ⊂ genoux, dos, epaules, poignets, hanches, cou, chevilles, coudes
  */
@@ -333,19 +335,19 @@ class ExerciseSeeder extends Seeder
             self::ex('Burpees', 'burpees', 'cardio', 'corps_entier', 'aucun', 'avance', 10.0, 3, 10, null,
                 'Descends en squat, pose les mains au sol, lance les pieds en arrière en planche, fais une pompe, reviens en squat et saute bras levés.',
                 ['genoux', 'poignets', 'epaules', 'chevilles', 'dos']),
-            self::ex('Corde à sauter', 'corde-a-sauter', 'cardio', 'cardio', 'aucun', 'intermediaire', 10.0, null, null, 60,
+            self::ex('Corde à sauter', 'corde-a-sauter', 'cardio', 'cardio', 'corde_a_sauter', 'intermediaire', 10.0, null, null, 60,
                 'Saute à petits bonds sur l’avant des pieds, coudes près du corps, la corde tourne grâce aux poignets. Reste souple à la réception.',
                 ['genoux', 'chevilles']),
             self::ex('Shadow boxing', 'shadow-boxing', 'cardio', 'corps_entier', 'aucun', 'debutant', 7.0, null, null, 60,
                 'En garde, enchaîne directs et crochets dans le vide en te déplaçant sur les appuis. Garde les épaules relâchées et le ventre serré.',
                 ['epaules']),
-            self::ex('Course sur tapis', 'course-tapis', 'cardio', 'cardio', 'tapis', 'intermediaire', 9.0, null, null, 600,
+            self::ex('Course sur tapis', 'course-tapis', 'cardio', 'cardio', 'tapis_course', 'intermediaire', 9.0, null, null, 600,
                 'Cours à une allure où tu peux encore prononcer quelques mots. Regarde devant toi, foulée légère, bras détendus.',
                 ['genoux', 'chevilles', 'hanches']),
-            self::ex('Marche rapide sur tapis', 'marche-rapide-tapis', 'cardio', 'cardio', 'tapis', 'debutant', 4.5, null, null, 600,
+            self::ex('Marche rapide sur tapis', 'marche-rapide-tapis', 'cardio', 'cardio', 'tapis_course', 'debutant', 4.5, null, null, 600,
                 'Marche d’un bon pas (5–6 km/h) en balançant les bras, sans tenir les poignées. Redresse-toi et regarde loin.',
                 []),
-            self::ex('Marche inclinée sur tapis', 'marche-inclinee-tapis', 'cardio', 'cardio', 'tapis', 'debutant', 6.0, null, null, 600,
+            self::ex('Marche inclinée sur tapis', 'marche-inclinee-tapis', 'cardio', 'cardio', 'tapis_course', 'debutant', 6.0, null, null, 600,
                 'Règle une pente de 6 à 10 % et marche d’un pas régulier sans te tenir. Les mollets et les fessiers travaillent davantage.',
                 ['chevilles']),
             self::ex('Vélo d’appartement', 'velo-appartement', 'cardio', 'cardio', 'velo', 'debutant', 6.5, null, null, 600,
@@ -354,6 +356,104 @@ class ExerciseSeeder extends Seeder
             self::ex('Fractionné vélo', 'fractionne-velo', 'cardio', 'cardio', 'velo', 'intermediaire', 8.5, null, null, 480,
                 'Alterne 30 secondes rapides avec résistance et 60 secondes de récupération souple. Reste assis et garde le haut du corps stable.',
                 ['genoux']),
+
+            // ------------------------------------------------------------------
+            // SPORT V2 — matériel des lieux d'entraînement
+            // ------------------------------------------------------------------
+            // Poulie / vis-à-vis
+            self::ex('Tirage vertical à la poulie', 'tirage-vertical-poulie', 'force', 'dos', 'poulie', 'debutant', 4.5, 3, 12, null,
+                'Assis, cuisses calées, tire la barre vers le haut de la poitrine en serrant les omoplates, coudes vers le bas. Remonte en contrôlant.',
+                ['epaules', 'coudes']),
+            self::ex('Rowing assis à la poulie', 'rowing-assis-poulie', 'force', 'dos', 'poulie', 'debutant', 4.5, 3, 12, null,
+                'Assis, dos droit et genoux légèrement fléchis, tire la poignée vers le nombril en serrant les omoplates, puis tends les bras sans arrondir le dos.',
+                ['dos']),
+            self::ex('Face pull à la poulie', 'face-pull-poulie', 'force', 'epaules', 'poulie', 'intermediaire', 4.0, 3, 15, null,
+                'Corde à hauteur du visage, tire vers le front en écartant les mains et en ouvrant les coudes. Reviens lentement, épaules basses.',
+                ['epaules']),
+            self::ex('Extension triceps à la poulie', 'extension-triceps-poulie', 'force', 'bras', 'poulie', 'debutant', 3.5, 3, 12, null,
+                'Coudes collés au corps, pousse la barre ou la corde vers le bas jusqu’à tendre les bras, puis remonte sans décoller les coudes.',
+                ['coudes']),
+            self::ex('Curl biceps à la poulie', 'curl-biceps-poulie', 'force', 'bras', 'poulie', 'debutant', 3.5, 3, 12, null,
+                'Debout face à la poulie basse, plie les coudes pour monter la barre vers les épaules, coudes immobiles, puis redescends lentement.',
+                ['coudes']),
+            self::ex('Écarté vis-à-vis à la poulie', 'ecarte-vis-a-vis-poulie', 'force', 'pectoraux', 'poulie', 'intermediaire', 4.0, 3, 12, null,
+                'Entre les deux poulies hautes, un pied devant, ramène les poignées devant la poitrine bras légèrement fléchis, comme pour enlacer un arbre.',
+                ['epaules']),
+
+            // Sangles de suspension (TRX)
+            self::ex('Rowing aux sangles TRX', 'rowing-trx', 'force', 'dos', 'trx', 'debutant', 4.0, 3, 12, null,
+                'Corps penché en arrière, gainé comme une planche, tire la poitrine vers les poignées en serrant les omoplates. Plus les pieds avancent, plus c’est dur.',
+                ['epaules', 'coudes']),
+            self::ex('Pompes aux sangles TRX', 'pompes-trx', 'force', 'pectoraux', 'trx', 'intermediaire', 4.5, 3, 10, null,
+                'Mains dans les poignées, corps incliné vers l’avant et gainé, descends la poitrine entre les mains puis repousse. Contrôle l’instabilité.',
+                ['epaules', 'poignets']),
+            self::ex('Squat aux sangles TRX', 'squat-trx', 'force', 'jambes', 'trx', 'debutant', 4.0, 3, 15, null,
+                'En tenant les poignées, descends en squat profond, poids sur les talons, puis remonte en t’aidant à peine des bras.',
+                ['genoux']),
+            self::ex('Gainage pieds dans les sangles TRX', 'gainage-trx', 'gainage', 'abdos', 'trx', 'intermediaire', 3.5, 3, null, 30,
+                'Pieds dans les sangles, en appui sur les avant-bras, aligne épaules, bassin et talons sans laisser les sangles se balancer.',
+                ['epaules', 'dos']),
+
+            // Médecine-ball
+            self::ex('Wall ball (squat et lancer au mur)', 'wall-ball', 'cardio', 'corps_entier', 'medecine_ball', 'intermediaire', 8.0, 3, 15, null,
+                'Ballon contre la poitrine, descends en squat puis lance-le haut contre le mur en te relevant ; rattrape-le en redescendant.',
+                ['genoux', 'epaules']),
+            self::ex('Crunch rotation russe au médecine-ball', 'rotation-russe-medecine-ball', 'gainage', 'abdos', 'medecine_ball', 'intermediaire', 3.5, 3, 16, null,
+                'Assis, buste incliné en arrière et pieds légers, fais passer le ballon d’un côté à l’autre en tournant les épaules, dos long.',
+                ['dos']),
+            self::ex('Squat avec médecine-ball', 'squat-medecine-ball', 'force', 'jambes', 'medecine_ball', 'debutant', 4.5, 3, 12, null,
+                'Ballon tenu contre la poitrine, descends en squat, poitrine haute, puis remonte en poussant dans les talons.',
+                ['genoux']),
+
+            // Swiss ball
+            self::ex('Crunch sur swiss ball', 'crunch-swiss-ball', 'gainage', 'abdos', 'swiss_ball', 'debutant', 3.0, 3, 15, null,
+                'Le bas du dos sur le ballon, pieds au sol, enroule le buste vers le haut sans tirer sur la nuque, puis redescends lentement.',
+                ['cou']),
+            self::ex('Planche sur swiss ball', 'planche-swiss-ball', 'gainage', 'abdos', 'swiss_ball', 'intermediaire', 3.5, 3, null, 30,
+                'Avant-bras sur le ballon, corps aligné, serre le ventre pour l’empêcher de rouler. Respire calmement.',
+                ['epaules', 'dos']),
+            self::ex('Leg curl au swiss ball', 'leg-curl-swiss-ball', 'force', 'jambes', 'swiss_ball', 'intermediaire', 4.0, 3, 12, null,
+                'Sur le dos, talons sur le ballon, monte le bassin puis ramène le ballon vers les fesses en pliant les genoux, et repousse-le.',
+                ['genoux']),
+            self::ex('Pont fessier pieds sur swiss ball', 'pont-fessier-swiss-ball', 'force', 'fessiers', 'swiss_ball', 'debutant', 3.5, 3, 15, null,
+                'Sur le dos, pieds sur le ballon, monte le bassin en serrant les fessiers jusqu’à aligner épaules, hanches et genoux.',
+                ['cou']),
+
+            // Step / box
+            self::ex('Step up alterné sur step', 'step-up-alterne', 'force', 'jambes', 'step', 'debutant', 5.0, 3, 12, null,
+                'Pose tout le pied sur le step, monte en poussant sur la jambe d’appui sans t’élancer, redescends en contrôle. Alterne les jambes.',
+                ['genoux']),
+            self::ex('Box jump sur step', 'box-jump', 'cardio', 'jambes', 'step', 'avance', 9.0, 3, 8, null,
+                'Pieds largeur de hanches, saute à deux pieds sur le step et réceptionne-toi en douceur genoux fléchis ; redescends en marchant.',
+                ['genoux', 'chevilles']),
+            self::ex('Pompes inclinées mains sur le step', 'pompes-inclinees-step', 'force', 'pectoraux', 'step', 'debutant', 3.8, 3, 12, null,
+                'Mains sur le step, corps gainé, descends la poitrine vers le bord puis repousse. Plus facile que les pompes au sol.',
+                ['poignets', 'epaules']),
+
+            // Corde à sauter
+            self::ex('Corde à sauter pieds alternés', 'corde-a-sauter-pieds-alternes', 'cardio', 'cardio', 'corde_a_sauter', 'intermediaire', 10.5, null, null, 45,
+                'Saute en alternant les pieds comme en courant sur place, coudes près du corps, réceptions légères sur l’avant du pied.',
+                ['genoux', 'chevilles']),
+
+            // Rameur, elliptique, vélo de route, piscine
+            self::ex('Rameur en endurance', 'rameur-endurance', 'cardio', 'cardio', 'rameur', 'debutant', 7.0, null, null, 600,
+                'À 22–24 coups par minute : pousse jambes, dos puis bras, reviens bras, dos puis jambes, le retour deux fois plus lent que la poussée.',
+                ['dos']),
+            self::ex('Rameur fractionné', 'rameur-fractionne', 'cardio', 'cardio', 'rameur', 'intermediaire', 8.5, null, null, 480,
+                'Alterne 1 minute à 28–32 coups par minute et 1 minute de rame souple. La puissance vient des jambes, le dos reste droit.',
+                ['dos']),
+            self::ex('Vélo elliptique', 'velo-elliptique', 'cardio', 'cardio', 'elliptique', 'debutant', 5.5, null, null, 600,
+                'Résistance moyenne, cadence régulière (60–70 tr/min), pousse dans les talons et utilise les bras sur les poignées mobiles.',
+                []),
+            self::ex('Elliptique fractionné', 'elliptique-fractionne', 'cardio', 'cardio', 'elliptique', 'intermediaire', 7.0, null, null, 480,
+                'Alterne 1 minute rapide et résistante (75–85 tr/min) et 1 min 30 souple. Buste droit, sans t’appuyer sur les poignées fixes.',
+                []),
+            self::ex('Sortie vélo en endurance', 'sortie-velo-endurance', 'cardio', 'cardio', 'velo_route', 'debutant', 7.5, null, null, 1800,
+                'Sur un parcours roulant, pédale à 85–95 tr/min en choisissant un braquet qui te laisse parler. Casque obligatoire.',
+                []),
+            self::ex('Nage libre en endurance', 'nage-libre-endurance', 'cardio', 'cardio', 'piscine', 'debutant', 8.0, null, null, 600,
+                'Crawl ou brasse à allure régulière, longues expirations dans l’eau ; fais une pause au bord dès que la nage se dégrade.',
+                ['epaules']),
 
             // ------------------------------------------------------------------
             // GAINAGE

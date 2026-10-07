@@ -39,8 +39,12 @@ class WorkoutProposalSchema
 
         $exercise = &$schema['properties']['blocks']['items']['properties']['exercises']['items'];
         $garder = ['exercise_id', 'name', 'sets', 'reps', 'duration_sec', 'rest_sec'];
+        // Sport v2 : rir, tempo et consigne sont proposés mais FACULTATIFS — les rendre requis
+        // ferait écrire au modèle une quinzaine de tokens par exercice même quand il n'a rien
+        // d'utile à dire ; le serveur complète la prescription (PrescriptionRules).
+        $facultatifs = ['rir', 'tempo', 'consigne'];
         $exercise['required'] = $garder;
-        $exercise['properties'] = array_intersect_key($exercise['properties'], array_flip($garder));
+        $exercise['properties'] = array_intersect_key($exercise['properties'], array_flip([...$garder, ...$facultatifs]));
         unset($exercise);
 
         // Au plus 5 exercices par bloc : séries et répétitions remplissent le temps demandé, et
@@ -64,7 +68,7 @@ class WorkoutProposalSchema
         $exercise = [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['exercise_id', 'name', 'category', 'muscle_group', 'equipment', 'sets', 'reps', 'duration_sec', 'rest_sec', 'distance_km', 'intensity', 'instructions'],
+            'required' => ['exercise_id', 'name', 'category', 'muscle_group', 'equipment', 'sets', 'reps', 'duration_sec', 'rest_sec', 'distance_km', 'intensity', 'instructions', 'rir', 'tempo', 'consigne'],
             'properties' => [
                 'exercise_id' => ['type' => ['integer', 'null'], 'description' => 'Identifiant du catalogue fourni, sinon null.'],
                 'name' => ['type' => 'string'],
@@ -78,6 +82,10 @@ class WorkoutProposalSchema
                 'distance_km' => ['type' => ['number', 'null']],
                 'intensity' => ['type' => ['string', 'null'], 'enum' => [...Intensity::values(), null]],
                 'instructions' => ['type' => 'string'],
+                // Sport v2 : la prescription fine vient du serveur, l'IA donne seulement ceci.
+                'rir' => ['type' => ['integer', 'null'], 'description' => 'Renforcement : répétitions gardées en réserve (0–4).'],
+                'tempo' => ['type' => ['string', 'null'], 'description' => 'Renforcement : descente-pause-montée en secondes, ex. « 3-1-1 ».'],
+                'consigne' => ['type' => ['string', 'null'], 'description' => 'Consigne courte (12 mots au plus).'],
             ],
         ];
 
@@ -374,6 +382,12 @@ class WorkoutProposalSchema
             'intensity' => in_array($ex['intensity'] ?? null, Intensity::values(), true) ? $ex['intensity'] : null,
             'instructions' => $instructions,
             'met' => $met,
+            // Indices de l'IA, complétés en prescription par PrescriptionRules (type absent).
+            'prescription' => [
+                'rir' => $this->intOrNull($ex['rir'] ?? null, 0, 5),
+                'tempo' => is_string($ex['tempo'] ?? null) && preg_match('/^\d{1,2}(-\d{1,2}){2,3}$/', trim($ex['tempo'])) === 1 ? trim($ex['tempo']) : null,
+                'consigne' => is_string($ex['consigne'] ?? null) && trim($ex['consigne']) !== '' ? mb_substr(trim(strip_tags($ex['consigne'])), 0, 200) : null,
+            ],
         ];
     }
 

@@ -17,6 +17,7 @@ use App\Models\Recipe;
 use App\Models\Recommendation;
 use App\Models\ShoppingItem;
 use App\Models\Sport;
+use App\Models\SportLieu;
 use App\Models\SportPlan;
 use App\Models\Stock;
 use App\Models\StockItem;
@@ -191,6 +192,7 @@ class AccountDeletionService
         WorkoutExercise::query()->whereIn('session_id', $sessionIds)->delete();
         SportPlan::query()->where('user_id', $userId)->delete();
         WorkoutSession::query()->whereIn('id', $sessionIds)->delete();
+        SportLieu::query()->where('user_id', $userId)->delete();
         Sport::query()->where('created_by_user_id', $userId)->where('is_public', false)->delete();
         Sport::query()->where('created_by_user_id', $userId)->update(['created_by_user_id' => null]);
 

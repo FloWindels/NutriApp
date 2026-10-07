@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Sport\SportActivityController;
 use App\Http\Controllers\Api\Sport\SportCalendarController;
 use App\Http\Controllers\Api\Sport\SportCatalogController;
 use App\Http\Controllers\Api\Sport\SportConfigController;
+use App\Http\Controllers\Api\Sport\SportLieuController;
 use App\Http\Controllers\Api\Sport\SportSummaryController;
 use App\Http\Controllers\Api\Sport\WorkoutSessionController;
 use Illuminate\Support\Facades\Route;
@@ -28,6 +29,12 @@ Route::get('/sport/exercises', [ExerciseController::class, 'index']);
 // --- Configuration et vocabulaires ----------------------------------------------------
 Route::get('/sport/config', SportConfigController::class);
 Route::get('/sport/summary', SportSummaryController::class);
+
+// --- Lieux d'entraînement (Sport v2) : gratuits, comme tout le suivi --------------------
+Route::get('/sport/lieux', [SportLieuController::class, 'index']);
+Route::post('/sport/lieux', [SportLieuController::class, 'store']);
+Route::put('/sport/lieux/{lieu}', [SportLieuController::class, 'update'])->whereNumber('lieu');
+Route::delete('/sport/lieux/{lieu}', [SportLieuController::class, 'destroy'])->whereNumber('lieu');
 
 // --- Catalogue des sports (publics + personnalisés) ------------------------------------
 Route::get('/sport/sports', [SportCatalogController::class, 'index']);

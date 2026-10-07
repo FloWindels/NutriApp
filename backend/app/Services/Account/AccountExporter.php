@@ -8,6 +8,7 @@ use App\Models\Profile;
 use App\Models\Recipe;
 use App\Models\Recommendation;
 use App\Models\ShoppingItem;
+use App\Models\SportLieu;
 use App\Models\SportPlan;
 use App\Models\User;
 use App\Models\UserSetting;
@@ -75,6 +76,9 @@ class AccountExporter
             ),
             'sport_plans' => $this->rows(
                 SportPlan::query()->where('user_id', $userId)->orderBy('date')->orderBy('id')->get()
+            ),
+            'sport_lieux' => $this->rows(
+                SportLieu::query()->where('user_id', $userId)->orderBy('id')->get()
             ),
             'recommendations' => $this->rows(
                 Recommendation::query()->where('user_id', $userId)->orderBy('date')->orderBy('priority')->get()

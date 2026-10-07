@@ -25,10 +25,12 @@ class SportPlan extends Model
         'status',
         'session_id',
         'recurrence_id',
+        'lieu_id',
     ];
 
     protected $casts = [
         'user_id' => 'integer',
+        'lieu_id' => 'integer',
         'sport_id' => 'integer',
         'session_id' => 'integer',
         'date' => 'date:Y-m-d',
@@ -52,5 +54,13 @@ class SportPlan extends Model
     public function session(): BelongsTo
     {
         return $this->belongsTo(WorkoutSession::class, 'session_id');
+    }
+
+    /**
+     * Lieu d'entraînement (Sport v2) ; null si aucun ou s'il a été supprimé.
+     */
+    public function lieuEntrainement(): BelongsTo
+    {
+        return $this->belongsTo(SportLieu::class, 'lieu_id');
     }
 }

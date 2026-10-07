@@ -135,16 +135,27 @@ export const SPORT_OBJECTIF_LABELS: Record<SportObjectif, string> = {
 };
 
 export const MATERIEL_LABELS: Record<Materiel, string> = {
-  aucun: "Aucun",
-  halteres: "Haltères",
-  barre: "Barre",
-  kettlebell: "Kettlebell",
+  aucun: "Poids du corps",
+  tapis: "Tapis de sol",
   elastiques: "Élastiques",
+  corde_a_sauter: "Corde à sauter",
+  trx: "Sangles de suspension (TRX)",
+  swiss_ball: "Swiss ball",
+  medecine_ball: "Médecine-ball",
+  step: "Step / box",
+  halteres: "Haltères",
+  kettlebell: "Kettlebell",
+  barre: "Barre et disques",
   banc: "Banc",
   barre_traction: "Barre de traction",
-  machine: "Machines",
-  tapis: "Tapis",
-  velo: "Vélo",
+  machine: "Machines guidées",
+  poulie: "Poulie / vis-à-vis",
+  velo: "Vélo d’appartement / home trainer",
+  velo_route: "Vélo (route, VTT)",
+  tapis_course: "Tapis de course",
+  rameur: "Rameur",
+  elliptique: "Vélo elliptique",
+  piscine: "Piscine",
 };
 
 export const SPORT_LIEU_LABELS: Record<SportLieu, string> = {

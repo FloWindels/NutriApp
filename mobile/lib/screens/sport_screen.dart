@@ -22,6 +22,7 @@ import '../widgets/status_banner.dart';
 import '../widgets/repere_visite.dart';
 import 'sport/activity_sheet.dart';
 import 'sport/generate_sheet.dart';
+import 'sport/lieux_sheet.dart';
 import 'sport/log_sheet.dart';
 import 'sport/plan_sheet.dart';
 import 'sport/proposal_screen.dart';
@@ -428,15 +429,15 @@ class _SportScreenState extends State<SportScreen> {
     final result = await SessionDetailSheet.show(context, session: session, service: _service);
     if (result == null || !mounted) return;
     if (result.action == SessionDetailAction.started) {
-      await _openWorkout(result.sessionId);
+      await _openWorkout(result.sessionId, guided: true);
       return;
     }
     _reloadAll();
   }
 
-  Future<void> _openWorkout(int sessionId) async {
+  Future<void> _openWorkout(int sessionId, {bool guided = false}) async {
     final result = await Navigator.of(context).push<Object?>(
-      MaterialPageRoute<Object?>(builder: (_) => WorkoutSessionScreen(sessionId: sessionId)),
+      MaterialPageRoute<Object?>(builder: (_) => WorkoutSessionScreen(sessionId: sessionId, autoGuided: guided)),
     );
     if (!mounted) return;
     _reloadAll();
@@ -631,7 +632,15 @@ class _SportScreenState extends State<SportScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => LieuxSheet.show(context, config: _config, service: _service),
+              icon: const Icon(Icons.place_outlined, size: 18),
+              label: const Text('Mes lieux d’entraînement'),
+            ),
+          ),
+          const SizedBox(height: 8),
           const SectionHeader(eyebrow: 'Aujourd’hui', title: 'Tes séances du jour'),
           if (summary.todaySessions.isEmpty)
             EmptyState(

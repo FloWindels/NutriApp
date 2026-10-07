@@ -40,10 +40,12 @@ class WorkoutSession extends Model
         'llm_model',
         'sport_plan_id',
         'zones_a_eviter',
+        'lieu_id',
     ];
 
     protected $casts = [
         'user_id' => 'integer',
+        'lieu_id' => 'integer',
         'sport_id' => 'integer',
         'sport_plan_id' => 'integer',
         'date' => 'date:Y-m-d',
@@ -96,5 +98,13 @@ class WorkoutSession extends Model
     public function isManualCalories(): bool
     {
         return $this->calories_source === 'manuel';
+    }
+
+    /**
+     * Lieu d'entraînement (Sport v2) ; null si aucun ou s'il a été supprimé.
+     */
+    public function lieuEntrainement(): BelongsTo
+    {
+        return $this->belongsTo(SportLieu::class, 'lieu_id');
     }
 }

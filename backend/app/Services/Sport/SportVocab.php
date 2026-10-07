@@ -62,11 +62,16 @@ final class SportVocab
         'yoga' => 'Yoga / mobilité',
         'marche' => 'Marche',
         'rameur' => 'Rameur',
+        'elliptique' => 'Elliptique',
+        'corde_a_sauter' => 'Corde à sauter',
         'autre' => 'Autre',
     ];
 
-    /** Types de sport traités comme du cardio pur (bloc principal en fractionné ou continu). */
-    public const CARDIO_TYPES = ['course_a_pied', 'velo', 'natation', 'marche', 'rameur'];
+    /**
+     * Types de sport construits depuis les modèles d'entraînement cardio (CardioTemplates),
+     * même en mode IA : cibles chiffrées fiables plutôt qu'inventées.
+     */
+    public const CARDIO_TYPES = ['course_a_pied', 'velo', 'natation', 'marche', 'rameur', 'elliptique', 'corde_a_sauter'];
 
     /** Type de sport → slug du catalogue `sports`. */
     public const SPORT_TYPE_SLUGS = [
@@ -78,6 +83,8 @@ final class SportVocab
         'yoga' => 'yoga',
         'marche' => 'marche',
         'rameur' => 'rameur',
+        'elliptique' => 'elliptique',
+        'corde_a_sauter' => 'corde-a-sauter',
         'autre' => 'autre',
     ];
 
@@ -93,6 +100,8 @@ final class SportVocab
         'randonnee' => 'marche',
         'rameur' => 'rameur',
         'aviron-kayak' => 'rameur',
+        'elliptique' => 'elliptique',
+        'corde-a-sauter' => 'corde_a_sauter',
         'musculation' => 'musculation',
         'crossfit' => 'musculation',
         'hiit' => 'hiit',

@@ -240,17 +240,29 @@ class AppStrings {
     VocabItem('avance', 'Avancé'),
   ];
 
+  /// Matériel (enum `Equipment`, Sport v2) — repli quand le serveur n'envoie pas son vocabulaire.
   static const List<VocabItem> sportMateriel = [
-    VocabItem('aucun', 'Aucun'),
-    VocabItem('halteres', 'Haltères'),
-    VocabItem('barre', 'Barre'),
-    VocabItem('kettlebell', 'Kettlebell'),
+    VocabItem('aucun', 'Poids du corps'),
+    VocabItem('tapis', 'Tapis de sol'),
     VocabItem('elastiques', 'Élastiques'),
+    VocabItem('corde_a_sauter', 'Corde à sauter'),
+    VocabItem('trx', 'Sangles de suspension (TRX)'),
+    VocabItem('swiss_ball', 'Swiss ball'),
+    VocabItem('medecine_ball', 'Médecine-ball'),
+    VocabItem('step', 'Step / box'),
+    VocabItem('halteres', 'Haltères'),
+    VocabItem('kettlebell', 'Kettlebell'),
+    VocabItem('barre', 'Barre et disques'),
     VocabItem('banc', 'Banc'),
     VocabItem('barre_traction', 'Barre de traction'),
-    VocabItem('machine', 'Machines'),
-    VocabItem('tapis', 'Tapis de course'),
-    VocabItem('velo', 'Vélo'),
+    VocabItem('machine', 'Machines guidées'),
+    VocabItem('poulie', 'Poulie / vis-à-vis'),
+    VocabItem('velo', 'Vélo d’appartement / home trainer'),
+    VocabItem('velo_route', 'Vélo (route, VTT)'),
+    VocabItem('tapis_course', 'Tapis de course'),
+    VocabItem('rameur', 'Rameur'),
+    VocabItem('elliptique', 'Vélo elliptique'),
+    VocabItem('piscine', 'Piscine'),
   ];
 
   static const List<VocabItem> sportIntensites = [

@@ -9,6 +9,7 @@ import '../../services/profile_service.dart';
 import '../../services/sport_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/status_banner.dart';
+import 'lieux_sheet.dart';
 
 /// Result of [GenerateSheet]: the proposal and the request that produced it
 /// (so « Régénérer » can replay it with another seed).
@@ -19,7 +20,9 @@ class GeneratedProposal {
   const GeneratedProposal(this.proposal, this.request);
 }
 
-/// « Générer une séance » (addendum §D) — IA switch, context chips, notes.
+/// « Générer une séance » (addendum §D, Sport v2 § 6) — lieu (et donc matériel), sport, objectif,
+/// durée, niveau, zones à éviter, notes. Envoie `lieu_id` ; sans lieux (ancien serveur ou
+/// aucun lieu créé), retombe sur le choix du type de lieu et du matériel.
 ///
 /// The sheet never pops before a 2xx: on failure it stays open with a
 /// [StatusBanner.error]; the IA call (20–60 s) shows a cancellable progress state.
@@ -90,6 +93,10 @@ class _GenerateSheetState extends State<GenerateSheet> {
   final Set<String> _focus = <String>{};
   final Set<String> _zones = <String>{};
 
+  /// Sport v2 : lieux du compte (null tant que non chargés ou si le serveur ne les connaît pas).
+  List<SportLieu>? _lieuxV2;
+  int? _lieuId;
+
   bool _generating = false;
   bool _cancelled = false;
   String? _error;
@@ -103,6 +110,7 @@ class _GenerateSheetState extends State<GenerateSheet> {
     _duration = widget.initialDurationMin ?? 30;
     _sportType = widget.initialSportType;
     _lieu = widget.initialLieu;
+    _loadLieux();
     final profile = widget.profile;
     if (profile != null) {
       _applyProfile(profile);
@@ -126,6 +134,61 @@ class _GenerateSheetState extends State<GenerateSheet> {
     } on ApiException {
       // Prefill is a convenience: keep the defaults when the profile is unavailable.
     }
+  }
+
+  SportConfig get _config => widget.config ?? const SportConfig();
+
+  SportLieu? get _selectedLieu {
+    for (final lieu in _lieuxV2 ?? const <SportLieu>[]) {
+      if (lieu.id == _lieuId) return lieu;
+    }
+    return null;
+  }
+
+  /// Charge les lieux et présélectionne : le lieu du type demandé (plan), sinon le lieu par défaut.
+  Future<void> _loadLieux({int? select}) async {
+    try {
+      final lieux = await _service.lieux();
+      if (!mounted) return;
+      setState(() {
+        _lieuxV2 = lieux;
+        if (select != null && lieux.any((l) => l.id == select)) {
+          _lieuId = select;
+        } else if (!lieux.any((l) => l.id == _lieuId)) {
+          _lieuId = _preselect(lieux)?.id;
+        }
+      });
+    } on ApiException {
+      // Serveur sans lieux (ou hors ligne) : on garde type de lieu + matériel.
+    }
+  }
+
+  SportLieu? _preselect(List<SportLieu> lieux) {
+    if (lieux.isEmpty) return null;
+    final type = widget.initialLieu;
+    if (type != null) {
+      final sameType = lieux.where((l) => l.type == type).toList();
+      if (sameType.isNotEmpty) return sameType.firstWhere((l) => l.parDefaut, orElse: () => sameType.first);
+    }
+    return lieux.firstWhere((l) => l.parDefaut, orElse: () => lieux.first);
+  }
+
+  Future<void> _addLieu() async {
+    final saved = await LieuFormSheet.show(
+      context,
+      config: _config,
+      service: _service,
+      premier: (_lieuxV2 ?? const []).isEmpty,
+    );
+    if (saved == null || !mounted) return;
+    setState(() => _lieuId = saved.id);
+    await _loadLieux(select: saved.id);
+  }
+
+  Future<void> _manageLieux() async {
+    await LieuxSheet.show(context, config: _config, service: _service);
+    if (!mounted) return;
+    await _loadLieux();
   }
 
   void _applyProfile(Profile profile) {
@@ -179,14 +242,17 @@ class _GenerateSheetState extends State<GenerateSheet> {
 
   Map<String, dynamic> _buildRequest({int? seed}) {
     final notes = _notes.text.trim();
+    final lieu = _selectedLieu;
     final body = <String, dynamic>{
       'mode': _withAi ? 'ia' : 'regles',
       'goal': _goal,
       'level': _level,
       'duration_min': _duration,
       'sport_type': ?_sportType,
-      'lieu': ?_lieu,
-      'equipment': _equipment.toList(),
+      // Le lieu choisi l'emporte côté serveur ; type et matériel suivent pour les anciens serveurs.
+      'lieu_id': ?lieu?.id,
+      'lieu': ?(lieu?.type ?? _lieu),
+      'equipment': lieu?.materiel ?? _equipment.toList(),
       'focus': _focus.toList(),
       'zones_a_eviter': _zones.toList(),
       if (notes.isNotEmpty) 'notes': notes,
@@ -272,6 +338,8 @@ class _GenerateSheetState extends State<GenerateSheet> {
                   if (_error != null) ...[
                     StatusBanner.error(_error!, margin: const EdgeInsets.only(bottom: 12)),
                   ],
+                  ..._lieuSection(),
+                  const SizedBox(height: 16),
                   const _Label('Type de sport'),
                   _ChipWrap(
                     items: AppStrings.sportTypes,
@@ -279,25 +347,11 @@ class _GenerateSheetState extends State<GenerateSheet> {
                     onTap: (key) => setState(() => _sportType = _sportType == key ? null : key),
                   ),
                   const SizedBox(height: 16),
-                  const _Label('Lieu'),
-                  _ChipWrap(
-                    items: _lieux,
-                    selected: _lieu == null ? const {} : {_lieu!},
-                    onTap: _selectLieu,
-                  ),
-                  const SizedBox(height: 16),
                   const _Label('Objectif'),
                   _ChipWrap(
                     items: _objectifs,
                     selected: {_goal},
                     onTap: (key) => setState(() => _goal = key),
-                  ),
-                  const SizedBox(height: 16),
-                  const _Label('Niveau'),
-                  _ChipWrap(
-                    items: _niveaux,
-                    selected: {_level},
-                    onTap: (key) => setState(() => _level = key),
                   ),
                   const SizedBox(height: 16),
                   const _Label('Durée'),
@@ -322,20 +376,29 @@ class _GenerateSheetState extends State<GenerateSheet> {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  const _Label('Matériel'),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _materiel
-                        .map(
-                          (item) => FilterChip(
-                            label: Text(item.label),
-                            selected: _equipment.contains(item.key),
-                            onSelected: (_) => _toggleEquipment(item.key),
-                          ),
-                        )
-                        .toList(),
+                  const _Label('Niveau'),
+                  _ChipWrap(
+                    items: _niveaux,
+                    selected: {_level},
+                    onTap: (key) => setState(() => _level = key),
                   ),
+                  if (_selectedLieu == null) ...[
+                    const SizedBox(height: 16),
+                    const _Label('Matériel'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _materiel
+                          .map(
+                            (item) => FilterChip(
+                              label: Text(item.label),
+                              selected: _equipment.contains(item.key),
+                              onSelected: (_) => _toggleEquipment(item.key),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   const _Label('Focus'),
                   Wrap(
@@ -393,6 +456,77 @@ class _GenerateSheetState extends State<GenerateSheet> {
         ),
       ),
     );
+  }
+
+  /// Choix du lieu : puces des lieux (matériel résumé dessous), « + Ajouter un lieu », « Gérer ».
+  /// Sans lieux côté serveur : l'ancien choix du type de lieu.
+  List<Widget> _lieuSection() {
+    final lieux = _lieuxV2;
+    if (lieux == null) {
+      return [
+        const _Label('Lieu'),
+        _ChipWrap(items: _lieux, selected: _lieu == null ? const {} : {_lieu!}, onTap: _selectLieu),
+      ];
+    }
+    final selected = _selectedLieu;
+    return [
+      Row(
+        children: [
+          const Expanded(child: _Label('Lieu')),
+          if (lieux.isNotEmpty)
+            TextButton.icon(
+              onPressed: _generating ? null : _manageLieux,
+              icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
+              label: const Text('Gérer mes lieux'),
+            ),
+        ],
+      ),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final lieu in lieux)
+            ChoiceChip(
+              avatar: Icon(lieuTypeIcon(lieu.type), size: 16),
+              label: Text(lieu.nom),
+              tooltip: resumeMateriel(lieu.materiel, _config.materielCatalogue, max: 99),
+              selected: lieu.id == _lieuId,
+              onSelected: _generating ? null : (_) => setState(() => _lieuId = lieu.id == _lieuId ? null : lieu.id),
+            ),
+          ActionChip(
+            avatar: const Icon(Icons.add_rounded, size: 16),
+            label: const Text('Ajouter un lieu'),
+            onPressed: _generating ? null : _addLieu,
+          ),
+        ],
+      ),
+      if (selected != null) ...[
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 1, right: 6),
+              child: Icon(Icons.fitness_center_rounded, size: 14, color: MaviohColors.muted),
+            ),
+            Expanded(
+              child: Text(
+                '${selected.typeLabel} · ${resumeMateriel(selected.materiel, _config.materielCatalogue, max: 8)}',
+                style: const TextStyle(fontSize: 12.5, color: MaviohColors.textTertiary, height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      ] else if (lieux.isEmpty) ...[
+        const SizedBox(height: 8),
+        const Text(
+          'Crée ton premier lieu pour que la séance colle à ton matériel. En attendant, choisis-le ci-dessous.',
+          style: TextStyle(fontSize: 12.5, color: MaviohColors.muted, height: 1.4),
+        ),
+        const SizedBox(height: 8),
+        _ChipWrap(items: _lieux, selected: _lieu == null ? const {} : {_lieu!}, onTap: _selectLieu),
+      ],
+    ];
   }
 
   Widget _cta() {

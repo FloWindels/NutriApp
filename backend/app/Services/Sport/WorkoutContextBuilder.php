@@ -66,8 +66,9 @@ class WorkoutContextBuilder
         $sport = [
             'niveau' => $profile?->sport_niveau,
             'objectif' => $profile?->sport_objectif,
-            'materiel' => $profile?->sport_materiel ?? [],
-            'lieu' => $profile?->sport_lieu,
+            // Le lieu choisi pour cette séance l'emporte sur les préférences du profil.
+            'materiel' => $request['equipment'] ?? $profile?->sport_materiel ?? [],
+            'lieu' => $request['lieu'] ?? $profile?->sport_lieu,
             'zones_a_eviter' => $profile?->sport_zones_a_eviter ?? [],
             'focus' => $profile?->sport_focus ?? [],
             'notes' => $profile?->sport_notes,

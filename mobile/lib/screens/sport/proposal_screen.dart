@@ -15,6 +15,7 @@ import '../../widgets/loading_state.dart';
 import '../../widgets/macro_pill.dart';
 import '../../widgets/status_banner.dart';
 import '../workout_session_screen.dart';
+import 'prescription_view.dart';
 import 'sport_icons.dart';
 
 /// Replays the generation with another seed (« Régénérer »).
@@ -172,7 +173,7 @@ class _ProposalScreenState extends State<ProposalScreen> {
         return;
       }
       final result = await Navigator.of(context).push<Object?>(
-        MaterialPageRoute<Object?>(builder: (_) => WorkoutSessionScreen(sessionId: session.id)),
+        MaterialPageRoute<Object?>(builder: (_) => WorkoutSessionScreen(sessionId: session.id, autoGuided: true)),
       );
       if (!mounted) return;
       Navigator.of(context).pop(result);
@@ -241,9 +242,10 @@ class _ProposalScreenState extends State<ProposalScreen> {
                               tone: MaviohColors.orange,
                               icon: Icons.local_fire_department_outlined,
                             ),
-                          if (proposal.lieu != null)
+                          if (proposal.lieuNom != null || proposal.lieu != null)
                             TonePill(
-                              label: AppStrings.vocabLabel(widget.config?.lieux ?? AppStrings.sportLieux, proposal.lieu),
+                              label: proposal.lieuNom ??
+                                  AppStrings.vocabLabel(widget.config?.lieux ?? AppStrings.sportLieux, proposal.lieu),
                               tone: MaviohColors.sky,
                               icon: Icons.place_outlined,
                             ),
@@ -407,52 +409,61 @@ class _ExerciseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final details = <String>[
-      if (exercise.prescription.isNotEmpty) exercise.prescription,
-      if (exercise.restSec != null) 'repos ${exercise.restSec} s',
-      if (exercise.muscleGroup != null) AppStrings.muscleGroupLabels[exercise.muscleGroup] ?? exercise.muscleGroup!,
-    ];
+    final muscle = exercise.muscleGroup == null
+        ? null
+        : AppStrings.muscleGroupLabels[exercise.muscleGroup] ?? exercise.muscleGroup!;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: MaviohColors.tint(MaviohColors.primary),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(equipmentIcon(exercise.equipment), size: 18, color: MaviohColors.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  exercise.name,
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: MaviohColors.text),
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: MaviohColors.tint(MaviohColors.primary),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                if (details.isNotEmpty)
-                  Text(
-                    details.join(' · '),
-                    style: const TextStyle(fontSize: 12.5, color: MaviohColors.muted),
-                  ),
-              ],
-            ),
+                child: Icon(
+                  exercise.movement != 'generique' ? movementIcon(exercise.movement) : equipmentIcon(exercise.equipment),
+                  size: 18,
+                  color: MaviohColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      exercise.name,
+                      style: const TextStyle(fontWeight: FontWeight.w800, color: MaviohColors.text),
+                    ),
+                    if (muscle != null)
+                      Text(muscle, style: const TextStyle(fontSize: 11.5, color: MaviohColors.muted)),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Voir les consignes',
+                onPressed: onInfo,
+                icon: const Icon(Icons.info_outline_rounded, size: 20),
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              ),
+              IconButton(
+                tooltip: 'Remplacer l’exercice',
+                onPressed: onReplace,
+                icon: const Icon(Icons.swap_horiz_rounded, size: 20),
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Voir les consignes',
-            onPressed: onInfo,
-            icon: const Icon(Icons.info_outline_rounded, size: 20),
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          ),
-          IconButton(
-            tooltip: 'Remplacer l’exercice',
-            onPressed: onReplace,
-            icon: const Icon(Icons.swap_horiz_rounded, size: 20),
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          // Ce que l'exercice demande, sur toute la largeur : phrase en clair, cibles, consigne.
+          Padding(
+            padding: const EdgeInsets.only(left: 50, right: 8, top: 2),
+            child: PrescriptionView(resume: exercise.resume, prescription: exercise.prescriptionV2),
           ),
         ],
       ),

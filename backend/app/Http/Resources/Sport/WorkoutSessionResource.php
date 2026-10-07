@@ -47,6 +47,8 @@ class WorkoutSessionResource extends JsonResource
             'sport_id' => $session->sport_id !== null ? (int) $session->sport_id : null,
             'sport_name' => $session->sport_name,
             'lieu' => $session->lieu,
+            'lieu_id' => $session->lieu_id !== null ? (int) $session->lieu_id : null,
+            'lieu_nom' => self::lieuNom($session),
             'intensity' => $session->intensity,
             'distance_km' => $session->distance_km !== null ? (float) $session->distance_km : null,
             'generated_by' => $session->generated_by,
@@ -75,5 +77,21 @@ class WorkoutSessionResource extends JsonResource
             'calories_burned' => $session->calories_burned !== null ? (float) $session->calories_burned : null,
             'kind' => (string) $session->kind,
         ];
+    }
+
+    /**
+     * Nom du lieu d'entraînement : relation `lieuEntrainement` si chargée, sinon une requête
+     * ciblée (jamais de chargement paresseux, interdit hors production).
+     */
+    public static function lieuNom(\Illuminate\Database\Eloquent\Model $model): ?string
+    {
+        if ($model->lieu_id === null) {
+            return null;
+        }
+        if ($model->relationLoaded('lieuEntrainement')) {
+            return $model->getRelation('lieuEntrainement')?->nom;
+        }
+
+        return \App\Models\SportLieu::query()->whereKey($model->lieu_id)->value('nom');
     }
 }

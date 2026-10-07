@@ -5,10 +5,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Chip, ChipGroup, Switch } from "@/components/sport/chips";
+import { LieuxModal } from "@/components/sport/lieux-modal";
 import { ProposalView } from "@/components/sport/proposal-view";
 import {
   DURATION_CHIPS,
+  resumeMateriel,
   sportApi,
+  useMaterielCatalogue,
+  useSportLieux,
   useSportProfile,
   useSportVocab,
 } from "@/components/sport/sport-api";
@@ -72,6 +76,20 @@ export function GenerateForm({
   const { vocab, config } = useSportVocab();
   const profileQuery = useSportProfile();
   const profile = profileQuery.data;
+  const lieuxQuery = useSportLieux();
+  const { libelle } = useMaterielCatalogue();
+  const lieux = lieuxQuery.data ?? [];
+  // Sport v2 : avec au moins un lieu enregistré, on choisit un lieu (son matériel suit) ;
+  // sinon (aucun lieu, ou serveur plus ancien) l’ancien choix type + matériel reste.
+  const avecLieux = lieux.length > 0;
+  /** « auto » = le lieu par défaut, résolu au rendu (pas d’effet de synchronisation). */
+  const [lieuSelection, setLieuSelection] = useState<number | "auto">("auto");
+  const lieuChoisi =
+    lieuSelection === "auto"
+      ? (lieux.find((item) => item.par_defaut) ?? lieux[0] ?? null)
+      : (lieux.find((item) => item.id === lieuSelection) ?? null);
+  const [lieuxOpen, setLieuxOpen] = useState(false);
+  const [lieuxCreation, setLieuxCreation] = useState(false);
 
   const [withAi, setWithAi] = useState(true);
   const [sportType, setSportType] = useState<SportType | null>(null);
@@ -151,14 +169,19 @@ export function GenerateForm({
     setPending(true);
     setBanner(null);
     try {
+      // Le lieu choisi l’emporte côté serveur ; son type et son matériel partent aussi pour
+      // qu’un serveur plus ancien (sans `lieu_id`) génère malgré tout pour le bon matériel.
+      const lieuPayload: Partial<GenerateSessionInput> =
+        avecLieux && lieuChoisi
+          ? { lieu_id: lieuChoisi.id, lieu: lieuChoisi.type, equipment: lieuChoisi.materiel }
+          : { ...(lieu ? { lieu } : {}), equipment };
       const payload: GenerateSessionInput = {
         mode: iaAvailable && withAi ? "ia" : "regles",
         duration_min: values.duration_min,
         ...(sportType ? { sport_type: sportType } : {}),
-        ...(lieu ? { lieu } : {}),
         ...(goal ? { goal } : {}),
         ...(level ? { level } : {}),
-        equipment,
+        ...lieuPayload,
         focus,
         zones_a_eviter: zones,
         ...(values.notes?.trim() ? { notes: values.notes.trim() } : {}),
@@ -262,18 +285,96 @@ export function GenerateForm({
           ))}
         </ChipGroup>
 
-        <ChipGroup legend="Lieu">
-          {vocab.lieux.map((entry) => (
-            <Chip
-              key={entry.key}
-              role="radio"
-              selected={lieu === entry.key}
-              onClick={() => pickLieu(entry.key as SportLieu)}
-            >
-              {entry.label}
-            </Chip>
-          ))}
-        </ChipGroup>
+        {avecLieux ? (
+          <div className="min-w-0">
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-slate-700">Où t’entraînes-tu ?</p>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setLieuxCreation(false);
+                  setLieuxOpen(true);
+                }}
+              >
+                Gérer mes lieux
+              </Button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" role="radiogroup" aria-label="Lieu">
+              {lieux.map((item) => {
+                const selected = lieuChoisi?.id === item.id;
+                return (
+                  <Chip
+                    key={item.id}
+                    role="radio"
+                    selected={selected}
+                    onClick={() => setLieuSelection(item.id)}
+                    className="h-auto min-h-14 flex-col items-start justify-center gap-0.5 rounded-2xl py-2 text-left"
+                  >
+                    <span className="flex w-full items-center gap-1.5">
+                      <span className="truncate font-semibold">{item.nom}</span>
+                      {item.par_defaut ? (
+                        <span className={selected ? "text-xs text-emerald-100" : "text-xs text-slate-400"}>
+                          · par défaut
+                        </span>
+                      ) : null}
+                    </span>
+                    <span
+                      className={
+                        selected
+                          ? "w-full truncate text-xs font-normal text-emerald-50"
+                          : "w-full truncate text-xs font-normal text-slate-500"
+                      }
+                    >
+                      {resumeMateriel(item.materiel, libelle)}
+                    </span>
+                  </Chip>
+                );
+              })}
+              <Chip
+                onClick={() => {
+                  setLieuxCreation(true);
+                  setLieuxOpen(true);
+                }}
+                className="h-auto min-h-14 rounded-2xl border-dashed py-2"
+              >
+                + Ajouter un lieu
+              </Chip>
+            </div>
+          </div>
+        ) : (
+          <ChipGroup
+            legend="Lieu"
+            hint={
+              lieuxQuery.isSuccess ? (
+                <>
+                  Enregistre tes lieux et leur matériel pour ne plus avoir à le cocher.{" "}
+                  <button
+                    type="button"
+                    className="font-semibold text-emerald-800 underline-offset-2 hover:underline"
+                    onClick={() => {
+                      setLieuxCreation(true);
+                      setLieuxOpen(true);
+                    }}
+                  >
+                    + Ajouter un lieu
+                  </button>
+                </>
+              ) : undefined
+            }
+          >
+            {vocab.lieux.map((entry) => (
+              <Chip
+                key={entry.key}
+                role="radio"
+                selected={lieu === entry.key}
+                onClick={() => pickLieu(entry.key as SportLieu)}
+              >
+                {entry.label}
+              </Chip>
+            ))}
+          </ChipGroup>
+        )}
 
         <div className="grid gap-5 lg:grid-cols-2">
           <ChipGroup legend="Objectif">
@@ -327,6 +428,7 @@ export function GenerateForm({
           {...register("duration_min", { valueAsNumber: true })}
         />
 
+        {avecLieux ? null : (
         <fieldset className="min-w-0">
           <legend className="mb-2 block text-sm font-medium text-slate-700">Matériel</legend>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -340,9 +442,10 @@ export function GenerateForm({
             ))}
           </div>
           <p className="mt-1.5 text-xs text-slate-500">
-            « Aucun » exclut les autres choix. Une salle publique présélectionne les machines.
+            Le choix sans matériel exclut les autres. Une salle publique présélectionne les machines.
           </p>
         </fieldset>
+        )}
 
         <ChipGroup legend="Focus" multiple hint="Plusieurs choix possibles.">
           {vocab.focus.map((entry) => (
@@ -390,6 +493,13 @@ export function GenerateForm({
 
         <p className="text-xs leading-5 text-slate-500">{messages.sportDisclaimer}</p>
       </form>
+
+      <LieuxModal
+        open={lieuxOpen}
+        onClose={() => setLieuxOpen(false)}
+        startWithCreate={lieuxCreation}
+        onSaved={(saved) => setLieuSelection(saved.id)}
+      />
     </Card>
   );
 }

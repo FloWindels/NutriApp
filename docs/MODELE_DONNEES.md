@@ -708,3 +708,11 @@ Calendrier sportif : « quel sport, quel jour, combien de temps ».
 5. suppression des jetons puis de l'utilisateur.
 
 `tests/Feature/Account/AccountDeletionTest` vérifie l'absence de ligne orpheline par comptage explicite.
+
+## Sport v2
+
+- `sport_lieux` : `id`, `user_id`, `nom`, `type` (enum `Lieu`), `materiel` (json, enum `Equipment`),
+  `par_defaut`, timestamps. Supprimé avec le compte, inclus dans l'export des données
+  (`sport_lieux`).
+- `sport_plans.lieu_id`, `workout_sessions.lieu_id` : nullables, mis à null si le lieu est supprimé.
+- `workout_exercises.prescription` : json nullable (voir `docs/SPORT_V2.md` § 3).

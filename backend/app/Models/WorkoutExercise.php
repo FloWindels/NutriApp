@@ -25,6 +25,7 @@ class WorkoutExercise extends Model
         'met',
         'completed',
         'notes',
+        'prescription',
     ];
 
     protected $casts = [
@@ -38,6 +39,7 @@ class WorkoutExercise extends Model
         'rest_sec' => 'integer',
         'met' => 'float',
         'completed' => 'boolean',
+        'prescription' => 'array',
     ];
 
     protected $attributes = [

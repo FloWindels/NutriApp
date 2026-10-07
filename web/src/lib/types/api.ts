@@ -59,7 +59,19 @@ export type Materiel =
   | "barre_traction"
   | "machine"
   | "tapis"
-  | "velo";
+  | "velo"
+  /* Sport v2 (docs/SPORT_V2.md §1) */
+  | "corde_a_sauter"
+  | "trx"
+  | "swiss_ball"
+  | "medecine_ball"
+  | "step"
+  | "poulie"
+  | "velo_route"
+  | "tapis_course"
+  | "rameur"
+  | "elliptique"
+  | "piscine";
 export type SituationParticuliere = "aucune" | "grossesse" | "allaitement" | "suivi_medical";
 export type SportLieu = "maison" | "exterieur" | "salle_publique" | "salle_privee";
 export type ZoneAEviter =
@@ -1526,8 +1538,33 @@ export type PlannerGenerateResponse = {
 
 export type VocabEntry<K extends string = string> = { key: K; label: string };
 
+/** Catégorie d’un matériel dans `GET /sport/config` › `materiel_catalogue` (Sport v2 §1). */
+export type MaterielCategorie = "cardio" | "musculation" | "accessoire" | "aucun";
+
+export type MaterielCatalogueEntry = { valeur: Materiel; libelle: string; categorie: MaterielCategorie };
+
+/** Lieu d’entraînement : chacun a son matériel (Sport v2 §1). */
+export type LieuEntrainement = {
+  id: number;
+  nom: string;
+  type: SportLieu;
+  type_libelle?: string;
+  materiel: Materiel[];
+  par_defaut: boolean;
+};
+
+export type LieuEntrainementInput = {
+  nom: string;
+  type: SportLieu;
+  materiel: Materiel[];
+  par_defaut?: boolean;
+};
+
 export type SportConfig = {
   ia_disponible: boolean;
+  /** Sport v2 — absent sur un serveur plus ancien. */
+  materiel_catalogue?: MaterielCatalogueEntry[];
+  materiel_par_type?: Partial<Record<SportLieu, Materiel[]>>;
   llm_model: string | null;
   coef_calories: SportCoefCalories;
   vocab: {
@@ -1584,7 +1621,61 @@ export type ExerciseSearchParams = {
   page?: number;
 };
 
-export type WorkoutExercise = {
+/* Prescription structurée (Sport v2 §3) — chaque clé est facultative. */
+
+/** Fourchette [min, max] ; une valeur seule arrive parfois en nombre. */
+export type PrescriptionRange = [number, number] | number;
+
+export type PrescriptionCible = {
+  cadence_rpm?: PrescriptionRange | null;
+  resistance?: PrescriptionRange | null;
+  puissance_w?: PrescriptionRange | null;
+  vitesse_kmh?: PrescriptionRange | null;
+  /** Minutes décimales : [5.5, 6] = 5:30–6:00 /km. */
+  allure_min_km?: PrescriptionRange | null;
+  inclinaison_pct?: PrescriptionRange | null;
+  cadence_coups_min?: PrescriptionRange | null;
+  /** Rameur : temps au 500 m, en secondes. */
+  allure_500m_sec?: PrescriptionRange | null;
+  zone_fc?: number | null;
+  /** Calculé par le serveur depuis la zone et l’âge. */
+  fc_bpm?: PrescriptionRange | null;
+  rpe?: PrescriptionRange | null;
+};
+
+export type PrescriptionType = "force" | "cardio_continu" | "intervalles" | "mobilite";
+
+export type Prescription = {
+  type?: PrescriptionType | null;
+  repetitions?: number | null;
+  effort_sec?: number | null;
+  recup_sec?: number | null;
+  cible?: PrescriptionCible | null;
+  recup_cible?: PrescriptionCible | null;
+  rir?: number | null;
+  tempo?: string | null;
+  charge_conseil?: string | null;
+  consigne?: string | null;
+};
+
+export type EtapeType = "effort" | "recup" | "travail" | "repos";
+
+/** Étape minutée calculée par le serveur ; `duree_sec` null = la personne valide elle-même. */
+export type SeanceEtape = {
+  label: string;
+  type: EtapeType;
+  duree_sec: number | null;
+  cible?: string | null;
+};
+
+/** Champs ajoutés à chaque exercice (proposition et séance enregistrée). */
+export type ExercisePrescriptionFields = {
+  prescription?: Prescription | null;
+  resume?: string | null;
+  etapes?: SeanceEtape[] | null;
+};
+
+export type WorkoutExercise = ExercisePrescriptionFields & {
   id: number;
   exercise_id: number | null;
   block: WorkoutBlockKey;
@@ -1620,6 +1711,9 @@ export type WorkoutSession = {
   sport_id: number | null;
   sport_name: string | null;
   lieu: SportLieu | null;
+  /** Sport v2 — lieu d’entraînement choisi. */
+  lieu_id?: number | null;
+  lieu_nom?: string | null;
   calories_source: CaloriesSource;
   generated_by: GeneratedBy | null;
   llm_model: string | null;
@@ -1646,6 +1740,8 @@ export type SportPlan = {
   planned_duration_min: number;
   planned_at: string | null;
   lieu: SportLieu | null;
+  lieu_id?: number | null;
+  lieu_nom?: string | null;
   notes: string | null;
   status: PlanStatus;
   session_id: number | null;
@@ -1750,6 +1846,8 @@ export type GenerateSessionInput = {
   sport_type?: SportType;
   sport_id?: number | null;
   lieu?: SportLieu;
+  /** Sport v2 : le type et le matériel viennent du lieu (ils l’emportent sur `lieu` / `equipment`). */
+  lieu_id?: number | null;
   equipment?: Materiel[];
   focus?: SportFocus[];
   zones_a_eviter?: ZoneAEviter[];
@@ -1757,7 +1855,7 @@ export type GenerateSessionInput = {
   seed?: number;
 };
 
-export type ProposalExercise = {
+export type ProposalExercise = ExercisePrescriptionFields & {
   exercise_id: number | null;
   name: string;
   category: ExerciseCategory;
@@ -1780,6 +1878,8 @@ export type WorkoutProposal = {
   title: string;
   sport_type: SportType | null;
   lieu: SportLieu | null;
+  lieu_id?: number | null;
+  lieu_nom?: string | null;
   goal: SportObjectif | null;
   level: SportNiveau | null;
   duration_min: number;
@@ -1805,6 +1905,7 @@ export type SessionExerciseInput = {
   duration_sec?: number | null;
   weight_kg?: number | null;
   rest_sec?: number | null;
+  prescription?: Prescription | null;
 };
 
 /** `POST /sport/sessions` — a saved proposal or a manual session. */

@@ -439,3 +439,25 @@ poids et historique récent, nombre de notifications non lues.
 
 `demo@mavioh.app` / `Demo1234!`, créé par `php artisan migrate --seed`. Le script
 `scripts/smoke-api.sh` vérifie 25 routes clés avec ce compte.
+
+---
+
+## Sport v2 — lieux, prescriptions, séance guidée
+
+Détail complet et raisons : `docs/SPORT_V2.md`.
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/sport/lieux` | lieux d'entraînement du compte (par défaut en premier) |
+| POST | `/sport/lieux` | `{nom, type, materiel?, par_defaut?}` — sans `materiel`, le préréglage du type |
+| PUT | `/sport/lieux/{id}` | mêmes champs |
+| DELETE | `/sport/lieux/{id}` | le lieu par défaut supprimé passe au plus ancien |
+
+- `GET /sport/config` ajoute `materiel_catalogue` et `materiel_par_type`.
+- `lieu_id` est accepté par la génération, la proposition d'un créneau, `POST`/`PUT /sport/sessions`
+  et le calendrier ; les ressources exposent `lieu_id` et `lieu_nom`.
+- Chaque exercice porte `prescription` (cibles structurées), `resume` (phrase lisible) et `etapes`
+  (étapes minutées de la séance guidée), calculés par le serveur ; `fc_bpm` est toujours recalculé
+  depuis l'âge du profil.
+- Les séances cardio viennent des modèles d'entraînement experts (`generated_by: "regles"`), même
+  en mode IA.

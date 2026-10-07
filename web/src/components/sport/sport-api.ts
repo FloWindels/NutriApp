@@ -13,7 +13,12 @@ import type {
   Exercise,
   ExerciseSearchParams,
   GenerateSessionInput,
+  LieuEntrainement,
+  LieuEntrainementInput,
   ListEnvelope,
+  Materiel,
+  MaterielCatalogueEntry,
+  MaterielCategorie,
   MessageEnvelope,
   PaginatedEnvelope,
   Profile,
@@ -26,6 +31,7 @@ import type {
   SportCalendar,
   SportConfig,
   SportInput,
+  SportLieu,
   SportPlan,
   SportPlanInput,
   SportPlanLogInput,
@@ -67,6 +73,14 @@ export const sportApi = {
   exercises: (params: ExerciseSearchParams) =>
     apiGet<PaginatedEnvelope<Exercise>>("/sport/exercises", { ...params }),
   profile: () => apiGet<Profile>("/profile"),
+
+  /* Lieux d’entraînement (Sport v2 §1) */
+  lieux: () => apiGet<ListEnvelope<LieuEntrainement>>("/sport/lieux"),
+  createLieu: (input: LieuEntrainementInput) =>
+    apiPost<DataEnvelope<LieuEntrainement>>("/sport/lieux", input),
+  updateLieu: (id: number, input: LieuEntrainementInput) =>
+    apiPut<DataEnvelope<LieuEntrainement>>(`/sport/lieux/${id}`, input),
+  deleteLieu: (id: number) => apiDelete<MessageEnvelope>(`/sport/lieux/${id}`),
 
   createPlan: (input: SportPlanInput) => apiPost<DataEnvelope<SportPlan>>("/sport/calendar", input),
   createRecurring: (input: SportRecurringInput) =>
@@ -181,6 +195,107 @@ export function useSportVocab(): { vocab: SportVocab; config: SportConfig | unde
     };
   }, [config.data]);
   return { vocab, config: config.data, isLoading: config.isLoading };
+}
+
+/* ------------------------------------------------------------------ */
+/* Matériel et lieux (Sport v2 §1)                                      */
+/* ------------------------------------------------------------------ */
+
+export const MATERIEL_CATEGORIE_LABELS: Record<MaterielCategorie, string> = {
+  aucun: "Sans matériel",
+  cardio: "Cardio",
+  musculation: "Musculation",
+  accessoire: "Accessoires",
+};
+
+export const MATERIEL_CATEGORIE_ORDER: MaterielCategorie[] = ["aucun", "cardio", "musculation", "accessoire"];
+
+/** Repli local quand le serveur ne publie pas encore `materiel_catalogue`. */
+const MATERIEL_CATEGORIES: Record<Materiel, MaterielCategorie> = {
+  aucun: "aucun",
+  tapis: "accessoire",
+  elastiques: "accessoire",
+  corde_a_sauter: "cardio",
+  trx: "accessoire",
+  swiss_ball: "accessoire",
+  medecine_ball: "accessoire",
+  step: "accessoire",
+  halteres: "musculation",
+  kettlebell: "musculation",
+  barre: "musculation",
+  banc: "musculation",
+  barre_traction: "musculation",
+  machine: "musculation",
+  poulie: "musculation",
+  velo: "cardio",
+  velo_route: "cardio",
+  tapis_course: "cardio",
+  rameur: "cardio",
+  elliptique: "cardio",
+  piscine: "cardio",
+};
+
+const TOUT_MATERIEL = Object.keys(MATERIEL_CATEGORIES) as Materiel[];
+
+const FALLBACK_PAR_TYPE: Record<SportLieu, Materiel[]> = {
+  maison: ["aucun", "tapis"],
+  exterieur: ["aucun"],
+  salle_publique: TOUT_MATERIEL.filter((m) => m !== "velo_route" && m !== "piscine"),
+  salle_privee: TOUT_MATERIEL.filter((m) => m !== "velo_route"),
+};
+
+/** Catalogue du matériel (serveur, sinon repli local) et préréglages par type de lieu. */
+export function useMaterielCatalogue(): {
+  catalogue: MaterielCatalogueEntry[];
+  presets: Record<SportLieu, Materiel[]>;
+  libelle: (valeur: Materiel | string) => string;
+} {
+  const config = useSportConfig();
+  return useMemo(() => {
+    const server = config.data?.materiel_catalogue;
+    const catalogue: MaterielCatalogueEntry[] =
+      server && server.length > 0
+        ? server
+        : TOUT_MATERIEL.map((valeur) => ({
+            valeur,
+            libelle: MATERIEL_LABELS[valeur],
+            categorie: MATERIEL_CATEGORIES[valeur],
+          }));
+    const serverPresets = config.data?.materiel_par_type ?? {};
+    const presets = { ...FALLBACK_PAR_TYPE };
+    (Object.keys(presets) as SportLieu[]).forEach((type) => {
+      const list = serverPresets[type];
+      if (list && list.length > 0) presets[type] = list;
+    });
+    const libelle = (valeur: Materiel | string) =>
+      catalogue.find((entry) => entry.valeur === valeur)?.libelle ??
+      MATERIEL_LABELS[valeur as Materiel] ??
+      valeur.replace(/_/g, " ");
+    return { catalogue, presets, libelle };
+  }, [config.data]);
+}
+
+/** « Haltères, banc, tapis de sol +2 » : le matériel d’un lieu en une ligne courte. */
+export function resumeMateriel(
+  materiel: Materiel[],
+  libelle: (valeur: Materiel) => string,
+  max = 3,
+): string {
+  const utiles = materiel.filter((m) => m !== "aucun");
+  if (utiles.length === 0) return "Poids du corps";
+  const noms = utiles.slice(0, max).map((m) => libelle(m));
+  const reste = utiles.length - max;
+  return reste > 0 ? `${noms.join(", ")} +${reste}` : noms.join(", ");
+}
+
+export function useSportLieux() {
+  return useQuery({
+    queryKey: queryKeys.sport.lieux,
+    queryFn: async () => (await sportApi.lieux()).data,
+    staleTime: 5 * 60 * 1000,
+    // Serveur plus ancien sans `/sport/lieux` : on retombe sur l’ancien formulaire sans insister.
+    retry: false,
+  });
 }
 
 /* ------------------------------------------------------------------ */

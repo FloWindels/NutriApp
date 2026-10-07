@@ -15,6 +15,7 @@ use App\Http\Resources\Sport\ProposalResource;
 use App\Http\Resources\Sport\SportPlanResource;
 use App\Http\Resources\Sport\WorkoutSessionResource;
 use App\Models\Sport;
+use App\Models\SportLieu;
 use App\Models\SportPlan;
 use App\Models\User;
 use App\Models\WorkoutSession;
@@ -81,7 +82,8 @@ class SportCalendarController extends SportController
             'sport_name' => $this->sportName($sport, $validated['sport_name'] ?? null),
             'planned_duration_min' => (int) $validated['planned_duration_min'],
             'planned_at' => $validated['planned_at'] ?? null,
-            'lieu' => $validated['lieu'] ?? null,
+            'lieu' => $this->lieuType($user, $validated) ?? ($validated['lieu'] ?? null),
+            'lieu_id' => $validated['lieu_id'] ?? null,
             'notes' => $validated['notes'] ?? null,
             'status' => PlanStatus::Prevu->value,
         ]);
@@ -124,7 +126,8 @@ class SportCalendarController extends SportController
                     'sport_name' => $sportName,
                     'planned_duration_min' => (int) $validated['planned_duration_min'],
                     'planned_at' => $validated['planned_at'] ?? null,
-                    'lieu' => $validated['lieu'] ?? null,
+                    'lieu' => $this->lieuType($user, $validated) ?? ($validated['lieu'] ?? null),
+                    'lieu_id' => $validated['lieu_id'] ?? null,
                     'notes' => $validated['notes'] ?? null,
                     'status' => PlanStatus::Prevu->value,
                     'recurrence_id' => $recurrenceId,
@@ -199,10 +202,14 @@ class SportCalendarController extends SportController
             $changes['sport_name'] = trim((string) $validated['sport_name']);
         }
 
-        foreach (['date', 'planned_duration_min', 'planned_at', 'lieu', 'notes', 'status'] as $field) {
+        foreach (['date', 'planned_duration_min', 'planned_at', 'lieu', 'lieu_id', 'notes', 'status'] as $field) {
             if (array_key_exists($field, $validated)) {
                 $changes[$field] = $validated[$field];
             }
+        }
+        // Un lieu enregistré impose son type au champ historique `lieu`.
+        if (! empty($validated['lieu_id'])) {
+            $changes['lieu'] = $this->lieuType($user, $validated);
         }
 
         $model->update($changes);
@@ -318,7 +325,7 @@ class SportCalendarController extends SportController
     {
         /** @var Collection<int, SportPlan> $plans */
         $plans = $this->plans($user)
-            ->with('sport')
+            ->with(['sport', 'lieuEntrainement'])
             ->whereBetween('date', [$from, $to])
             ->orderBy('date')
             ->orderByRaw('planned_at IS NULL')
@@ -366,6 +373,20 @@ class SportCalendarController extends SportController
                 'calories_done' => round((float) $done->sum(fn (WorkoutSession $s) => (float) ($s->calories_burned ?? 0)), 1),
             ],
         ];
+    }
+
+    /**
+     * Type du lieu d'entraînement désigné (`lieu_id`, déjà validé comme appartenant au compte).
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function lieuType(User $user, array $validated): ?string
+    {
+        if (empty($validated['lieu_id'])) {
+            return null;
+        }
+
+        return SportLieu::query()->where('user_id', $user->id)->whereKey((int) $validated['lieu_id'])->value('type');
     }
 
     private function sportFrom(User $user, mixed $sportId): ?Sport

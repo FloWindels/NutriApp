@@ -34,6 +34,7 @@ Règles :
 - Utilise en priorité les exercices du catalogue fourni et renvoie leur `exercise_id` ; sinon `exercise_id: null` avec un nom clair et des consignes.
 - Respecte strictement le matériel indiqué (« aucun » = poids du corps) et le lieu.
 - Pour un sport d’endurance (course, vélo, natation, marche, rameur), propose un bloc principal en fractionné ou en continu avec durées et allures, `exercise_id: null`.
+- Pour chaque exercice de renforcement, tu peux donner `rir` (répétitions gardées en réserve), `tempo` (« 3-1-1 ») et une `consigne` courte ; sinon null.
 - Débutant : charges légères, technique, pas d’exercice avancé ni de barre lourde.
 - Profil mineur, grossesse, allaitement ou suivi médical : intensité douce, pas de HIIT, rappelle l’avis médical dans `warnings`.
 - Jamais de promesse médicale, jamais de vocabulaire « brûle-graisse », « détox » ou « garanti ».

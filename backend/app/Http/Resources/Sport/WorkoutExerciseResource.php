@@ -4,6 +4,7 @@ namespace App\Http\Resources\Sport;
 
 use App\Models\WorkoutExercise;
 use App\Services\Sport\ExerciseMovement;
+use App\Services\Sport\PrescriptionFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -44,6 +45,10 @@ class WorkoutExerciseResource extends JsonResource
                 $catalog?->slug, $catalog?->category, $catalog?->muscle_group,
                 $catalog?->equipment, $item->name,
             ))),
+            // Sport v2 : prescription enregistrée, phrase lisible et étapes calculées ici.
+            'prescription' => is_array($item->prescription) ? $item->prescription : null,
+            'resume' => PrescriptionFormatter::resume($item, $catalog?->category),
+            'etapes' => PrescriptionFormatter::etapes($item, $catalog?->category, (string) $item->block),
         ];
     }
 }

@@ -1,6 +1,11 @@
 import '../core/api_client.dart';
 import '../core/strings.dart';
 import 'meal.dart';
+import 'sport_lieu.dart';
+import 'sport_prescription.dart';
+
+export 'sport_lieu.dart';
+export 'sport_prescription.dart';
 
 /// Catalog exercise (§13.1).
 class Exercise {
@@ -191,6 +196,15 @@ class WorkoutExercise {
   /// Motif de mouvement, qui choisit l'illustration (backend : ExerciseMovement).
   final String movement;
 
+  /// Sport v2 : cibles chiffrées (null pour une séance d'avant la v2).
+  final Prescription? prescriptionV2;
+
+  /// Phrase lisible calculée par le serveur (null : repli [resume]).
+  final String? resumeServeur;
+
+  /// Étapes minutées calculées par le serveur (vide : repli [etapesOuRepli]).
+  final List<Etape> etapes;
+
   const WorkoutExercise({
     required this.id,
     this.exerciseId,
@@ -207,6 +221,9 @@ class WorkoutExercise {
     this.instructions,
     this.notes,
     this.movement = 'generique',
+    this.prescriptionV2,
+    this.resumeServeur,
+    this.etapes = const [],
   });
 
   factory WorkoutExercise.fromJson(Map<String, dynamic> json) => WorkoutExercise(
@@ -225,7 +242,19 @@ class WorkoutExercise {
         completed: parseBool(json['completed']),
         instructions: parseString(json['instructions']),
         notes: parseString(json['notes']),
+        prescriptionV2: Prescription.fromJson(json['prescription']),
+        resumeServeur: parseString(json['resume']),
+        etapes: Etape.listFrom(json['etapes']),
       );
+
+  /// Ce que l'exercice demande, en clair : `resume` du serveur, sinon une phrase reconstruite.
+  String get resume =>
+      resumeServeur ??
+      resumeLegacy(sets: sets, reps: reps, durationSec: durationSec, restSec: restSec);
+
+  /// Étapes du serveur, sinon reconstruites depuis séries / durée / repos.
+  List<Etape> get etapesOuRepli =>
+      etapes.isNotEmpty ? etapes : etapesLegacy(sets: sets, reps: reps, durationSec: durationSec, restSec: restSec);
 
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{
@@ -257,6 +286,11 @@ class WorkoutExercise {
         completed: completed ?? this.completed,
         instructions: instructions,
         notes: notes,
+        movement: movement,
+        prescriptionV2: prescriptionV2,
+        // Séries ou répétitions modifiées à la main : la phrase serveur ne correspond plus.
+        resumeServeur: (sets == null && reps == null) ? resumeServeur : null,
+        etapes: (sets == null && reps == null) ? etapes : const [],
       );
 
   /// « 3 × 12 » / « 45 s » summary.
@@ -289,6 +323,8 @@ class WorkoutSession {
   final int? sportId;
   final String? sportName;
   final String? lieu;
+  final int? lieuId;
+  final String? lieuNom;
   final String? intensity;
   final double? distanceKm;
   final String? generatedBy; // regles | ia
@@ -320,6 +356,8 @@ class WorkoutSession {
     this.sportId,
     this.sportName,
     this.lieu,
+    this.lieuId,
+    this.lieuNom,
     this.intensity,
     this.distanceKm,
     this.generatedBy,
@@ -352,6 +390,8 @@ class WorkoutSession {
         sportId: parseInt(json['sport_id']),
         sportName: parseString(json['sport_name']) ?? parseString(json['activity_type']),
         lieu: parseString(json['lieu']),
+        lieuId: parseInt(json['lieu_id']),
+        lieuNom: parseString(json['lieu_nom']),
         intensity: parseString(json['intensity']),
         distanceKm: parseNum(json['distance_km']),
         generatedBy: parseString(json['generated_by']),
@@ -378,6 +418,9 @@ class WorkoutSession {
   bool get isManualCalories => caloriesSource == 'manuel';
 
   String get statusLabel => AppStrings.sessionStatusLabels[status] ?? status;
+
+  /// Au moins une étape à dérouler en séance guidée.
+  bool get hasGuidedSteps => exercises.any((e) => e.etapesOuRepli.isNotEmpty);
 
   /// Exercises grouped by block in canonical order.
   Map<String, List<WorkoutExercise>> get blocks {
@@ -409,6 +452,12 @@ class ProposalExercise {
   final String instructions;
   final double? met;
   final double? weightKg;
+  final String movement;
+
+  /// Sport v2 : cibles chiffrées, phrase lisible et étapes (calculées par le serveur).
+  final Prescription? prescriptionV2;
+  final String? resumeServeur;
+  final List<Etape> etapes;
 
   const ProposalExercise({
     this.exerciseId,
@@ -425,6 +474,10 @@ class ProposalExercise {
     this.instructions = '',
     this.met,
     this.weightKg,
+    this.movement = 'generique',
+    this.prescriptionV2,
+    this.resumeServeur,
+    this.etapes = const [],
   });
 
   factory ProposalExercise.fromJson(Map<String, dynamic> json) => ProposalExercise(
@@ -442,7 +495,16 @@ class ProposalExercise {
         instructions: parseString(json['instructions']) ?? '',
         met: parseNum(json['met']),
         weightKg: parseNum(json['weight_kg']),
+        movement: parseString(json['movement']) ?? 'generique',
+        prescriptionV2: Prescription.fromJson(json['prescription']),
+        resumeServeur: parseString(json['resume']),
+        etapes: Etape.listFrom(json['etapes']),
       );
+
+  /// Ce que l'exercice demande, en clair (repli lisible pour les anciennes réponses).
+  String get resume =>
+      resumeServeur ??
+      resumeLegacy(sets: sets, reps: reps, durationSec: durationSec, restSec: restSec, distanceKm: distanceKm);
 
   /// Body row for `POST /sport/sessions.exercises[]`.
   Map<String, dynamic> toSessionJson(String block) {
@@ -457,6 +519,8 @@ class ProposalExercise {
       'rest_sec': restSec,
       'distance_km': distanceKm,
       'intensity': intensity,
+      // Sport v2 : la prescription voyage avec l'exercice ; le serveur recalcule resume / etapes.
+      'prescription': prescriptionV2?.raw,
     };
     map.removeWhere((k, v) => v == null);
     return map;
@@ -477,6 +541,9 @@ class ProposalExercise {
         instructions: e.instructions,
         met: e.met,
         weightKg: weightKg,
+        movement: e.movement,
+        // Autre exercice : la prescription garde son volume, la consigne de l'ancien ne vaut plus.
+        prescriptionV2: prescriptionV2?.type == 'force' ? null : prescriptionV2,
       );
 
   String get prescription {
@@ -516,6 +583,8 @@ class SessionProposal {
   final String title;
   final String? sportType;
   final String? lieu;
+  final int? lieuId;
+  final String? lieuNom;
   final String? goal;
   final String? level;
   final int durationMin;
@@ -535,6 +604,8 @@ class SessionProposal {
     required this.title,
     this.sportType,
     this.lieu,
+    this.lieuId,
+    this.lieuNom,
     this.goal,
     this.level,
     this.durationMin = 30,
@@ -555,6 +626,8 @@ class SessionProposal {
         title: parseString(json['title']) ?? 'Séance',
         sportType: parseString(json['sport_type']),
         lieu: parseString(json['lieu']),
+        lieuId: parseInt(json['lieu_id']),
+        lieuNom: parseString(json['lieu_nom']),
         goal: parseString(json['goal']),
         level: parseString(json['level']),
         durationMin: parseIntOr(json['duration_min'], 30),
@@ -600,6 +673,7 @@ class SessionProposal {
       'focus': focus,
       'zones_a_eviter': zonesAEviter,
       'lieu': lieu,
+      'lieu_id': lieuId,
       'sport_type': sportType,
       'sport_id': sportId,
       'intensity': intensity,
@@ -621,6 +695,8 @@ class SessionProposal {
         title: title,
         sportType: sportType,
         lieu: lieu,
+        lieuId: lieuId,
+        lieuNom: lieuNom,
         goal: goal,
         level: level,
         durationMin: durationMin,
@@ -721,11 +797,19 @@ class SportConfig {
   final int coefCalories;
   final Map<String, List<VocabItem>> vocab;
 
+  /// Sport v2 : catalogue du matériel par catégorie (vide : repli local).
+  final List<MaterielItem> materielCatalogueServeur;
+
+  /// Sport v2 : préréglages de matériel par type de lieu (vide : repli local).
+  final Map<String, List<String>> materielParTypeServeur;
+
   const SportConfig({
     this.iaDisponible = false,
     this.llmModel,
     this.coefCalories = 100,
     this.vocab = const {},
+    this.materielCatalogueServeur = const [],
+    this.materielParTypeServeur = const {},
   });
 
   factory SportConfig.fromJson(Map<String, dynamic> json) {
@@ -737,13 +821,30 @@ class SportConfig {
           .where((v) => v.key.isNotEmpty)
           .toList();
     });
+    final parType = <String, List<String>>{};
+    ApiClient.asMap(json['materiel_par_type']).forEach((key, value) {
+      parType[key] = ApiClient.asStringList(value);
+    });
     return SportConfig(
       iaDisponible: parseBool(json['ia_disponible']),
       llmModel: parseString(json['llm_model']),
       coefCalories: parseIntOr(json['coef_calories'], 100),
       vocab: vocab,
+      materielCatalogueServeur: ApiClient.asList(json['materiel_catalogue'])
+          .map(MaterielItem.fromJson)
+          .where((m) => m.valeur.isNotEmpty)
+          .toList(),
+      materielParTypeServeur: parType,
     );
   }
+
+  /// Catalogue du matériel : celui du serveur, sinon le repli local.
+  List<MaterielItem> get materielCatalogue =>
+      materielCatalogueServeur.isEmpty ? materielCatalogueLocal : materielCatalogueServeur;
+
+  /// Préréglage de matériel pour un type de lieu.
+  List<String> presetPour(String type) =>
+      materielParTypeServeur[type] ?? materielParTypeLocal()[type] ?? const ['aucun'];
 
   /// Server vocab when present, else the local fallback from [AppStrings].
   List<VocabItem> vocabOr(String key, List<VocabItem> fallback) {

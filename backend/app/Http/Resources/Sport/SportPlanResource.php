@@ -32,6 +32,8 @@ class SportPlanResource extends JsonResource
             'planned_duration_min' => (int) $plan->planned_duration_min,
             'planned_at' => self::time($plan->planned_at),
             'lieu' => $plan->lieu,
+            'lieu_id' => $plan->lieu_id !== null ? (int) $plan->lieu_id : null,
+            'lieu_nom' => self::lieuNom($plan),
             'notes' => $plan->notes,
             'status' => (string) $plan->status,
             'session_id' => $plan->session_id !== null ? (int) $plan->session_id : null,
@@ -53,5 +55,21 @@ class SportPlanResource extends JsonResource
         }
 
         return substr((string) $value, 0, 5);
+    }
+
+    /**
+     * Nom du lieu d'entraînement : relation `lieuEntrainement` si chargée, sinon une requête
+     * ciblée (jamais de chargement paresseux, interdit hors production).
+     */
+    public static function lieuNom(\Illuminate\Database\Eloquent\Model $model): ?string
+    {
+        if ($model->lieu_id === null) {
+            return null;
+        }
+        if ($model->relationLoaded('lieuEntrainement')) {
+            return $model->getRelation('lieuEntrainement')?->nom;
+        }
+
+        return \App\Models\SportLieu::query()->whereKey($model->lieu_id)->value('nom');
     }
 }

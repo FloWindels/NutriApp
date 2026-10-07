@@ -18,7 +18,10 @@ use App\Models\User;
 use App\Models\WorkoutExercise;
 use App\Models\WorkoutSession;
 use App\Services\Coach\RecommendationCopy;
+use App\Models\Profile;
+use App\Models\SportLieu;
 use App\Services\Sport\CaloriesEstimator;
+use App\Services\Sport\Prescription;
 use App\Services\Sport\WorkoutAiGenerator;
 use App\Services\Sport\WorkoutProposalSchema;
 use App\Services\SportNutrition;
@@ -54,7 +57,7 @@ class WorkoutSessionController extends SportController
         $user = $request->user();
         $validated = $request->validated();
 
-        $query = $this->sessions($user)->with(['exercises', 'exercises.exercise']);
+        $query = $this->sessions($user)->with(['exercises', 'exercises.exercise', 'lieuEntrainement']);
 
         if (! empty($validated['from'])) {
             $query->where('date', '>=', $validated['from']);
@@ -78,7 +81,7 @@ class WorkoutSessionController extends SportController
     {
         $user = $request->user();
 
-        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise'])->findOrFail($session);
+        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise', 'lieuEntrainement'])->findOrFail($session);
 
         return $this->json(['data' => WorkoutSessionResource::make($model)->resolve($request)]);
     }
@@ -119,8 +122,9 @@ class WorkoutSessionController extends SportController
             : $this->visibleSports($user)->find((int) $validated['sport_id']);
 
         $manual = array_key_exists('calories_burned', $validated) && $validated['calories_burned'] !== null;
+        $lieu = $this->lieuEntrainement($user, $validated['lieu_id'] ?? null);
 
-        $session = DB::transaction(function () use ($user, $validated, $plan, $sport, $manual) {
+        $session = DB::transaction(function () use ($user, $validated, $plan, $sport, $manual, $lieu) {
             $session = WorkoutSession::query()->create([
                 'user_id' => $user->id,
                 'date' => $validated['date'],
@@ -141,7 +145,8 @@ class WorkoutSessionController extends SportController
                 'notes' => $validated['notes'] ?? null,
                 'sport_id' => $sport?->id,
                 'sport_name' => $validated['sport_name'] ?? $sport?->name ?? $plan?->sport_name,
-                'lieu' => $validated['lieu'] ?? $plan?->lieu,
+                'lieu' => $lieu?->type ?? $validated['lieu'] ?? $plan?->lieu,
+                'lieu_id' => $lieu?->id ?? $plan?->lieu_id,
                 'generated_by' => $validated['generated_by'] ?? null,
                 'llm_model' => $validated['llm_model'] ?? null,
                 'sport_plan_id' => $plan?->id,
@@ -150,12 +155,12 @@ class WorkoutSessionController extends SportController
                 'calories_burned' => $manual ? round((float) $validated['calories_burned'], 1) : null,
             ]);
 
-            $this->syncExercises($session, $this->flattenExercises($validated));
+            $this->syncExercises($session, $this->flattenExercises($validated), $this->age($user));
 
             return $session;
         });
 
-        $session->load(['exercises', 'exercises.exercise']);
+        $session->load(['exercises', 'exercises.exercise', 'lieuEntrainement']);
 
         return $this->json([
             'message' => 'Séance enregistrée.',
@@ -173,7 +178,7 @@ class WorkoutSessionController extends SportController
         $validated = $request->validated();
 
         /** @var WorkoutSession $model */
-        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise'])->findOrFail($session);
+        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise', 'lieuEntrainement'])->findOrFail($session);
 
         $changes = [];
 
@@ -209,14 +214,23 @@ class WorkoutSessionController extends SportController
             $changes['sport_plan_id'] = $plan->id;
         }
 
+        if (array_key_exists('lieu_id', $validated)) {
+            $lieu = $this->lieuEntrainement($user, $validated['lieu_id']);
+            $changes['lieu_id'] = $lieu?->id;
+            if ($lieu !== null) {
+                $changes['lieu'] = $lieu->type;
+            }
+            $model->unsetRelation('lieuEntrainement');
+        }
+
         DB::transaction(function () use ($model, $validated, $changes, $user) {
             $model->fill($changes)->save();
 
             $exercises = $this->flattenExercises($validated);
             if ($exercises !== []) {
                 $model->exercises()->delete();
-                $this->syncExercises($model, $exercises);
-                $model->load(['exercises', 'exercises.exercise']);
+                $this->syncExercises($model, $exercises, $this->age($user));
+                $model->load(['exercises', 'exercises.exercise', 'lieuEntrainement']);
             }
 
             // Calories : valeur envoyée ⇒ manuel ; `null` explicite ⇒ estimation MET.
@@ -250,7 +264,7 @@ class WorkoutSessionController extends SportController
         $user = $request->user();
 
         /** @var WorkoutSession $model */
-        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise'])->findOrFail($session);
+        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise', 'lieuEntrainement'])->findOrFail($session);
 
         $model->fill([
             'status' => SessionStatus::EnCours->value,
@@ -272,7 +286,7 @@ class WorkoutSessionController extends SportController
         $validated = $request->validated();
 
         /** @var WorkoutSession $model */
-        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise'])->findOrFail($session);
+        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise', 'lieuEntrainement'])->findOrFail($session);
 
         $date = $model->date->format('Y-m-d');
         $weight = $this->calories->weightFor($user, $date);
@@ -334,7 +348,7 @@ class WorkoutSessionController extends SportController
         $user = $request->user();
 
         /** @var WorkoutSession $model */
-        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise'])->findOrFail($session);
+        $model = $this->sessions($user)->with(['exercises', 'exercises.exercise', 'lieuEntrainement'])->findOrFail($session);
 
         $model->fill(['status' => SessionStatus::Annulee->value])->save();
 
@@ -406,11 +420,31 @@ class WorkoutSessionController extends SportController
     }
 
     /**
+     * Lieu d'entraînement du compte (l'appartenance est déjà validée par la requête).
+     */
+    private function lieuEntrainement(User $user, mixed $id): ?SportLieu
+    {
+        return $id === null || $id === '' ? null : SportLieu::query()->where('user_id', $user->id)->find((int) $id);
+    }
+
+    /**
+     * Âge du profil, pour les zones cardiaques des prescriptions enregistrées.
+     */
+    private function age(User $user): ?int
+    {
+        $age = $user->relationLoaded('profile')
+            ? $user->getRelation('profile')?->age
+            : Profile::query()->where('user_id', $user->id)->value('age');
+
+        return $age !== null ? (int) $age : null;
+    }
+
+    /**
      * Crée les `workout_exercises` d'une séance : bloc, position, nom et MET sont des **instantanés**.
      *
      * @param  list<array<string, mixed>>  $exercises
      */
-    private function syncExercises(WorkoutSession $session, array $exercises): void
+    private function syncExercises(WorkoutSession $session, array $exercises, ?int $age = null): void
     {
         $position = 0;
 
@@ -429,6 +463,8 @@ class WorkoutSessionController extends SportController
                 'rest_sec' => isset($exercise['rest_sec']) ? (int) $exercise['rest_sec'] : null,
                 'met' => isset($exercise['met']) ? (float) $exercise['met'] : null,
                 'notes' => $exercise['notes'] ?? null,
+                // Nettoyée et bornée ; fréquences cardiaques recalculées pour l'âge du profil.
+                'prescription' => Prescription::sanitize($exercise['prescription'] ?? null, $age),
                 'completed' => false,
             ]);
         }

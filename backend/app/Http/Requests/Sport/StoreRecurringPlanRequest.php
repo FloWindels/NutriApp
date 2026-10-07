@@ -24,6 +24,7 @@ class StoreRecurringPlanRequest extends SportFormRequest
             'planned_duration_min' => ['required', 'integer', 'between:'.self::DUREE_MIN.','.self::DUREE_MAX],
             'planned_at' => ['nullable', 'date_format:H:i'],
             'lieu' => ['nullable', 'string', Rule::enum(Lieu::class)],
+            'lieu_id' => $this->lieuIdRules(),
             'notes' => ['nullable', 'string', 'max:500'],
         ];
     }

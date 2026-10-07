@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,8 +9,10 @@ import {
   GeneratedByBadge,
   SessionStatusPill,
 } from "@/components/sport/shared";
+import { unlockAudio } from "@/components/sport/guided-audio";
+import { GuidedSession, buildGuidedSteps } from "@/components/sport/guided-session";
+import { PrescriptionDetails } from "@/components/sport/prescription-view";
 import {
-  describeSets,
   sportApi,
   SPORT_MUTATION_KEYS,
   useSportSession,
@@ -55,6 +57,8 @@ type LocalState = Record<number, LocalExercise>;
 
 export function SessionDetail({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { success, error: toastError } = useToast();
 
@@ -68,6 +72,10 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   const [caloriesOpen, setCaloriesOpen] = useState(false);
   const [result, setResult] = useState<SessionCompleteResponse | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  // `?guide=1` : arrivée depuis « Démarrer la séance » d’une proposition.
+  const [guidedOpen, setGuidedOpen] = useState(searchParams.get("guide") === "1");
+  const sessionExercises = session?.exercises;
+  const guidedSteps = useMemo(() => buildGuidedSteps(sessionExercises ?? []), [sessionExercises]);
 
   // Les champs locaux repartent de la séance dès qu'elle change (ajustement au rendu).
   useResetOnChange(session ? `${session.id}:${session.status}:${session.completed_at ?? ""}` : "", () => {
@@ -98,12 +106,13 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   });
 
   const complete = useMutation({
-    mutationFn: (input: { duration_min: number; rpe: number }) =>
+    // `allDone` : la séance guidée est allée au bout, chaque exercice compte comme réalisé.
+    mutationFn: ({ allDone = false, ...input }: { duration_min: number; rpe: number; allDone?: boolean }) =>
       sportApi.completeSession(Number(sessionId), {
         ...input,
         exercises: Object.entries(local).map(([id, row]) => ({
           id: Number(id),
-          completed: row.completed,
+          completed: allDone || row.completed,
           sets: row.sets.trim() ? Math.round(parseDecimal(row.sets) ?? 0) : null,
           reps: row.reps.trim() ? Math.round(parseDecimal(row.reps) ?? 0) : null,
           weight_kg: row.weight.trim() ? parseDecimal(row.weight) : null,
@@ -111,6 +120,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
       }),
     onSuccess: async (response) => {
       setCompleteOpen(false);
+      setGuidedOpen(false);
       setResult(response);
       await invalidate();
     },
@@ -170,6 +180,20 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
   }
 
   const blocks = groupBlocks(session.exercises ?? []);
+  const canGuide =
+    guidedSteps.length > 0 && (session.status === "prevue" || session.status === "en_cours");
+
+  function openGuided() {
+    // Le son doit être déverrouillé pendant le geste (Safari iPhone).
+    unlockAudio();
+    if (session?.status === "prevue") start.mutate();
+    setGuidedOpen(true);
+  }
+
+  function closeGuided() {
+    setGuidedOpen(false);
+    if (searchParams.get("guide")) router.replace(pathname, { scroll: false });
+  }
   const done = Object.values(local).filter((row) => row.completed).length;
   const total = Object.keys(local).length;
 
@@ -181,6 +205,7 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         subtitle={[
           formatMinutes(session.duration_min),
           session.sport_name && session.sport_name !== session.title ? session.sport_name : null,
+          session.lieu_nom ?? null,
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -223,13 +248,25 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
+          {canGuide ? (
+            <Button onClick={openGuided} size="lg">
+              {session.status === "en_cours" ? "Reprendre en mode guidé" : "Démarrer la séance"}
+            </Button>
+          ) : null}
           {session.status === "prevue" ? (
-            <Button onClick={() => start.mutate()} loading={start.isPending}>
-              Commencer
+            <Button
+              variant={canGuide ? "secondary" : "primary"}
+              size={canGuide ? "md" : "lg"}
+              onClick={() => start.mutate()}
+              loading={start.isPending}
+            >
+              {canGuide ? "Commencer sans guide" : "Commencer"}
             </Button>
           ) : null}
           {session.status === "en_cours" ? (
-            <Button onClick={() => setCompleteOpen(true)}>Terminer</Button>
+            <Button variant={canGuide ? "secondary" : "primary"} onClick={() => setCompleteOpen(true)}>
+              Terminer
+            </Button>
           ) : null}
           {session.status === "terminee" ? (
             <Button variant="secondary" onClick={() => setCaloriesOpen(true)}>
@@ -265,6 +302,19 @@ export function SessionDetail({ sessionId }: { sessionId: string }) {
           </ul>
         </Card>
       ))}
+
+      {guidedOpen && canGuide ? (
+        <GuidedSession
+          sessionId={session.id}
+          title={session.title}
+          steps={guidedSteps}
+          onClose={closeGuided}
+          onFinish={async (values) => {
+            await complete.mutateAsync({ ...values, allDone: true });
+            if (searchParams.get("guide")) router.replace(pathname, { scroll: false });
+          }}
+        />
+      ) : null}
 
       <CompleteModal
         open={completeOpen}
@@ -334,7 +384,6 @@ function ExerciseRow({
   onChange: (next: LocalExercise) => void;
 }) {
   const row = state ?? { completed: exercise.completed, sets: "", reps: "", weight: "" };
-  const details = describeSets(exercise);
 
   return (
     <li
@@ -354,13 +403,12 @@ function ExerciseRow({
           />
           <ExerciseFigure movement={exercise.movement} name={exercise.name} size={40} />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-slate-900">{exercise.name}</span>
-            {details ? <span className="block text-xs text-slate-500">{details}</span> : null}
+            <span className="block text-sm font-medium text-slate-900">{exercise.name}</span>
           </span>
         </label>
-
-        {exercise.rest_sec ? <Pill tone="slate">repos {exercise.rest_sec} s</Pill> : null}
       </div>
+
+      <PrescriptionDetails exercise={exercise} className="mt-2" />
 
       {editable ? (
         <div className="mt-3 grid gap-3 sm:grid-cols-3">

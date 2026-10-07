@@ -16,6 +16,8 @@ import '../widgets/error_state.dart';
 import '../widgets/loading_state.dart';
 import '../widgets/macro_pill.dart';
 import '../widgets/status_banner.dart';
+import 'sport/guided_session_screen.dart';
+import 'sport/prescription_view.dart';
 import 'sport/sport_icons.dart';
 
 /// Secure-storage key holding the session the user is currently doing.
@@ -26,17 +28,23 @@ const String activeWorkoutSessionKey = 'active_workout_session_id';
 /// Pops `'budget'` when the user asks to see the daily budget, `true` after a
 /// completion, or null otherwise.
 class WorkoutSessionScreen extends StatefulWidget {
-  const WorkoutSessionScreen({super.key, required this.sessionId});
+  const WorkoutSessionScreen({super.key, required this.sessionId, this.autoGuided = false, this.service});
 
   /// Identifiant de la séance (`workout_sessions.id`).
   final int sessionId;
+
+  /// Ouvre directement la séance guidée (Sport v2) une fois la séance chargée, si elle est en
+  /// cours et a des étapes.
+  final bool autoGuided;
+
+  final SportService? service;
 
   @override
   State<WorkoutSessionScreen> createState() => _WorkoutSessionScreenState();
 }
 
 class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
-  final SportService _service = SportService();
+  late final SportService _service = widget.service ?? SportService();
 
   WorkoutSession? _session;
   List<WorkoutExercise> _exercises = const [];
@@ -51,6 +59,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
   Timer? _restTimer;
   Duration _elapsed = Duration.zero;
   int _restLeft = 0;
+  bool _autoGuidedDone = false;
 
   @override
   void initState() {
@@ -82,6 +91,12 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         _error = null;
       });
       _syncTicker();
+      if (widget.autoGuided && !_autoGuidedDone && session.isInProgress && session.hasGuidedSteps) {
+        _autoGuidedDone = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openGuided();
+        });
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -149,6 +164,7 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         _busy = false;
       });
       _syncTicker();
+      if (_session?.hasGuidedSteps ?? false) await _openGuided();
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -240,6 +256,28 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
     });
   }
 
+  /// Séance guidée plein écran ; au retour, une séance terminée affiche son bilan.
+  Future<void> _openGuided() async {
+    final session = _session;
+    if (session == null) return;
+    final result = await Navigator.of(context).push<SessionCompleteResult>(
+      MaterialPageRoute<SessionCompleteResult>(
+        fullscreenDialog: true,
+        builder: (_) => GuidedSessionScreen(session: session, exercises: _exercises, service: _service),
+      ),
+    );
+    if (result == null || !mounted) return;
+    _ticker?.cancel();
+    _stopRest();
+    await _rememberActiveSession(null);
+    _invalidateCaches();
+    if (!mounted) return;
+    setState(() {
+      _result = result;
+      _session = result.session;
+    });
+  }
+
   Future<void> _confirmLeave() async {
     final leave = await ConfirmDialog.show(
       context,
@@ -296,6 +334,18 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
           _TimerCard(session: session, elapsed: _elapsed),
+          if (session.isInProgress && session.hasGuidedSteps) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _openGuided,
+                style: FilledButton.styleFrom(backgroundColor: MaviohColors.accent, foregroundColor: MaviohColors.text),
+                icon: const Icon(Icons.play_circle_outline_rounded),
+                label: const Text('Démarrer la séance guidée'),
+              ),
+            ),
+          ],
           if (_actionError != null) ...[
             const SizedBox(height: 12),
             StatusBanner.error(_actionError!, onClose: () => setState(() => _actionError = null)),
@@ -379,22 +429,19 @@ class _WorkoutSessionScreenState extends State<WorkoutSessionScreen> {
         style: const TextStyle(fontWeight: FontWeight.w700, color: MaviohColors.text),
       ),
       subtitle: Padding(
-        padding: const EdgeInsets.only(top: 6),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        padding: const EdgeInsets.only(top: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (exercise.prescription.isNotEmpty)
-              TonePill(label: exercise.prescription, tone: MaviohColors.slate, icon: Icons.repeat_rounded),
-            if (exercise.weightKg != null)
+            PrescriptionView(resume: exercise.resume, prescription: exercise.prescriptionV2),
+            if (exercise.weightKg != null) ...[
+              const SizedBox(height: 6),
               TonePill(
                 label: '${fmtDecimal(exercise.weightKg)} kg',
                 tone: MaviohColors.primary,
                 icon: Icons.fitness_center,
               ),
-            if (exercise.restSec != null)
-              TonePill(label: 'repos ${exercise.restSec} s', tone: MaviohColors.sky, icon: Icons.timer_outlined),
+            ],
           ],
         ),
       ),
