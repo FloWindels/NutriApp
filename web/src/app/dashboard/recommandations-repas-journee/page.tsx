@@ -240,7 +240,7 @@ function CoachPageContent() {
   const recommendations = query.data?.data ?? [];
 
   const controls = (
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between" data-tour="coach-controles">
       <DateStrip value={date} onChange={(next) => navigate({ date: next })} className="lg:max-w-sm lg:flex-1" />
 
       <button
@@ -298,8 +298,8 @@ function CoachPageContent() {
         />
       ) : (
         <ul className="space-y-4">
-          {recommendations.map((recommendation) => (
-            <li key={recommendation.id}>
+          {recommendations.map((recommendation, rang) => (
+            <li key={recommendation.id} data-tour={rang === 0 ? "coach-conseil" : undefined}>
               <RecommendationCard
                 recommendation={recommendation}
                 onAction={handleAction}

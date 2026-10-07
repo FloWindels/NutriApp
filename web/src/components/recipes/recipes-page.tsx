@@ -226,7 +226,7 @@ export function RecipesPage({
         title="Recettes"
         subtitle="Tes recettes et celles de la communauté, avec les calories et les macros par portion."
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" data-tour="recettes-actions">
             <Button variant="secondary" onClick={() => setGenerateurManuel(true)}>
               Avec ce que j’ai
             </Button>

@@ -12,7 +12,12 @@ import { cn } from "@/lib/cn";
 import { sectionsByCategory, toneStyles } from "@/lib/dashboard-sections";
 import { BRAND, messages } from "@/lib/messages";
 import { clearSession, useSession } from "@/lib/session";
-import MenuIcon from "./menu-icons";
+import MenuIcon, { type IconName } from "./menu-icons";
+import { InstallerApp } from "./installer-app";
+import { TitreBarreContext } from "@/lib/titre-barre";
+import { GardeAccueil } from "./onboarding/garde-accueil";
+import { useVisiteEnCours } from "./onboarding/use-accueil";
+import { VisiteGuidee } from "./tour/visite-guidee";
 import { Banner } from "./ui/banner";
 
 type DashboardShellProps = {
@@ -33,6 +38,26 @@ export default function DashboardShell({ children }: DashboardShellProps) {
   const queryClient = useQueryClient();
   const { token, user, ready } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Tiroir du téléphone : se referme à chaque changement de page.
+  const [tiroirOuvert, setTiroirOuvert] = useState(false);
+  const [cheminDuTiroir, setCheminDuTiroir] = useState(pathname);
+  if (cheminDuTiroir !== pathname) {
+    setCheminDuTiroir(pathname);
+    setTiroirOuvert(false);
+  }
+  // La visite guidée parcourt les pages elle-même : le tiroir reste fermé tant qu'elle dure.
+  const visiteEnCours = useVisiteEnCours();
+  if (visiteEnCours && tiroirOuvert) setTiroirOuvert(false);
+
+  // Pendant que le tiroir est ouvert, la page derrière ne défile pas.
+  useEffect(() => {
+    if (!tiroirOuvert) return;
+    const precedent = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = precedent;
+    };
+  }, [tiroirOuvert]);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const me = useMe();
@@ -66,8 +91,15 @@ export default function DashboardShell({ children }: DashboardShellProps) {
 
   const displayUser = me.data ?? user;
 
+  // Rien n'est rendu sans session : ni menu, ni squelette de page.
+  if (!ready || !token) return null;
+
   return (
-    <main className="min-h-screen bg-[#f3faec] p-3 text-[#0b3f2f] sm:p-4 lg:p-5">
+    <main className="min-h-screen bg-[#f4f8f1] px-2 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-0 text-[#0b3f2f] sm:px-4 lg:p-5">
+      <BarreMobile
+        titre={titreDePage(pathname)}
+        onMenu={() => setTiroirOuvert(true)}
+      />
       <div
         className={cn(
           "mx-auto grid min-h-[calc(100vh-1.5rem)] max-w-[1600px] gap-3 transition-all duration-300",
@@ -76,7 +108,7 @@ export default function DashboardShell({ children }: DashboardShellProps) {
       >
         <aside
           aria-label={`Navigation ${BRAND}`}
-          className="flex items-center justify-between rounded-[1.75rem] border border-emerald-100 bg-white px-3 py-3 shadow-[0_20px_60px_rgba(15,23,42,0.08)] lg:min-h-0 lg:flex-col lg:items-stretch lg:justify-start lg:px-2 lg:py-4"
+          className="hidden items-center justify-between rounded-[1.75rem] border border-emerald-100 bg-white px-3 py-3 lg:flex shadow-[0_20px_60px_rgba(15,23,42,0.08)] lg:min-h-0 lg:flex-col lg:items-stretch lg:justify-start lg:px-2 lg:py-4"
         >
           <div className="flex w-full flex-col items-center gap-3 px-1">
             <Link
@@ -122,75 +154,7 @@ export default function DashboardShell({ children }: DashboardShellProps) {
 
           <nav aria-label="Sections" className="overflow-x-auto lg:mt-4 lg:flex-1 lg:overflow-visible lg:px-1">
             {menuOpen ? (
-              <div className="space-y-3">
-                <Link
-                  href="/dashboard"
-                  aria-current={pathname === "/dashboard" ? "page" : undefined}
-                  className={cn(
-                    "flex h-12 w-full items-center gap-3 rounded-2xl border px-4 text-sm font-medium transition",
-                    pathname === "/dashboard"
-                      ? "border-emerald-700 bg-emerald-700 text-white"
-                      : "border-emerald-100 bg-emerald-50 text-emerald-900 hover:border-emerald-200 hover:bg-emerald-100/70",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "grid h-7 w-7 place-items-center rounded-lg",
-                      pathname === "/dashboard" ? "bg-white/15 text-white" : "bg-emerald-700 text-white",
-                    )}
-                  >
-                    <HomeIcon />
-                  </span>
-                  Accueil
-                </Link>
-
-                {groups.map((group) => (
-                  <div key={group.category} className="space-y-2">
-                    <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                      {group.category}
-                    </p>
-                    <div className="space-y-2">
-                      {group.sections.map((section) => {
-                        const href = `/dashboard/${section.slug}`;
-                        const active = pathname === href || pathname.startsWith(`${href}/`);
-                        const verrou = verrouillee(section);
-                        return (
-                          <Link
-                            key={section.slug}
-                            href={href}
-                            title={verrou ? SUFFIXE_VERROU : undefined}
-                            aria-current={active ? "page" : undefined}
-                            className={cn(
-                              "group flex h-12 w-full items-center justify-start gap-3 rounded-2xl border px-4 transition",
-                              active
-                                ? "border-emerald-700 bg-emerald-700 text-white"
-                                : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50",
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "grid h-7 w-7 place-items-center rounded-lg",
-                                active ? "bg-white/15 text-white" : `${toneStyles[section.tone].bar} text-white`,
-                              )}
-                            >
-                              <MenuIcon name={section.icon} className="h-4 w-4" />
-                            </span>
-                            <span className="truncate text-sm font-medium">{section.title}</span>
-                            {verrou ? (
-                              <CadenasIcon
-                                className={cn(
-                                  "ml-auto h-3.5 w-3.5 shrink-0",
-                                  active ? "text-white/70" : "text-slate-400",
-                                )}
-                              />
-                            ) : null}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <MenuComplet pathname={pathname} verrouillee={verrouillee} />
             ) : (
               <div className="flex items-center gap-2 lg:flex-col lg:justify-center">
                 {compactSections.map((section) => {
@@ -201,6 +165,7 @@ export default function DashboardShell({ children }: DashboardShellProps) {
                     <Link
                       key={section.slug}
                       href={href}
+                      data-tour={section.slug}
                       aria-label={verrou ? `${section.title} — ${SUFFIXE_VERROU}` : section.title}
                       aria-current={active ? "page" : undefined}
                       className={cn(
@@ -258,8 +223,9 @@ export default function DashboardShell({ children }: DashboardShellProps) {
           </button>
         </aside>
 
-        <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-          <div className="p-4 sm:p-6 lg:p-8">
+        {/* Comme dans l'application : les cartes reposent directement sur le fond, sans cadre. */}
+        <section className="min-w-0">
+          <div className="px-2 pb-2 pt-1 sm:px-2 lg:px-4 lg:py-2">
             {sessionWarning ? (
               <Banner
                 tone="warning"
@@ -278,11 +244,251 @@ export default function DashboardShell({ children }: DashboardShellProps) {
                 {messages.sessionCheckFailed}
               </Banner>
             ) : null}
-            {children}
+            {pathname === "/dashboard" ? <InstallerApp className="mb-4" /> : null}
+            <TitreBarreContext.Provider value={titreDePage(pathname)}>{children}</TitreBarreContext.Provider>
           </div>
         </section>
       </div>
+
+      <OngletsMobile pathname={pathname} onMenu={() => setTiroirOuvert(true)} />
+      <GardeAccueil />
+      <VisiteGuidee />
+
+      {tiroirOuvert ? (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
+          <button
+            type="button"
+            aria-label="Fermer le menu"
+            onClick={() => setTiroirOuvert(false)}
+            className="absolute inset-0 bg-slate-900/40"
+          />
+          <div className="absolute inset-y-0 right-0 flex w-[min(22rem,88vw)] flex-col bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">{displayUser?.name ?? "Utilisateur"}</p>
+                <p className="truncate text-xs text-slate-500">{displayUser?.email ?? ""}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTiroirOuvert(false)}
+                aria-label="Fermer le menu"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-50"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+                  <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-3 py-4">
+              <MenuComplet
+                pathname={pathname}
+                verrouillee={verrouillee}
+                onNavigate={() => setTiroirOuvert(false)}
+              />
+            </div>
+            <div className="border-t border-slate-100 p-3">
+              <button
+                type="button"
+                onClick={() => logout.mutate()}
+                disabled={logout.isPending}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 text-sm font-medium text-rose-700 disabled:opacity-60"
+              >
+                {messages.logout}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
+  );
+}
+
+/** Titre court de la page courante, pour la barre du téléphone. */
+function titreDePage(pathname: string): string {
+  if (pathname === "/dashboard") return "Accueil";
+  if (pathname === "/dashboard/bienvenue") return "Bienvenue";
+  const section = compactSections.find(
+    (s) => pathname === `/dashboard/${s.slug}` || pathname.startsWith(`/dashboard/${s.slug}/`),
+  );
+  return section?.title ?? BRAND;
+}
+
+/** Barre du haut sur téléphone : logo, titre de la page, bouton du menu. */
+function BarreMobile({ titre, onMenu }: { titre: string; onMenu: () => void }) {
+  return (
+    <header data-tour="barre-mobile" className="sticky top-0 z-30 -mx-2 mb-2 flex items-center gap-3 bg-[#f4f8f1]/90 px-3 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur sm:-mx-4 sm:px-4 lg:hidden">
+      <Link
+        href="/dashboard"
+        aria-label={`Accueil ${BRAND}`}
+        className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white"
+      >
+        <Image src="/logoMoh.png" alt="" width={28} height={28} className="h-7 w-7 object-contain" priority />
+      </Link>
+      <p className="min-w-0 flex-1 truncate text-xl font-extrabold tracking-tight text-slate-900">{titre}</p>
+      <button
+        type="button"
+        onClick={onMenu}
+        aria-label="Ouvrir le menu"
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600"
+      >
+        <span className="space-y-1">
+          <span className="block h-0.5 w-4 bg-current" />
+          <span className="block h-0.5 w-4 bg-current" />
+          <span className="block h-0.5 w-4 bg-current" />
+        </span>
+      </button>
+    </header>
+  );
+}
+
+/** Raccourcis du pouce, en bas de l'écran du téléphone ; le reste est dans le menu. */
+const ONGLETS: { slug: string | null; titre: string; icon: IconName | "home" }[] = [
+  { slug: null, titre: "Accueil", icon: "home" },
+  { slug: "historique-repas-journee", titre: "Repas", icon: "history" },
+  { slug: "recettes", titre: "Recettes", icon: "recipe" },
+  { slug: "sport", titre: "Sport", icon: "sport" },
+];
+
+function OngletsMobile({ pathname, onMenu }: { pathname: string; onMenu: () => void }) {
+  return (
+    <nav
+      aria-label="Raccourcis"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/70 bg-[#f4f8f1]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+    >
+      <ul className="mx-auto grid max-w-lg grid-cols-5">
+        {ONGLETS.map((onglet) => {
+          const href = onglet.slug ? `/dashboard/${onglet.slug}` : "/dashboard";
+          const actif = onglet.slug
+            ? pathname === href || pathname.startsWith(`${href}/`)
+            : pathname === "/dashboard";
+          return (
+            <li key={onglet.titre}>
+              <Link
+                href={href}
+                data-tour={onglet.slug ?? "accueil"}
+                aria-current={actif ? "page" : undefined}
+                className={cn(
+                  "flex h-16 flex-col items-center justify-center gap-1 text-xs",
+                  actif ? "font-bold text-slate-900" : "font-medium text-slate-500",
+                )}
+              >
+                {/* Pastille de l'onglet actif, comme la barre de navigation Material 3 de l'app. */}
+                <span
+                  className={cn(
+                    "grid h-8 w-14 place-items-center rounded-full transition",
+                    actif ? "bg-[#dfe8c8] text-emerald-800" : "text-slate-600",
+                  )}
+                >
+                  {onglet.icon === "home" ? <HomeIcon /> : <MenuIcon name={onglet.icon} className="h-5 w-5" />}
+                </span>
+                {onglet.titre}
+              </Link>
+            </li>
+          );
+        })}
+        <li>
+          <button
+            type="button"
+            onClick={onMenu}
+            data-tour="menu-mobile"
+            className="flex h-16 w-full flex-col items-center justify-center gap-1 text-xs font-medium text-slate-500"
+          >
+            <span className="grid h-8 w-14 place-items-center rounded-full text-slate-600">
+            <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+              <path d="M4 7H20M4 12H20M4 17H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            </span>
+            Plus
+          </button>
+        </li>
+      </ul>
+    </nav>
+  );
+}
+
+/** Menu déplié : toutes les sections par catégorie. Partagé par la barre latérale et le tiroir mobile. */
+function MenuComplet({
+  pathname,
+  verrouillee,
+  onNavigate,
+}: {
+  pathname: string;
+  verrouillee: (section: { capacite?: string }) => boolean;
+  onNavigate?: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <Link
+        href="/dashboard"
+        onClick={onNavigate}
+        aria-current={pathname === "/dashboard" ? "page" : undefined}
+        className={cn(
+          "flex h-12 w-full items-center gap-3 rounded-2xl border px-4 text-sm font-medium transition",
+          pathname === "/dashboard"
+            ? "border-emerald-700 bg-emerald-700 text-white"
+            : "border-emerald-100 bg-emerald-50 text-emerald-900 hover:border-emerald-200 hover:bg-emerald-100/70",
+        )}
+      >
+        <span
+          className={cn(
+            "grid h-7 w-7 place-items-center rounded-lg",
+            pathname === "/dashboard" ? "bg-white/15 text-white" : "bg-emerald-700 text-white",
+          )}
+        >
+          <HomeIcon />
+        </span>
+        Accueil
+      </Link>
+
+      {groups.map((group) => (
+        <div key={group.category} className="space-y-2">
+          <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            {group.category}
+          </p>
+          <div className="space-y-2">
+            {group.sections.map((section) => {
+              const href = `/dashboard/${section.slug}`;
+              const active = pathname === href || pathname.startsWith(`${href}/`);
+              const verrou = verrouillee(section);
+              return (
+                <Link
+                  key={section.slug}
+                  href={href}
+                  data-tour={section.slug}
+                  onClick={onNavigate}
+                  title={verrou ? SUFFIXE_VERROU : undefined}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "group flex h-12 w-full items-center justify-start gap-3 rounded-2xl border px-4 transition",
+                    active
+                      ? "border-emerald-700 bg-emerald-700 text-white"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid h-7 w-7 place-items-center rounded-lg",
+                      active ? "bg-white/15 text-white" : `${toneStyles[section.tone].bar} text-white`,
+                    )}
+                  >
+                    <MenuIcon name={section.icon} className="h-4 w-4" />
+                  </span>
+                  <span className="truncate text-sm font-medium">{section.title}</span>
+                  {verrou ? (
+                    <CadenasIcon
+                      className={cn(
+                        "ml-auto h-3.5 w-3.5 shrink-0",
+                        active ? "text-white/70" : "text-slate-400",
+                      )}
+                    />
+                  ) : null}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

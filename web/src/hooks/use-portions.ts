@@ -10,7 +10,7 @@ import { PORTIONS_FALLBACK } from "@/lib/units";
 export function usePortions(): { portions: Portion[]; aliases: Record<string, string>; isFallback: boolean } {
   const query = useQuery({
     queryKey: queryKeys.portions,
-    queryFn: () => apiGet<PortionsResponse>("/portions", undefined, { anonymous: true }),
+    queryFn: () => apiGet<PortionsResponse>("/portions"),
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     retry: 1,

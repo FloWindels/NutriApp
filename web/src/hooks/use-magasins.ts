@@ -8,7 +8,7 @@ import type { Magasin, MagasinsResponse, Rayon } from "@/lib/types/api";
 /**
  * Le catalogue des enseignes et des rayons, tel que le serveur le donne.
  *
- * Il est public et ne change pour ainsi dire jamais : on le garde une heure plutôt que de le
+ * Il ne relève d'aucune offre (mais exige un compte) et ne change pour ainsi dire jamais : on le garde une heure plutôt que de le
  * redemander à chaque ouverture de la liste de courses. Les rayons arrivent déjà dans l'ordre de
  * traversée du magasin, celui dans lequel on veut lire sa liste ; ne les retrie nulle part.
  */
@@ -20,7 +20,7 @@ export function useMagasins(): {
 } {
   const query = useQuery({
     queryKey: queryKeys.magasins.catalogue,
-    queryFn: () => apiGet<MagasinsResponse>("/magasins", undefined, { anonymous: true }),
+    queryFn: () => apiGet<MagasinsResponse>("/magasins"),
     staleTime: 60 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     retry: 1,

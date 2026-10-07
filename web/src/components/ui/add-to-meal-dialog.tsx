@@ -1,6 +1,6 @@
 "use client";
 
-import { PlatePhotoPanel } from "@/components/ui/plate-photo-panel";
+import { PlatePhotoPanel, type AjoutPhotoPickerProps } from "@/components/ui/plate-photo-panel";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiDelete, apiGet, apiPost, apiPut, getErrorMessage, isApiError } from "@/lib/api-client";
@@ -328,6 +328,7 @@ export function AddToMealDialog({
                 onAdded?.({ day: response.day, item, mealId: response.data.id });
                 onClose();
               }}
+              renderAjout={(props) => <PhotoAjoutPicker {...props} />}
             />
           }
           query={query}
@@ -840,6 +841,113 @@ function QuantityStep({
         disabled={disabled}
         hint={item.food_id === null ? messages.stockNotLinked : `${formatQty(item.quantity, unitLabel(item.unit, portions))} disponible${item.stock_name ? ` · ${item.stock_name}` : ""}`}
       />
+    </div>
+  );
+}
+
+/* --------------------------- ajout après photo --------------------------- */
+
+/**
+ * Complète la revue d'une photo : même recherche, mêmes fréquents et même choix d'unité que
+ * le reste du dialogue, mais le choix rejoint la liste à vérifier au lieu d'être enregistré.
+ */
+function PhotoAjoutPicker({ onAjouter, onAnnuler }: AjoutPhotoPickerProps) {
+  const { portions } = usePortions();
+  const [query, setQuery] = useState("");
+  const [selection, setSelection] = useState<Extract<Selection, { kind: "food" | "recipe" | "create-food" }> | null>(null);
+  const [value, setValue] = useState<QuantityUnitValue>(() => initialValueFor(null));
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  function select(next: Extract<Selection, { kind: "food" | "recipe" }>, initial?: QuantityUnitValue) {
+    setSelection(next);
+    setValue(initial ?? initialValueFor(next));
+    setLocalError(null);
+  }
+
+  // Un fréquent ne porte qu'un résumé : on charge la fiche pour les conversions d'unité.
+  const frequentMutation = useMutation({
+    mutationFn: async (item: FrequentItem) => {
+      if (item.kind === "food") {
+        const response = await apiGet<DataEnvelope<Food>>(`/foods/${item.id}`);
+        return { selection: { kind: "food", food: response.data } as const, item };
+      }
+      const response = await apiGet<DataEnvelope<Recipe>>(`/recipes/${item.id}`);
+      return { selection: { kind: "recipe", recipe: response.data } as const, item };
+    },
+    onSuccess: ({ selection: next, item }) =>
+      select(next, { quantity: item.last_quantity, unit: next.kind === "recipe" ? "portion" : item.last_unit }),
+    onError: (err) => setLocalError(getErrorMessage(err)),
+  });
+
+  function confirmer() {
+    if (!selection || selection.kind === "create-food") return;
+    if (value.quantity <= 0) {
+      setLocalError("Indique une quantité supérieure à zéro.");
+      return;
+    }
+    onAjouter(
+      selection.kind === "food"
+        ? { kind: "food", food: selection.food, quantity: value.quantity, unit: value.unit }
+        : { kind: "recipe", recipe: selection.recipe, quantity: value.quantity },
+    );
+  }
+
+  if (selection?.kind === "create-food") {
+    return (
+      <CreateFoodForm
+        barcode={selection.barcode}
+        busy={false}
+        onCreated={(food) => select({ kind: "food", food })}
+        onCancel={() => setSelection(null)}
+      />
+    );
+  }
+
+  if (selection) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-slate-700">{selectionTitle(selection)}</p>
+        <QuantityStep
+          selection={selection}
+          value={value}
+          onChange={setValue}
+          portions={portions}
+          decrementStock={false}
+          onDecrementStock={() => {}}
+          disabled={false}
+        />
+        {localError ? <Banner tone="error">{localError}</Banner> : null}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setSelection(null)}>
+            {messages.back}
+          </Button>
+          <Button size="sm" onClick={confirmer}>
+            Ajouter à la liste
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <FoodSearch
+        query={query}
+        onQuery={setQuery}
+        onPick={(food) => select({ kind: "food", food })}
+        onPickFrequent={(item) => {
+          setLocalError(null);
+          frequentMutation.mutate(item);
+        }}
+        onCreateFood={(barcode) => setSelection({ kind: "create-food", barcode })}
+        busy={frequentMutation.isPending}
+      />
+      {localError ? <Banner tone="error">{localError}</Banner> : null}
+      <div className="flex justify-end">
+        <Button variant="ghost" size="sm" onClick={onAnnuler}>
+          {messages.cancel}
+        </Button>
+      </div>
     </div>
   );
 }

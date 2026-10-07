@@ -14,6 +14,7 @@ import { applyFieldErrors, apiPost, getErrorMessage, isApiError } from "@/lib/ap
 import { messages } from "@/lib/messages";
 import { setSession } from "@/lib/session";
 import type { AuthResponse } from "@/lib/types/api";
+import { InstallerApp } from "@/components/installer-app";
 
 const schema = z.object({
   email: z.email("Adresse e-mail invalide."),
@@ -122,6 +123,7 @@ function LoginForm() {
           {isSubmitting ? "Connexion…" : "Se connecter"}
         </Button>
       </form>
+      <InstallerApp className="mt-6" />
     </AuthShell>
   );
 }

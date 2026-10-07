@@ -14,11 +14,13 @@ export type CardProps<T extends ElementType = "section"> = {
   className?: string;
 } & Omit<ComponentPropsWithoutRef<T>, "as" | "children" | "className">;
 
+// Sur téléphone, les cartes s'imbriquent souvent (page › liste › article) : des marges plus
+// courtes y laissent la place au contenu.
 const paddingClasses = {
   none: "",
-  sm: "p-4",
-  md: "p-5 sm:p-6",
-  lg: "p-6 sm:p-8",
+  sm: "p-3 sm:p-4",
+  md: "p-4 sm:p-6",
+  lg: "p-4 sm:p-8",
 } as const;
 
 export function Card<T extends ElementType = "section">({
@@ -34,8 +36,8 @@ export function Card<T extends ElementType = "section">({
   return (
     <Component
       className={cn(
-        "rounded-[1.75rem] border shadow-[0_14px_40px_rgba(15,23,42,0.06)]",
-        tone ? toneStyles[tone].card : "border-slate-200 bg-white",
+        "rounded-3xl border shadow-[0_10px_18px_rgba(15,23,42,0.06)]",
+        tone ? toneStyles[tone].card : "border-slate-100 bg-white",
         paddingClasses[padding],
         interactive && "transition hover:-translate-y-0.5 hover:shadow-[0_18px_44px_rgba(15,23,42,0.1)]",
         className,

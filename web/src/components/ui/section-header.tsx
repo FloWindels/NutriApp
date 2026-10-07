@@ -1,6 +1,9 @@
+"use client";
+
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { toneStyles, type DashboardTone } from "@/lib/dashboard-sections";
+import { useTitreBarre } from "@/lib/titre-barre";
 
 export type SectionHeaderProps = {
   /** Small uppercase label above the title (e.g. « Nutrition »). */
@@ -25,14 +28,21 @@ export function SectionHeader({
   className,
 }: SectionHeaderProps) {
   const Heading = level === "page" ? "h1" : "h2";
+  // Sur téléphone, la barre du haut porte déjà le titre : pas de doublon à l'écran.
+  const titreBarre = useTitreBarre();
+  const doublon = level === "page" && typeof title === "string" && title === titreBarre;
   return (
-    <div className={cn("flex flex-wrap items-end justify-between gap-3", className)}>
+    <div
+      className={cn("flex flex-wrap items-end justify-between gap-3", className)}
+      data-tour={level === "page" ? "entete-page" : undefined}
+    >
       <div className="min-w-0">
         {eyebrow ? (
           <p
             className={cn(
-              "mb-2 inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]",
-              tone ? toneStyles[tone].badge : "border-slate-200 bg-slate-50 text-slate-600",
+              "mb-1 text-[11px] font-bold uppercase tracking-[0.1em]",
+              level === "page" && "max-lg:hidden",
+              tone ? toneStyles[tone].subtle : "text-slate-500",
             )}
           >
             {eyebrow}
@@ -40,8 +50,9 @@ export function SectionHeader({
         ) : null}
         <Heading
           className={cn(
-            "font-semibold tracking-tight text-slate-950",
-            level === "page" ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl",
+            "tracking-tight text-slate-900",
+            doublon && "max-lg:sr-only",
+            level === "page" ? "text-[26px] font-extrabold leading-tight sm:text-3xl" : "text-lg font-bold sm:text-xl",
           )}
         >
           {title}

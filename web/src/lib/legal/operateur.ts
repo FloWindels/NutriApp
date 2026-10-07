@@ -71,22 +71,22 @@ export type Operateur = {
 export const OPERATEUR: Operateur = {
   service: "Mavi’oh",
   editeur: {
-    nom: A_COMPLETER,
-    forme: A_COMPLETER,
-    adresse: A_COMPLETER,
+    nom: "Florent Windels",
+    forme: "personne physique",
+    adresse: "442 chaussée de lille, 7501 Orcq, Belgique",
     numeroEntreprise: null,
     tva: null,
-    directeurPublication: A_COMPLETER,
+    directeurPublication: "Florent Windels",
   },
   contact: {
-    email: A_COMPLETER,
-    emailDonnees: A_COMPLETER,
+    email: "florentwindels@gmail.com",
+    emailDonnees: "florentwindels@gmail.com",
     telephone: null,
   },
   dpo: null,
   hebergeur: {
-    nom: A_COMPLETER,
-    adresse: A_COMPLETER,
+    nom: "Florent Windels (serveur auto-hébergé)",
+    adresse: "442 chaussée de lille, 7501 Orcq, Belgique",
     pays: "Belgique",
   },
   // Belgique : l'Autorité de protection des données (APD / GBA).
@@ -99,7 +99,7 @@ export const OPERATEUR: Operateur = {
   // jusqu'à 15 ans, volontairement plus prudent que le minimum légal.
   ageConsentementNumerique: 13,
   // À passer à "public" le jour de l'ouverture, en même temps que le domaine et le certificat.
-  deploiement: "local",
+  deploiement: "public",
 };
 
 /** Vrai tant que le service n'est pas offert au public. */

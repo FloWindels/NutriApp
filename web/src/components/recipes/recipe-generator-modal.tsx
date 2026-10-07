@@ -231,7 +231,8 @@ export function RecipeGeneratorModal({
               <div>
                 <Overline className="mb-2">Sources consultées</Overline>
                 <ul className="space-y-1 text-xs text-slate-600">
-                  {proposition.sources_web.map((source) => (
+                  {/* Adresses issues du web et du modèle : seuls les liens http(s) sont rendus. */}
+                  {proposition.sources_web.filter((source) => /^https?:\/\//i.test(source.url)).map((source) => (
                     <li key={source.url}>
                       <a
                         href={source.url}

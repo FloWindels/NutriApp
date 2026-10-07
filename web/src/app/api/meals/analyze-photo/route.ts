@@ -1,3 +1,3 @@
 import { proxyRoute } from "@/lib/laravel-proxy";
 
-export const POST = proxyRoute("/meals/analyze-photo", { label: "de la photo", timeoutMs: 120000 });
+export const POST = proxyRoute("/meals/analyze-photo", { label: "de la photo", timeoutMs: 120000, maxBytes: 14_000_000 });

@@ -1,20 +1,25 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useOffre } from "@/hooks/use-offre";
+import { usePortions } from "@/hooks/use-portions";
 import { apiGet, apiPost, getErrorMessage } from "@/lib/api-client";
 import { dataUriBytes, resizeImage, MAX_IMAGE_BYTES } from "@/lib/image-resize";
-import { formatKcal } from "@/lib/format";
+import { formatKcal, parseDecimal } from "@/lib/format";
 import { messages } from "@/lib/messages";
+import { previewNutrition, unitLabel } from "@/lib/units";
 import type {
   DataEnvelope,
+  Food,
   MealCreateInput,
   MealCreateResponse,
   MealItemInput,
   MealType,
   PlateAnalysis,
   PlateLine,
+  Portion,
+  Recipe,
 } from "@/lib/types/api";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
@@ -26,16 +31,32 @@ import { Field } from "@/components/ui/field";
  * Photo d'assiette : capture, analyse, puis vérification OBLIGATOIRE.
  *
  * Aucune écriture n'a lieu tant que l'utilisateur n'a pas confirmé : l'analyse ne fait que
- * proposer des lignes, qu'il corrige, complète ou supprime. La confirmation envoie tout le
+ * proposer des lignes, qu'il corrige, complète ou supprime. Ce que le modèle n'a pas vu
+ * s'ajoute à la main depuis le catalogue, dans la même liste. La confirmation envoie tout le
  * repas en un seul appel à POST /meals.
  */
 
+/** Aliment ou recette choisi à la main pour compléter ce que la photo a manqué. */
+export type AjoutPhoto =
+  | { kind: "food"; food: Food; quantity: number; unit: string }
+  | { kind: "recipe"; recipe: Recipe; quantity: number };
+
+/** Ce que reçoit le sélecteur d'ajout : il rend la main par l'un ou l'autre. */
+export type AjoutPhotoPickerProps = {
+  onAjouter: (ajout: AjoutPhoto) => void;
+  onAnnuler: () => void;
+};
+
 // `quantite` devient une chaîne : c'est la valeur d'un champ texte, corrigée par l'utilisateur.
-type Ligne = Omit<PlateLine, "quantite"> & {
+// `unite` s'élargit : une ligne ajoutée à la main garde l'unité choisie dans le sélecteur.
+type Ligne = Omit<PlateLine, "quantite" | "unite"> & {
   uid: string;
+  unite: string;
   quantiteInitiale: number;
   quantite: string;
   retenue: boolean;
+  /** Présent seulement pour une ligne ajoutée à la main, absente de la photo. */
+  ajout: AjoutPhoto | null;
 };
 
 let compteur = 0;
@@ -47,13 +68,49 @@ function toLignes(analyse: PlateAnalysis): Ligne[] {
     quantiteInitiale: ligne.quantite,
     quantite: String(ligne.quantite),
     retenue: true,
+    ajout: null,
   }));
 }
 
+function ligneAjoutee(ajout: AjoutPhoto): Ligne {
+  const unite = ajout.kind === "food" ? ajout.unit : "portion";
+
+  return {
+    uid: `plate-${++compteur}`,
+    nom: ajout.kind === "food" ? ajout.food.name : ajout.recipe.title,
+    marque: ajout.kind === "food" ? ajout.food.brand : null,
+    unite,
+    confiance: 1,
+    food: null,
+    valeurs_proposees: null,
+    quantiteInitiale: ajout.quantity,
+    quantite: String(ajout.quantity),
+    retenue: true,
+    ajout,
+  };
+}
+
+/** Quantité saisie, virgule comprise ; null si elle n'est pas exploitable. */
+function quantiteSaisie(ligne: Ligne): number | null {
+  const quantite = parseDecimal(ligne.quantite);
+  return quantite !== null && Number.isFinite(quantite) && quantite > 0 ? quantite : null;
+}
+
 /** Calories de la ligne pour la quantité saisie, à titre indicatif. */
-function caloriesLigne(ligne: Ligne): number | null {
-  const quantite = Number(ligne.quantite);
-  if (!Number.isFinite(quantite) || quantite <= 0) return null;
+function caloriesLigne(ligne: Ligne, portions: Portion[]): number | null {
+  const quantite = quantiteSaisie(ligne);
+  if (quantite === null) return null;
+
+  if (ligne.ajout?.kind === "food") {
+    const food = ligne.ajout.food;
+    return previewNutrition(quantite, ligne.unite, food, food, portions).calories;
+  }
+
+  if (ligne.ajout?.kind === "recipe") {
+    const recette = ligne.ajout.recipe;
+    const parPortion = recette.per_serving?.calories ?? recette.calories;
+    return parPortion == null ? null : parPortion * quantite;
+  }
 
   if (ligne.food) {
     const pour100 = ligne.food.calories;
@@ -68,8 +125,16 @@ function caloriesLigne(ligne: Ligne): number | null {
 }
 
 function toItem(ligne: Ligne): MealItemInput | null {
-  const quantite = Number(ligne.quantite);
-  if (!Number.isFinite(quantite) || quantite <= 0) return null;
+  const quantite = quantiteSaisie(ligne);
+  if (quantite === null) return null;
+
+  if (ligne.ajout?.kind === "food") {
+    return { food_id: ligne.ajout.food.id, quantity: quantite, unit: ligne.unite };
+  }
+
+  if (ligne.ajout?.kind === "recipe") {
+    return { recipe_id: ligne.ajout.recipe.id, quantity: quantite, unit: "portion" };
+  }
 
   if (ligne.food) {
     return { food_id: ligne.food.id, quantity: quantite, unit: ligne.unite };
@@ -94,10 +159,17 @@ export type PlatePhotoPanelProps = {
   date: string;
   type: MealType;
   onAdded: (response: MealCreateResponse) => void;
+  /**
+   * Recherche dans le catalogue pour ajouter un aliment oublié par le modèle. Fournie par le
+   * dialogue d'ajout, qui possède déjà la recherche, les fréquents et le choix d'unité.
+   */
+  renderAjout?: (props: AjoutPhotoPickerProps) => ReactNode;
 };
 
-export function PlatePhotoPanel({ date, type, onAdded }: PlatePhotoPanelProps) {
+export function PlatePhotoPanel({ date, type, onAdded, renderAjout }: PlatePhotoPanelProps) {
   const { peut } = useOffre();
+  const { portions } = usePortions();
+  const [ajoutOuvert, setAjoutOuvert] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [apercu, setApercu] = useState<string | null>(null);
   const [lignes, setLignes] = useState<Ligne[] | null>(null);
@@ -144,6 +216,7 @@ export function PlatePhotoPanel({ date, type, onAdded }: PlatePhotoPanelProps) {
       setApercu(dataUri);
       setLignes(null);
       setAnalyse(null);
+      setAjoutOuvert(false);
       analyseMutation.mutate(dataUri);
     } catch {
       setErreur("Impossible de lire cette image.");
@@ -154,6 +227,16 @@ export function PlatePhotoPanel({ date, type, onAdded }: PlatePhotoPanelProps) {
     setLignes((precedent) =>
       precedent === null ? precedent : precedent.map((l) => (l.uid === uid ? { ...l, ...patch } : l)),
     );
+  }
+
+  function retirer(uid: string) {
+    setLignes((precedent) => (precedent === null ? precedent : precedent.filter((l) => l.uid !== uid)));
+  }
+
+  function ajouter(ajout: AjoutPhoto) {
+    setErreur(null);
+    setLignes((precedent) => [...(precedent ?? []), ligneAjoutee(ajout)]);
+    setAjoutOuvert(false);
   }
 
   function confirmer() {
@@ -177,7 +260,7 @@ export function PlatePhotoPanel({ date, type, onAdded }: PlatePhotoPanelProps) {
 
   const indisponible = capacite.data?.data.disponible === false;
   const retenues = (lignes ?? []).filter((l) => l.retenue);
-  const totalKcal = retenues.reduce((somme, ligne) => somme + (caloriesLigne(ligne) ?? 0), 0);
+  const totalKcal = retenues.reduce((somme, ligne) => somme + (caloriesLigne(ligne, portions) ?? 0), 0);
 
   return (
     <div className="space-y-3">
@@ -229,7 +312,9 @@ export function PlatePhotoPanel({ date, type, onAdded }: PlatePhotoPanelProps) {
         </Banner>
       ) : null}
 
-      {lignes !== null && lignes.length > 0 ? (
+      {/* La revue s'ouvre dès que l'analyse a répondu, même sans rien reconnaître : il reste
+          possible de tout saisir à la main. */}
+      {lignes !== null ? (
         <div className="space-y-2">
           {analyse?.avertissements.map((avertissement) => (
             <Banner key={avertissement} tone="warning">
@@ -239,7 +324,43 @@ export function PlatePhotoPanel({ date, type, onAdded }: PlatePhotoPanelProps) {
 
           <ul className="space-y-2">
             {lignes.map((ligne) => {
-              const kcal = caloriesLigne(ligne);
+              const kcal = caloriesLigne(ligne, portions);
+
+              if (ligne.ajout) {
+                return (
+                  <li key={ligne.uid} className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-slate-900">{ligne.nom}</p>
+                        <p className="text-xs text-slate-500">
+                          {["Ajouté par toi", ligne.marque, kcal != null ? formatKcal(kcal) : null]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                      <div className="w-28">
+                        <Field
+                          type="text"
+                          inputMode="decimal"
+                          value={ligne.quantite}
+                          onChange={(event) => modifier(ligne.uid, { quantite: event.target.value })}
+                          aria-label={`Quantité pour ${ligne.nom}`}
+                        />
+                      </div>
+                      <span className="text-sm text-slate-500">{unitLabel(ligne.unite, portions)}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => retirer(ligne.uid)}
+                        aria-label={`Retirer ${ligne.nom}`}
+                      >
+                        Retirer
+                      </Button>
+                    </div>
+                  </li>
+                );
+              }
 
               return (
                 <li
@@ -283,11 +404,35 @@ export function PlatePhotoPanel({ date, type, onAdded }: PlatePhotoPanelProps) {
             })}
           </ul>
 
+          {lignes.length === 0 && !ajoutOuvert ? (
+            <p className="rounded-2xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500">
+              Rien n’a été reconnu sur la photo. Ajoute toi-même ce que contient l’assiette.
+            </p>
+          ) : null}
+
+          {renderAjout ? (
+            ajoutOuvert ? (
+              <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                <p className="text-sm font-semibold text-slate-900">Ajouter un aliment oublié</p>
+                {renderAjout({ onAjouter: ajouter, onAnnuler: () => setAjoutOuvert(false) })}
+              </div>
+            ) : (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setAjoutOuvert(true)}>
+                + Ajouter un aliment oublié
+              </Button>
+            )
+          ) : null}
+
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-3 py-2.5">
             <span className="text-sm text-slate-700">
               {retenues.length} ligne{retenues.length > 1 ? "s" : ""} · {formatKcal(totalKcal)}
             </span>
-            <Button type="button" onClick={confirmer} loading={enregistrer.isPending}>
+            <Button
+              type="button"
+              onClick={confirmer}
+              loading={enregistrer.isPending}
+              disabled={ajoutOuvert || retenues.length === 0}
+            >
               Vérifié, ajouter au repas
             </Button>
           </div>

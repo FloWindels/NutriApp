@@ -39,12 +39,12 @@ export function FieldWrapper({ label, hint, error, required, htmlFor, className,
 }
 
 export const inputClassName =
-  "w-full rounded-2xl border bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
+  "w-full rounded-[14px] border bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
 
 export function inputStateClassName(hasError: boolean): string {
   return hasError
     ? "border-rose-300 focus:border-rose-500 focus:ring-rose-500/10"
-    : "border-slate-200 focus:border-lime-600 focus:ring-lime-600/10";
+    : "border-[#d7dee7] focus:border-emerald-700 focus:ring-emerald-700/10";
 }
 
 type CommonFieldProps = {

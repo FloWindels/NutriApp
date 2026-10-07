@@ -9,12 +9,13 @@ import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { Field } from "@/components/ui/field";
-import { ModulePayant } from "@/components/ui/offre-requise";
+import { OffreRequisePourCapacite } from "@/components/ui/offre-requise";
 import { Pill } from "@/components/ui/pill";
 import { SectionHeader, Overline } from "@/components/ui/section-header";
 import { SkeletonCard } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useMe } from "@/hooks/use-me";
+import { useOffre } from "@/hooks/use-offre";
 import { apiDelete, apiGet, apiPost, apiPut, getErrorMessage } from "@/lib/api-client";
 import { formatKcal } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
@@ -30,12 +31,42 @@ import type {
 
 const CODE_LENGTH = 8;
 
-/** « Famille » — créer ou rejoindre un foyer, membres et repas commun (§10). */
+/**
+ * « Famille » — créer ou rejoindre un foyer, membres et repas commun (§10).
+ *
+ * Sans l'offre Foyer, on montre l'invitation à s'abonner, mais aussi de quoi rejoindre un foyer
+ * existant : l'offre Foyer du propriétaire couvre ses membres, et le serveur répond 402 si le
+ * foyer visé n'en bénéficie pas.
+ */
 export default function FamilyRoute() {
+  const { peut } = useOffre();
+
+  if (peut("foyer")) return <FamilyPage />;
+
+  return <InviteSansOffre />;
+}
+
+function InviteSansOffre() {
+  const queryClient = useQueryClient();
+  const { success } = useToast();
+
   return (
-    <ModulePayant capacite="foyer">
-      <FamilyPage />
-    </ModulePayant>
+    <div className="space-y-6">
+      <SectionHeader eyebrow="Compte" title="Famille" tone="sky" />
+      <OffreRequisePourCapacite capacite="foyer" />
+      <div className="mx-auto max-w-xl">
+        <JoinHouseholdCard
+          onJoined={async () => {
+            // L'offre du compte change avec l'adhésion : /me doit être relu pour ouvrir le module.
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: queryKeys.me }),
+              queryClient.invalidateQueries({ queryKey: queryKeys.household.all }),
+            ]);
+          }}
+          onSuccess={success}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -123,10 +154,6 @@ function NoHousehold({
   const [name, setName] = useState(firstName ? `Foyer de ${firstName}` : "Mon foyer");
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const [code, setCode] = useState("");
-  const [joinError, setJoinError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<HouseholdPreview | null>(null);
-
   const create = useMutation({
     mutationFn: () => apiPost<DataEnvelope<Household>>("/household", { name: name.trim() }),
     onSuccess: async () => {
@@ -135,6 +162,40 @@ function NoHousehold({
     },
     onError: (error) => setCreateError(getErrorMessage(error)),
   });
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card padding="md" data-tour="famille-creer">
+        <p className="mb-1 text-sm font-semibold text-slate-900">Créer un foyer</p>
+        <p className="mb-3 text-sm text-slate-600">
+          Tu deviens propriétaire et tu obtiens un code d’invitation à partager.
+        </p>
+        {createError ? (
+          <Banner tone="error" className="mb-3" onClose={() => setCreateError(null)}>
+            {createError}
+          </Banner>
+        ) : null}
+        <Field label="Nom du foyer" value={name} onChange={(event) => setName(event.target.value)} />
+        <Button className="mt-3" loading={create.isPending} onClick={() => create.mutate()}>
+          Créer le foyer
+        </Button>
+      </Card>
+
+      <JoinHouseholdCard onJoined={onJoined} onSuccess={onSuccess} />
+    </div>
+  );
+}
+
+function JoinHouseholdCard({
+  onJoined,
+  onSuccess,
+}: {
+  onJoined: () => Promise<void>;
+  onSuccess: (message: string) => void;
+}) {
+  const [code, setCode] = useState("");
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<HouseholdPreview | null>(null);
 
   const lookup = useMutation({
     mutationFn: () =>
@@ -161,24 +222,8 @@ function NoHousehold({
   });
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card padding="md">
-        <p className="mb-1 text-sm font-semibold text-slate-900">Créer un foyer</p>
-        <p className="mb-3 text-sm text-slate-600">
-          Tu deviens propriétaire et tu obtiens un code d’invitation à partager.
-        </p>
-        {createError ? (
-          <Banner tone="error" className="mb-3" onClose={() => setCreateError(null)}>
-            {createError}
-          </Banner>
-        ) : null}
-        <Field label="Nom du foyer" value={name} onChange={(event) => setName(event.target.value)} />
-        <Button className="mt-3" loading={create.isPending} onClick={() => create.mutate()}>
-          Créer le foyer
-        </Button>
-      </Card>
-
-      <Card padding="md">
+    <>
+      <Card padding="md" data-tour="famille-rejoindre">
         <p className="mb-1 text-sm font-semibold text-slate-900">Rejoindre un foyer</p>
         <p className="mb-3 text-sm text-slate-600">
           Saisis le code à huit caractères transmis par le propriétaire.
@@ -229,7 +274,7 @@ function NoHousehold({
           await join.mutateAsync();
         }}
       />
-    </div>
+    </>
   );
 }
 
@@ -306,7 +351,7 @@ function HouseholdView({
   return (
     <div className="space-y-4">
       {isOwner && household.invite_code ? (
-        <Card padding="md">
+        <Card padding="md" data-tour="famille-invitation">
           <p className="mb-2 text-sm font-semibold text-slate-900">Code d’invitation</p>
           <div className="flex flex-wrap items-center gap-3">
             <span className="rounded-2xl bg-slate-950 px-4 py-2 font-mono text-lg tracking-[0.3em] text-white">
@@ -329,7 +374,7 @@ function HouseholdView({
         </Card>
       ) : null}
 
-      <Card padding="md">
+      <Card padding="md" data-tour="famille-membres">
         <Overline className="mb-3">
           Membres
         </Overline>

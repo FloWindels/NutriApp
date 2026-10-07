@@ -223,7 +223,7 @@ function ShoppingListPage() {
         }
         tone="slate"
         actions={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" data-tour="courses-generer">
             <Button variant="secondary" onClick={() => generate.mutate()} loading={generate.isPending}>
               Générer depuis le planning
             </Button>

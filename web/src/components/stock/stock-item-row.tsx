@@ -94,7 +94,7 @@ export function StockItemRow({
         depleted ? "border-slate-200 bg-slate-50" : "border-slate-200 hover:border-slate-300",
       )}
     >
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3 px-3 py-3 sm:px-4">
         <div className={cn("min-w-0 flex-1", depleted && "opacity-60")}>
           <p className="truncate text-sm font-semibold text-slate-900">{item.food_name}</p>
           <p className="truncate text-xs text-slate-500">
@@ -133,7 +133,8 @@ export function StockItemRow({
           />
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {/* Téléphone : trois boutons en parts égales sur toute la largeur, sous l'article. */}
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:shrink-0 sm:flex-wrap sm:items-center">
           <Button size="md" variant="secondary" onClick={onConsume} disabled={depleted}>
             Consommer
           </Button>

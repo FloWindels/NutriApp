@@ -318,6 +318,16 @@ export type Besoins = {
   rythme_demande_kg_semaine: number | null;
   rythme_intense_kcal: number | null;
   rythme_intense_kg_semaine: number | null;
+  /** Rythme sans plafond de vitesse : seul le plancher de sécurité borne le déficit. */
+  rythme_libre_possible?: boolean;
+  rythme_libre_accepte?: boolean;
+  rythme_libre_kcal?: number | null;
+  rythme_libre_kg_semaine?: number | null;
+  /** Seuil absolu qui reste en place avec le rythme libre (1 200 / 1 500 kcal). */
+  rythme_libre_plancher_kcal?: number | null;
+  /** Durée qui respecterait le rythme conseillé, quand le délai demandé va plus vite. */
+  delai_conseille_jours?: number | null;
+  delai_conseille_fin?: string | null;
   poids_reference: number;
   jours_restants: number | null;
   cibles_calculees_le: string | null;
@@ -421,6 +431,7 @@ export type ProfileInput = {
   consentement_sante?: boolean;
   /** Accord explicite pour perdre plus vite que le rythme conseillé ; faux le retire. */
   rythme_intense?: boolean;
+  rythme_libre?: boolean;
   /** Ce que l'écran a affiché à côté de la case : le serveur refuse un accord qui ne s'y rapporte pas. */
   rythme_intense_deficit_vu?: number | null;
   rythme_intense_version_vue?: string;
@@ -1830,9 +1841,20 @@ export type UserSettings = {
   partage_profil_foyer: boolean | null;
   /** Réglage personnel, jamais partagé avec le foyer : chacun fait ses courses où il veut. */
   magasin_prefere_id: number | null;
+  /** Questionnaire de bienvenue terminé (ISO) ; null tant qu'il ne l'est pas. */
+  onboarding_termine_le: string | null;
+  /** Visite guidée vue ou passée (ISO) ; null tant qu'elle ne l'a pas été. */
+  visite_vue_le: string | null;
 };
 
-export type SettingsInput = Partial<UserSettings>;
+/**
+ * Les deux dates d'accueil ne s'écrivent pas : on déclare l'étape faite (vrai) ou à refaire
+ * (faux), le serveur pose l'heure.
+ */
+export type SettingsInput = Partial<Omit<UserSettings, "onboarding_termine_le" | "visite_vue_le">> & {
+  onboarding_termine?: boolean;
+  visite_vue?: boolean;
+};
 
 export type NotificationType =
   | "peremption"

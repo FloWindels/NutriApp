@@ -1,3 +1,3 @@
 import { proxyRoute } from "@/lib/laravel-proxy";
 
-export const POST = proxyRoute("/login", { label: "d’authentification" });
+export const POST = proxyRoute("/login", { label: "d’authentification", issueSession: true });

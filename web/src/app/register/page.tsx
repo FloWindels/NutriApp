@@ -20,7 +20,7 @@ const schema = z
   .object({
     name: z.string().trim().min(2, "Ton nom doit contenir au moins 2 caractères."),
     email: z.email("Adresse e-mail invalide."),
-    password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères."),
+    password: z.string().min(10, "Le mot de passe doit contenir au moins 10 caractères."),
     password_confirmation: z.string().min(1, "Confirme ton mot de passe."),
     accept_conditions: z.literal(true, {
       message: "Tu dois accepter les conditions et la politique de confidentialité.",
@@ -115,7 +115,7 @@ export default function RegisterPage() {
           label="Mot de passe"
           type={showPassword ? "text" : "password"}
           autoComplete="new-password"
-          placeholder="Minimum 8 caractères"
+          placeholder="Minimum 10 caractères"
           error={errors.password?.message}
           {...register("password")}
         />

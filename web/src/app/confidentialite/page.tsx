@@ -145,6 +145,10 @@ export default function ConfidentialitePage() {
               `Sous-traitant. Héberge le serveur et la base de données en ${hebergeur.pays}. Il n’accède pas au contenu dans le cadre de sa mission.`,
             ],
             [
+              "Cloudflare, Inc.",
+              "Sous-traitant. Achemine les échanges entre ton appareil et le serveur (tunnel chiffré et protection contre les attaques). Les requêtes transitent par son réseau, qui peut s’étendre hors de l’Union européenne, notamment aux États-Unis ; ce transfert est encadré par les clauses contractuelles types de la Commission européenne et le cadre de protection des données UE–États-Unis. Il ne conserve pas le contenu de tes données.",
+            ],
+            [
               "Membres de ton foyer",
               "Si tu rejoins un foyer, ses membres voient le stock partagé, la liste de courses et les repas communs. Ton journal alimentaire personnel et tes données de santé restent privés.",
             ],
@@ -180,8 +184,8 @@ export default function ConfidentialitePage() {
         <ul className="list-disc space-y-2 pl-5">
           <li>
             <strong>Modèle exécuté localement</strong> sur le serveur de {service} (Ollama).
-            Aucune donnée ne quitte le serveur, aucun transfert hors de l’Union européenne n’a
-            lieu. C’est la configuration à privilégier. Une exception, et une seule : si tu
+            L’analyse a lieu sur le serveur : aucune donnée n’est confiée à un fournisseur
+            d’intelligence artificielle. C’est la configuration à privilégier. Une exception, et une seule : si tu
             demandes une recherche sur Internet pour une recette ou une séance, la phrase que tu
             as écrite part alors vers un moteur de recherche. Cette fonction est facultative,
             éteinte par défaut, et se décide à chaque génération.

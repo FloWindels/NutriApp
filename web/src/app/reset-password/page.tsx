@@ -17,7 +17,7 @@ import type { MessageEnvelope, ResetPasswordInput } from "@/lib/types/api";
 const schema = z
   .object({
     email: z.email("Adresse e-mail invalide."),
-    password: z.string().min(8, "Le mot de passe doit contenir au moins 8 caractères."),
+    password: z.string().min(10, "Le mot de passe doit contenir au moins 10 caractères."),
     password_confirmation: z.string().min(1, "Confirme ton mot de passe."),
   })
   .refine((values) => values.password === values.password_confirmation, {
@@ -118,7 +118,7 @@ function ResetPasswordForm() {
             label="Nouveau mot de passe"
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
-            placeholder="Minimum 8 caractères"
+            placeholder="Minimum 10 caractères"
             error={errors.password?.message}
             {...register("password")}
           />

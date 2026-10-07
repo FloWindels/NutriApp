@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE, SESSION_MARKER, SESSION_MAX_AGE_SECONDS } from "@/lib/session-cookie";
 
 /**
  * Server-side helper shared by every route handler under `src/app/api/**`.
@@ -34,9 +35,51 @@ export type ProxyOptions = {
   forwardAuth?: boolean;
   /** Query string appended to the Laravel path (use `proxyQuery(request)` to forward as-is). */
   query?: ProxyQuery;
+  /** Taille maximale du corps entrant, en octets → 413 au-delà. 1 Mo par défaut. */
+  maxBytes?: number;
+  /**
+   * Connexion ou inscription : le jeton renvoyé par Laravel part dans le cookie httpOnly, et le
+   * corps n'en garde que le témoin `SESSION_MARKER`.
+   */
+  issueSession?: boolean;
+  /** Déconnexion : le cookie de session est effacé quoi que réponde Laravel. */
+  endSession?: boolean;
 };
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_MAX_BYTES = 1_000_000;
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * Le cookie de session part avec toute requête vers ce site : une écriture venue d'une autre
+ * origine (CSRF) est refusée. Sec-Fetch-Site d'abord, que les navigateurs posent eux-mêmes ;
+ * Origin ensuite, comparée à l'hôte servi. Un client sans ces en-têtes n'est pas un navigateur
+ * piloté par un site tiers, et n'a de toute façon pas le cookie de quelqu'un d'autre.
+ */
+function isCrossSiteWrite(request: NextRequest): boolean {
+  if (SAFE_METHODS.has(request.method.toUpperCase())) return false;
+
+  const site = request.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin") return true;
+
+  const origin = request.headers.get("origin");
+  if (!origin) return false;
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  try {
+    return new URL(origin).host !== host;
+  } catch {
+    return true;
+  }
+}
+
+function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+  };
+}
 
 export function laravelBaseUrl(): string {
   const raw =
@@ -67,6 +110,10 @@ function serializeQuery(query: ProxyQuery): string {
   return serialized ? `?${serialized}` : "";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function parseBody(text: string): unknown {
   if (!text) return {};
   try {
@@ -86,11 +133,25 @@ export async function proxyToLaravel(
   const label = options.label ?? "Mavi’oh";
   const forwardAuth = options.forwardAuth ?? true;
 
+  if (isCrossSiteWrite(request)) {
+    return NextResponse.json({ message: "Requête refusée." }, { status: 403 });
+  }
+
+  const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+  if (Number(request.headers.get("content-length") ?? 0) > maxBytes) {
+    return NextResponse.json({ message: "Le contenu envoyé est trop volumineux." }, { status: 413 });
+  }
+
   const headers: Record<string, string> = { Accept: "application/json" };
-  const authorization = request.headers.get("authorization");
-  if (forwardAuth && authorization) headers.Authorization = authorization;
+  // Le jeton vient du cookie httpOnly, jamais d'un en-tête fourni par la page.
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (forwardAuth && token) headers.Authorization = `Bearer ${token}`;
   const acceptLanguage = request.headers.get("accept-language");
   if (acceptLanguage) headers["Accept-Language"] = acceptLanguage;
+  // Derrière Cloudflare, l'IP du visiteur : sans elle, Laravel verrait celle de ce serveur et
+  // appliquerait ses limites (connexion, codes) à tous les visiteurs ensemble.
+  const clientIp = request.headers.get("cf-connecting-ip");
+  if (clientIp) headers["CF-Connecting-IP"] = clientIp;
 
   let body: string | undefined;
   if (method !== "GET") {
@@ -99,6 +160,10 @@ export async function proxyToLaravel(
       headers["Content-Type"] = "application/json";
     } else {
       const raw = await request.text().catch(() => "");
+      // Content-Length peut manquer (envoi fragmenté) : la taille réelle fait foi.
+      if (new TextEncoder().encode(raw).length > maxBytes) {
+        return NextResponse.json({ message: "Le contenu envoyé est trop volumineux." }, { status: 413 });
+      }
       if (raw) {
         body = raw;
         headers["Content-Type"] = request.headers.get("content-type") ?? "application/json";
@@ -121,12 +186,29 @@ export async function proxyToLaravel(
       signal: controller.signal,
     });
 
+    let result: NextResponse;
     if (response.status === 204) {
-      return new NextResponse(null, { status: 204 });
+      result = new NextResponse(null, { status: 204 });
+    } else {
+      const payload = parseBody(await response.text());
+
+      if (options.issueSession && response.ok && isRecord(payload) && typeof payload.token === "string") {
+        result = NextResponse.json({ ...payload, token: SESSION_MARKER }, { status: response.status });
+        result.cookies.set(SESSION_COOKIE, payload.token, {
+          ...sessionCookieOptions(),
+          maxAge: SESSION_MAX_AGE_SECONDS,
+        });
+        return result;
+      }
+
+      result = NextResponse.json(payload, { status: response.status });
     }
 
-    const text = await response.text();
-    return NextResponse.json(parseBody(text), { status: response.status });
+    // Jeton expiré ou révoqué, ou déconnexion : le cookie ne sert plus à rien.
+    if (options.endSession || (response.status === 401 && token)) {
+      result.cookies.set(SESSION_COOKIE, "", { ...sessionCookieOptions(), maxAge: 0 });
+    }
+    return result;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       return NextResponse.json(
@@ -185,6 +267,10 @@ export function proxyParamRoute<P extends Record<string, string>>(
 ) {
   return async (request: NextRequest, context: { params: Promise<P> }) => {
     const params = await context.params;
+    // Un segment comme « .. » survivrait à l'échappement et remonterait d'un cran côté Laravel.
+    if (Object.values(params).some((value) => !/^[A-Za-z0-9_-]+$/.test(String(value)))) {
+      return NextResponse.json({ message: "Introuvable." }, { status: 404 });
+    }
     const escaped = Object.fromEntries(
       Object.entries(params).map(([key, value]) => [key, encodeURIComponent(String(value))]),
     ) as P;

@@ -131,7 +131,7 @@ export function TodayTab({ autoGenerate = false }: TodayTabProps) {
         </div>
       </Card>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" data-tour="sport-generer">
         <Button
           size="lg"
           onClick={() => {

@@ -46,6 +46,7 @@ function ProfileModal({
   const current = getUser();
   const [name, setName] = useState(current?.name ?? "");
   const [email, setEmail] = useState(current?.email ?? "");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useResetOnChange(String(open), () => {
@@ -53,11 +54,20 @@ function ProfileModal({
     const user = getUser();
     setName(user?.name ?? "");
     setEmail(user?.email ?? "");
+    setCurrentPassword("");
     setError(null);
   });
 
+  // Changer d'adresse exige le mot de passe actuel (le nom seul, non).
+  const emailChanged = email.trim().toLowerCase() !== (current?.email ?? "").toLowerCase();
+
   const save = useMutation({
-    mutationFn: () => apiPut<DataEnvelope<AuthUser>>("/account", { name: name.trim(), email: email.trim() }),
+    mutationFn: () =>
+      apiPut<DataEnvelope<AuthUser>>("/account", {
+        name: name.trim(),
+        email: email.trim(),
+        ...(emailChanged ? { current_password: currentPassword } : {}),
+      }),
     onSuccess: async (response) => {
       setSessionUser(response.data);
       await queryClient.invalidateQueries({ queryKey: queryKeys.me });
@@ -92,6 +102,16 @@ function ProfileModal({
           value={email}
           onChange={(event) => setEmail(event.target.value)}
         />
+        {emailChanged ? (
+          <Field
+            label="Mot de passe actuel"
+            type="password"
+            autoComplete="current-password"
+            hint="Requis pour changer d'adresse e-mail."
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+          />
+        ) : null}
       </div>
     </Modal>
   );

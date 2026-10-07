@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { DOCUMENTS } from "@/components/legal/legal-page";
 import { OffreCard } from "@/components/settings/offre-card";
+import { demanderVisite } from "@/components/onboarding/use-accueil";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -119,6 +120,27 @@ export default function SettingsPage() {
           </Button>
           <Button variant="danger" onClick={() => setModal("suppression")}>
             Supprimer mon compte
+          </Button>
+        </div>
+      </Card>
+
+      <Card padding="md" data-tour="parametres-decouvrir">
+        <p className="text-sm font-semibold text-slate-900">Découvrir Mavi’oh</p>
+        <p className="mb-3 text-xs text-slate-500">
+          Repasse par la visite guidée ou le questionnaire de bienvenue quand tu veux.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              demanderVisite();
+              router.push("/dashboard");
+            }}
+          >
+            Revoir la visite guidée
+          </Button>
+          <Button variant="secondary" onClick={() => router.push("/dashboard/bienvenue")}>
+            Refaire le questionnaire
           </Button>
         </div>
       </Card>

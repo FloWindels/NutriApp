@@ -133,6 +133,7 @@ const CIBLES_JOURNAL: Record<string, string> = {
   food: "aliment",
   recipe: "recette",
   code_acces: "code d’accès",
+  promotion: "promotion",
 };
 
 const ACTIONS_JOURNAL: Record<string, string> = {
@@ -145,6 +146,12 @@ const ACTIONS_JOURNAL: Record<string, string> = {
   demasquer_recette: "Rétablissement d’une recette",
   creer_code_acces: "Création d’un code d’accès",
   revoquer_code_acces: "Révocation d’un code d’accès",
+  creer_promotion: "Ajout d’une promotion",
+  modifier_promotion: "Modification d’une promotion",
+  supprimer_promotion: "Suppression d’une promotion",
+  promouvoir_administrateur: "Attribution du rôle d’administrateur",
+  redefinir_mot_de_passe: "Mot de passe redéfini depuis le serveur",
+  retirer_administrateur: "Retrait du rôle d’administrateur",
 };
 
 /**

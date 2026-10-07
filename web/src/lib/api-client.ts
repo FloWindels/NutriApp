@@ -7,7 +7,8 @@ import type { ApiErrorPayload, ValidationErrors } from "@/lib/types/api";
 /**
  * Browser-side fetch wrapper for the same-origin BFF (`/api/**` route handlers).
  *
- * - Adds `Accept`, `Content-Type` and the bearer token from the session.
+ * - Adds `Accept` and `Content-Type`. Authentication rides on the httpOnly session cookie,
+ *   which the browser sends to the Next proxy by itself.
  * - Parses `{ data, message, errors }` and throws `ApiError` on non-2xx.
  * - 401 on an authenticated path → clears the session → `/login?expired=1`.
  */
@@ -140,7 +141,6 @@ export async function apiFetch<T = unknown>(path: string, init: ApiFetchInit = {
   }
 
   const token = anonymous ? null : getToken();
-  if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
 
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const url = `${API_PREFIX}${normalizedPath}${buildQuery(query)}`;

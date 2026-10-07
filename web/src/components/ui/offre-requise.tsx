@@ -28,7 +28,11 @@ export function OffreRequise({
   className?: string;
 }) {
   return (
-    <Card padding={compact ? "md" : "lg"} className={cn("mx-auto max-w-xl text-center", className)}>
+    <Card
+      padding={compact ? "md" : "lg"}
+      className={cn("mx-auto max-w-xl text-center", className)}
+      data-tour={compact ? undefined : "offre-requise"}
+    >
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-800">
         Offre {offre}
       </p>

@@ -177,7 +177,7 @@ export function FoodSearchPage() {
       </div>
 
       {tab === "recherche" ? (
-        <div>
+        <div data-tour="recherche-aliment">
           <label htmlFor="food-search" className="mb-1.5 block text-sm font-medium text-slate-700">
             Nom, marque ou code-barres
           </label>

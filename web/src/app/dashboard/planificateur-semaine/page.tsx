@@ -188,7 +188,7 @@ function PlannerContent() {
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2" data-tour="planificateur-generer">
         <Button variant="secondary" onClick={() => setGenerateOpen(true)}>
           Générer la semaine
         </Button>

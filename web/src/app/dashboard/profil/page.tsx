@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiGet, apiPost, apiPut, getErrorMessage } from "@/lib/api-client";
@@ -61,6 +62,7 @@ type FormState = {
   situation: SituationParticuliere;
   consentementParental: boolean;
   rythmeIntense: boolean;
+  rythmeLibre: boolean;
 };
 
 const EMPTY_FORM: FormState = {
@@ -77,6 +79,7 @@ const EMPTY_FORM: FormState = {
   situation: "aucune",
   consentementParental: false,
   rythmeIntense: false,
+  rythmeLibre: false,
 };
 
 function fromProfile(profile: Profile): FormState {
@@ -96,6 +99,7 @@ function fromProfile(profile: Profile): FormState {
     // Le consentement enregistré se lit dans les besoins recalculés : le serveur seul sait
     // s'il tient toujours pour l'objectif en cours.
     rythmeIntense: profile.besoins?.rythme_intense_accepte ?? false,
+    rythmeLibre: profile.besoins?.rythme_libre_accepte ?? false,
   };
 }
 
@@ -120,12 +124,17 @@ function toInput(form: FormState, besoins?: Besoins | null): ProfileInput {
     ...(mineur ? { consentement_parental: form.consentementParental } : {}),
     // Toujours transmis, y compris à faux : c'est ainsi qu'on retire un accord donné.
     rythme_intense: form.objectifType === "perdre" && form.rythmeIntense,
+    rythme_libre: form.objectifType === "perdre" && form.rythmeIntense && form.rythmeLibre,
     // Ce que l'écran affichait au moment du choix. Le serveur refuse l'accord si le calcul a
     // bougé depuis : sans cela, changer son poids puis enregistrer appliquerait un rythme plus
     // rapide que celui qu'on a lu, et la trace l'attesterait comme accepté.
     ...(form.objectifType === "perdre" && form.rythmeIntense && besoins
       ? {
-          rythme_intense_deficit_vu: besoins.rythme_intense_kcal,
+          // Sans plafond, le déficit présenté est celui qui va jusqu'au plancher de sécurité.
+          rythme_intense_deficit_vu:
+            form.rythmeLibre && besoins.rythme_libre_possible
+              ? (besoins.rythme_libre_kcal ?? besoins.rythme_intense_kcal)
+              : besoins.rythme_intense_kcal,
           rythme_intense_version_vue: besoins.rythme_avertissement_version,
         }
       : {}),
@@ -219,12 +228,20 @@ export default function ProfilPage() {
     setErreursLocales((precedent) => ({ ...precedent, [champ]: undefined }));
   }
 
-  function changerRythmeIntense(accepte: boolean) {
-    const suivant = { ...form, rythmeIntense: accepte };
+  function changerRythmeIntense(accepte: boolean, libre: boolean = form.rythmeLibre) {
+    const suivant = { ...form, rythmeIntense: accepte, rythmeLibre: accepte && libre };
     setForm(suivant);
     // La cible dépend directement de cette case : on relance le calcul serveur pour que les
     // chiffres affichés soient bien ceux du choix qui vient d'être fait.
     if (simulation !== null) setSimulation(toInput(suivant, besoins));
+  }
+
+  /** Reprend la durée proposée par le calcul et relance la simulation avec elle. */
+  function utiliserDelai(jours: number) {
+    const suivant = { ...form, delaiJours: String(jours) };
+    setForm(suivant);
+    setErreursLocales((precedent) => ({ ...precedent, delaiJours: undefined }));
+    setSimulation(toInput(suivant, besoins));
   }
 
   function simuler() {
@@ -291,10 +308,18 @@ export default function ProfilPage() {
         level="page"
         title="Mon profil"
         subtitle="Tes objectifs sont calculés par Mavi’oh à partir de ces informations, puis vérifiés par des bornes de sécurité."
+        actions={
+          <Link
+            href="/dashboard/bienvenue"
+            className="text-sm font-medium text-emerald-800 hover:underline"
+          >
+            Répondre au questionnaire pas à pas
+          </Link>
+        }
       />
 
       <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-        <Card tone="emerald" padding="md" className="space-y-4">
+        <Card tone="emerald" padding="md" className="space-y-4" data-tour="profil-informations">
           <CardHeader title="Mes informations" subtitle="Modifie, simule, puis enregistre." />
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -490,6 +515,7 @@ export default function ProfilPage() {
             <RythmeIntense
               besoins={besoins}
               accepte={form.rythmeIntense}
+              libre={form.rythmeLibre}
               onChange={changerRythmeIntense}
             />
           ) : null}
@@ -523,7 +549,7 @@ export default function ProfilPage() {
               Complète le formulaire puis clique sur « Calculer » pour obtenir tes objectifs.
             </p>
           ) : (
-            <ResultatNutritionnel besoins={besoins} />
+            <ResultatNutritionnel besoins={besoins} onUtiliserDelai={utiliserDelai} />
           )}
         </Card>
       </div>
@@ -541,12 +567,21 @@ export default function ProfilPage() {
 function RythmeIntense({
   besoins,
   accepte,
+  libre,
   onChange,
 }: {
   besoins: Besoins;
   accepte: boolean;
-  onChange: (accepte: boolean) => void;
+  libre: boolean;
+  onChange: (accepte: boolean, libre?: boolean) => void;
 }) {
+  // Quand le rythme intense n'ouvre rien de plus que le conseillé (le plancher habituel borne
+  // déjà), seul le rythme libre a un sens : la case principale le choisit directement.
+  const libreSeul =
+    Boolean(besoins.rythme_libre_possible) &&
+    (besoins.rythme_intense_kcal ?? 0) <= (besoins.rythme_conseille_kcal ?? 0);
+  const plancherLibre = besoins.rythme_libre_plancher_kcal ?? besoins.plancher_kcal;
+
   return (
     <section className="rounded-2xl border-2 border-amber-300 bg-amber-50 px-4 py-4 text-amber-950">
       <h3 className="text-base font-semibold">
@@ -566,8 +601,8 @@ function RythmeIntense({
         />
         <RythmeChiffre
           libelle="Au plus vite, avec ton accord"
-          kcal={besoins.rythme_intense_kcal}
-          kg={besoins.rythme_intense_kg_semaine}
+          kcal={libreSeul ? (besoins.rythme_libre_kcal ?? null) : besoins.rythme_intense_kcal}
+          kg={libreSeul ? (besoins.rythme_libre_kg_semaine ?? null) : besoins.rythme_intense_kg_semaine}
         />
       </dl>
 
@@ -578,16 +613,26 @@ function RythmeIntense({
         poids fréquente dès le retour à une alimentation normale. Parles-en à un médecin ou à un
         diététicien avant de t’y engager, en particulier si tu suis un traitement.
       </p>
-      <p className="mt-2 text-sm leading-6">
-        Quel que soit ton choix, tes calories ne descendront pas sous ton plancher de sécurité de{" "}
-        {formatKcal(besoins.plancher_kcal)} par jour.
-      </p>
+      {libreSeul ? (
+        <p className="mt-2 text-sm leading-6">
+          Ici, c’est ton plancher habituel qui te limite : pendant une perte, Mavi’oh ne descend
+          pas sous ton métabolisme de base ({formatKcal(besoins.plancher_kcal)} par jour). Avec ton
+          accord, ce plancher est ramené au seuil minimal de {formatKcal(plancherLibre)} par jour,
+          sous lequel Mavi’oh ne descend jamais. Manger sous son métabolisme de base accentue les
+          risques ci-dessus : un suivi médical est fortement recommandé.
+        </p>
+      ) : (
+        <p className="mt-2 text-sm leading-6">
+          Quel que soit ton choix, tes calories ne descendront pas sous ton plancher de sécurité de{" "}
+          {formatKcal(besoins.plancher_kcal)} par jour.
+        </p>
+      )}
 
       <label className="mt-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-white/70 px-3 py-2.5 text-sm">
         <input
           type="checkbox"
           checked={accepte}
-          onChange={(e) => onChange(e.target.checked)}
+          onChange={(e) => onChange(e.target.checked, libreSeul ? e.target.checked : undefined)}
           className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-400 accent-amber-700"
         />
         <span>
@@ -598,6 +643,34 @@ function RythmeIntense({
           </span>
         </span>
       </label>
+
+      {accepte && besoins.rythme_libre_possible && !libreSeul ? (
+        <div className="mt-3 rounded-xl border-2 border-rose-300 bg-white/80 px-3 py-3 text-sm">
+          <p className="font-semibold text-rose-900">Aller plus vite que le rythme intense</p>
+          <p className="mt-1 leading-6">
+            Même avec ton accord, Mavi’oh limite d’habitude la perte à{" "}
+            {formatKcal(besoins.rythme_intense_kcal)} de déficit par jour. Tu peux lever cette limite :
+            seul le seuil minimal de {formatKcal(plancherLibre)} par jour reste alors en place, soit jusqu’à −{formatKcal(besoins.rythme_libre_kcal ?? null)} par jour
+            (~{formatNumber(besoins.rythme_libre_kg_semaine ?? null, 2)} kg par semaine). Les
+            risques décrits plus haut augmentent avec la vitesse : un suivi médical est fortement
+            recommandé à ce rythme.
+          </p>
+          <label className="mt-2 flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={libre}
+              onChange={(e) => onChange(true, e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-rose-400 accent-rose-700"
+            />
+            <span>
+              <span className="font-semibold">Ne plus limiter la vitesse de perte.</span>
+              <span className="mt-0.5 block">
+                Tu peux décocher à tout moment pour revenir au rythme intense.
+              </span>
+            </span>
+          </label>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -624,7 +697,14 @@ function RythmeChiffre({
   );
 }
 
-function ResultatNutritionnel({ besoins }: { besoins: Besoins }) {
+function ResultatNutritionnel({
+  besoins,
+  onUtiliserDelai,
+}: {
+  besoins: Besoins;
+  onUtiliserDelai: (jours: number) => void;
+}) {
+  const delaiConseille = besoins.delai_conseille_jours ?? null;
   const [etapesOuvertes, setEtapesOuvertes] = useState(false);
   // Jauge de sécurité : 1 kg par semaine est la variation maximale raisonnable.
   const jauge = Math.min(Math.round((Math.abs(besoins.variation_hebdo_kg) / 1) * 100), 100);
@@ -671,6 +751,11 @@ function ResultatNutritionnel({ besoins }: { besoins: Besoins }) {
               {avertissement}
             </Banner>
           ))}
+          {delaiConseille !== null ? (
+            <Button type="button" variant="secondary" onClick={() => onUtiliserDelai(delaiConseille)}>
+              Utiliser ce délai ({delaiConseille} jours)
+            </Button>
+          ) : null}
         </div>
       ) : null}
 

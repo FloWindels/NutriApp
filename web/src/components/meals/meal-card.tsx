@@ -26,7 +26,7 @@ export function MealCard({ type, meal, budgetCalories, portions, onAdd }: MealCa
   const calories = meal?.totals?.calories ?? 0;
 
   return (
-    <Card padding="sm">
+    <Card padding="sm" data-tour={type === "petit_dejeuner" ? "repas-du-jour" : undefined}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-base font-semibold text-slate-900">{MEAL_TYPE_LABELS[type]}</h3>

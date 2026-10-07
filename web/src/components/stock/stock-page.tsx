@@ -154,7 +154,7 @@ export function StockPage() {
             <Button variant="secondary" onClick={() => setLocationModal({ mode: "create", location: null })}>
               Nouveau lieu
             </Button>
-            <Button onClick={() => setAddOpen(true)} disabled={locations.length === 0}>
+            <Button onClick={() => setAddOpen(true)} disabled={locations.length === 0} data-tour="stock-ajouter">
               Ajouter un article
             </Button>
           </>

@@ -59,6 +59,7 @@ function SportPageContent() {
       <div
         role="tablist"
         aria-label="Vues du module sport"
+        data-tour="sport-onglets"
         className="flex flex-wrap gap-1 rounded-2xl border border-slate-200 bg-white p-1"
       >
         {TABS.map((item) => {

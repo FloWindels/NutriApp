@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Geist_Mono, Roboto } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Roboto, comme l'application mobile : le site et l'app se lisent de la même façon.
+const roboto = Roboto({
+  variable: "--font-roboto",
   subsets: ["latin"],
 });
 
@@ -23,8 +24,24 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.png",
     shortcut: "/favicon.png",
-    apple: "/favicon.png",
+    // Icône de l'écran d'accueil de l'iPhone : fond opaque, sans quoi iOS remplit de noir.
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
   },
+  // Ajoutée à l'écran d'accueil, l'application s'ouvre en plein écran, sans Safari autour.
+  appleWebApp: {
+    capable: true,
+    title: "Mavi’oh",
+    statusBarStyle: "default",
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Le contenu passe sous l'encoche ; les barres de l'application s'en écartent (safe-area).
+  viewportFit: "cover",
+  themeColor: "#f3faec",
 };
 
 export default function RootLayout({
@@ -36,7 +53,7 @@ export default function RootLayout({
     <html
       lang="fr"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${roboto.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body suppressHydrationWarning className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
