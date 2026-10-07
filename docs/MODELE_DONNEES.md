@@ -106,6 +106,8 @@ Une ligne par utilisateur, créée à l'inscription puis paresseusement (`firstO
 | `langue` | string(8) | non | `fr` | `fr` \| `en` |
 | `timezone` | string(64) | non | `Europe/Paris` | Fuseau utilisé par `Clock` |
 | `ia_seances` | boolean | non | `true` | Autorise la génération de séances par l'IA |
+| `onboarding_termine_le` | timestamp | oui | `null` | Questionnaire de bienvenue terminé (API : `onboarding_termine` booléen en écriture) |
+| `visite_vue_le` | timestamp | oui | `null` | Visite guidée vue ou passée (API : `visite_vue` booléen en écriture) |
 | `created_at`, `updated_at` | timestamp | oui | `null` | — |
 
 **Index** : `user_settings_user_id_unique`.

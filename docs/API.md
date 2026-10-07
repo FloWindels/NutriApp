@@ -4,8 +4,8 @@ API REST JSON servie par Laravel. Elle est la source de vérité : tous les calc
 nutritionnels et sportifs y sont faits, les clients (site web Next.js et application
 Flutter) se contentent d'afficher.
 
-Référence générée depuis le code : `routes/api.php`, `routes/api/*.php`,
-`routes/api_public/*.php` et les contrôleurs correspondants.
+Référence générée depuis le code : `routes/api.php`, `routes/api/*.php` et les contrôleurs
+correspondants.
 
 ---
 
@@ -20,14 +20,20 @@ nouveau développement.
 ### Authentification
 
 Jetons Laravel Sanctum. `POST /api/register` et `POST /api/login` renvoient
-`{token, user}` ; toutes les routes protégées attendent ensuite :
+`{token, user}` ; toutes les autres routes attendent ensuite :
 
 ```
 Authorization: Bearer <token>
 Accept: application/json
 ```
 
-Les jetons expirent au bout de 30 jours par défaut (`SANCTUM_EXPIRATION`, en minutes) et
+Sans compte, on n'atteint que l'inscription, la connexion et la réinitialisation du mot de
+passe : les catalogues (aliments, portions, régimes, magasins, exercices) exigent eux aussi un
+jeton. Seuls les jetons Bearer sont acceptés (pas de cookie de session, pas de
+`/sanctum/csrf-cookie`).
+
+Les jetons expirent au bout de 30 jours par défaut (`SANCTUM_EXPIRATION`, en minutes ; 14 jours
+dans la configuration Docker) et
 `POST /api/logout` révoque celui de l'appareil courant. Une purge quotidienne supprime les
 jetons expirés.
 
@@ -61,7 +67,10 @@ L'isolation est volontairement opaque : demander la ressource d'un autre utilisa
 ### Limitation de débit
 
 10 requêtes par minute sur la connexion, l'inscription et la réinitialisation de mot de passe ;
-30 sur les catalogues publics ; 120 par minute et par utilisateur ailleurs.
+la connexion est en plus plafonnée à 5 essais par minute pour un couple (e-mail, IP) et à 20 par
+heure pour un même e-mail. 5 par minute et par utilisateur sur le changement de mot de passe et
+la suppression du compte ; 30 par minute sur la recherche d'aliments ; 120 par minute et par
+utilisateur ailleurs.
 
 ### Formats
 
@@ -93,6 +102,11 @@ clients qui ignorent la pagination continuent de fonctionner.
 | POST | `/api/register` | non | AuthController@register |
 | POST | `/api/reset-password` | non | AuthController@resetPassword |
 
+`PUT /api/account` prend `{name, email}` ; quand l'adresse change, `current_password` est exigé
+(422 sinon) et l'adresse repasse non vérifiée. Les mots de passe (inscription, réinitialisation,
+changement) font au moins 10 caractères. `POST /api/reset-password` répond le même message pour
+une adresse inconnue et pour un jeton invalide.
+
 ### Profil nutritionnel
 
 | Méthode | Chemin | Auth | Contrôleur |
@@ -109,14 +123,14 @@ clients qui ignorent la pagination continuent de fonctionner.
 | Méthode | Chemin | Auth | Contrôleur |
 |---|---|---|---|
 | POST | `/api/foods` | oui | FoodController@store |
-| GET | `/api/foods/barcode/{barcode}` | non | FoodController@showByBarcode |
+| GET | `/api/foods/barcode/{barcode}` | oui | FoodController@showByBarcode |
 | GET | `/api/foods/favorites` | oui | FoodController@favorites |
-| GET | `/api/foods/search` | non | FoodController@search |
+| GET | `/api/foods/search` | oui | FoodController@search |
 | GET | `/api/foods/{food}` | oui | FoodController@show |
 | PUT | `/api/foods/{food}` | oui | FoodController@update |
 | DELETE | `/api/foods/{food}/favorite` | oui | FoodController@unfavorite |
 | POST | `/api/foods/{food}/favorite` | oui | FoodController@favorite |
-| GET | `/api/portions` | non | PortionController@index |
+| GET | `/api/portions` | oui | PortionController@index |
 
 ### Recettes
 
@@ -176,9 +190,9 @@ clients qui ignorent la pagination continuent de fonctionner.
 
 | Méthode | Chemin | Auth | Contrôleur |
 |---|---|---|---|
-| GET | `/api/diets` | non | DietController@index |
+| GET | `/api/diets` | oui | DietController@index |
 | GET | `/api/diets/evaluate` | oui | DietController@evaluate |
-| GET | `/api/diets/{key}` | non | DietController@show |
+| GET | `/api/diets/{key}` | oui | DietController@show |
 
 ### Foyer
 
@@ -218,16 +232,16 @@ sert de défaut.
 
 | Méthode | Chemin | Auth | Contrôleur |
 |---|---|---|---|
-| GET | `/api/magasins` | non | MagasinController@index |
+| GET | `/api/magasins` | oui | MagasinController@index |
 | PUT | `/api/magasins/promotions/{promotion}` | oui | PromotionController@update |
 | DELETE | `/api/magasins/promotions/{promotion}` | oui | PromotionController@destroy |
-| GET | `/api/magasins/{magasin}/produits` | non | MagasinController@produits |
+| GET | `/api/magasins/{magasin}/produits` | oui | MagasinController@produits |
 | GET | `/api/magasins/{magasin}/promotions` | oui | PromotionController@index |
 | POST | `/api/magasins/{magasin}/promotions` | oui | PromotionController@store |
 | POST | `/api/magasins/{magasin}/promotions/recherche` | oui | PromotionController@rechercher |
 
-Le catalogue (`/api/magasins`, `/api/magasins/{magasin}/produits`) est **public** : ce sont des
-données de référence. Les promotions relèvent de la capacité `courses` ; leur relevé automatique
+Le catalogue (`/api/magasins`, `/api/magasins/{magasin}/produits`) ne relève d'aucune offre, mais
+exige un compte : ce sont des données de référence. Les promotions relèvent de la capacité `courses` ; leur relevé automatique
 exige `courses` **et** `ia`, et répond 402 en nommant celle qui manque.
 
 **Tous les prix de ce module sont indicatifs.** Chaque produit porte `prix_maj_le` et
@@ -261,7 +275,7 @@ avec l'URL de leur source.
 | POST | `/api/sport/calendar/{plan}/propose` | oui | SportCalendarController@propose |
 | POST | `/api/sport/calories/estimate` | oui | SportActivityController@estimate |
 | GET | `/api/sport/config` | oui | SportConfigController |
-| GET | `/api/sport/exercises` | non | ExerciseController@index |
+| GET | `/api/sport/exercises` | oui | ExerciseController@index |
 | GET | `/api/sport/sessions` | oui | WorkoutSessionController@index |
 | POST | `/api/sport/sessions` | oui | WorkoutSessionController@store |
 | POST | `/api/sport/sessions/generate` | oui | WorkoutSessionController@generate |

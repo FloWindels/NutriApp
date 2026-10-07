@@ -68,7 +68,7 @@ nombre d'utilisateurs devient significatif.
 | Données | Nom d'usage, e-mail, empreinte du mot de passe, jetons, dates |
 | Destinataires | Hébergeur (sous-traitant) |
 | Transfert hors UE | Aucun |
-| Conservation | Durée de vie du compte ; jetons 30 jours |
+| Conservation | Durée de vie du compte ; jetons 14 jours en production (`SANCTUM_EXPIRATION=20160`) |
 | Sécurité | HTTPS, `bcrypt`, jetons Sanctum expirants, limitation de débit |
 
 ### T2 — Calcul des objectifs nutritionnels et sportifs
@@ -181,13 +181,14 @@ nombre d'utilisateurs devient significatif.
 
 | Sous-traitant | Rôle | Localisation | Encadrement |
 |---|---|---|---|
-| Hébergeur | Serveur et base de données | Belgique | Contrat art. 28 **à signer** |
+| Hébergeur | Serveur et base de données | Belgique | Contrat art. 28 **à signer** (auto-hébergement : l'éditeur lui-même) |
+| Cloudflare, Inc. | Tunnel d'accès et terminaison HTTPS : tout le trafic transite par son réseau | États-Unis et réseau mondial | DPA Cloudflare (art. 28, accepté avec les conditions d'utilisation), clauses contractuelles types, Data Privacy Framework |
 | Anthropic | Coach IA et vision, **si activés** | États-Unis | Clauses contractuelles types + conditions professionnelles |
 | Ollama | Modèle exécuté sur le serveur | Sur place | Aucun transfert, aucun tiers |
 | Open Food Facts | Source de données publique | France | Destinataire, non sous-traitant : aucune donnée personnelle transmise |
 
-**Recommandation.** Faire tourner le coach et la vision avec Ollama en local supprime le seul
-transfert hors Union européenne du produit, et avec lui l'essentiel de la complexité juridique.
+**Recommandation.** Faire tourner le coach et la vision avec Ollama en local supprime le
+transfert hors Union européenne lié à l'IA, et avec lui l'essentiel de la complexité juridique.
 
 ---
 
