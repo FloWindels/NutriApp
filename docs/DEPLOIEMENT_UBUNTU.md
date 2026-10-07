@@ -138,7 +138,7 @@ DB_USERNAME=mavioh
 DB_PASSWORD=un-mot-de-passe-solide
 
 LOG_CHANNEL=daily
-SANCTUM_EXPIRATION=43200
+SANCTUM_EXPIRATION=20160
 
 OFF_BASE_URL=https://world.openfoodfacts.org
 OFF_USER_AGENT="Mavioh/1.0 (ton-email@exemple.fr)"

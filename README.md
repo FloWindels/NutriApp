@@ -121,7 +121,7 @@ Les variables importantes de `backend/.env` :
 |---|---|
 | `DB_CONNECTION` | `sqlite` en développement, `pgsql` en production (MySQL non pris en charge) |
 | `FRONTEND_URL` | base des liens de réinitialisation de mot de passe |
-| `SANCTUM_EXPIRATION` | durée de vie des jetons en minutes (43200 = 30 jours) |
+| `SANCTUM_EXPIRATION` | durée de vie des jetons en minutes (43200 = 30 jours par défaut ; 20160 = 14 jours dans `docker/.env`) |
 | `OFF_BASE_URL`, `OFF_USER_AGENT` | accès à Open Food Facts |
 | `LLM_PROVIDER` | coach IA : `auto`, `anthropic`, `ollama` ou `none` |
 | `ANTHROPIC_API_KEY` | active le coach IA via l'API Claude |
@@ -154,6 +154,7 @@ cd mobile && flutter analyze && flutter test
 | `docs/REGLES_SPORT.md` | MET, calories, génération des séances, coach IA |
 | `docs/RECETTE.md` | scénarios de recette et critères d'acceptation |
 | `docs/DEPLOIEMENT_UBUNTU.md` | installation sur un serveur Ubuntu, en une commande ou pas à pas |
+| `docker/README.md` | installation en conteneurs derrière un tunnel Cloudflare, IA locale sur GPU |
 | `docs/DECISIONS.md` | choix techniques et périmètre de la version 1 |
 | `docs/RGPD.md` | registre des traitements, analyse des risques, procédure de violation |
 

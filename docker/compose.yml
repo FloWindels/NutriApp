@@ -1,0 +1,181 @@
+# Mavi'oh en conteneurs, derrière un tunnel Cloudflare.
+#
+#   cp docker/.env.example docker/.env    # puis remplir les secrets (voir docker/README.md)
+#   docker compose -f docker/compose.yml up -d --build
+#
+# Seuls deux ports sont publiés, et uniquement sur 127.0.0.1 : cloudflared, sur l'hôte, les
+# expose sous les noms publics. Rien n'est joignable depuis le réseau sans passer par Cloudflare.
+#   127.0.0.1:${WEB_PORT}  → site      (https://mavioh.<domaine>)
+#   127.0.0.1:${API_PORT}  → API       (https://mavioh-api.<domaine>, application mobile)
+
+name: mavioh
+
+x-backend-env: &backend-env
+  APP_ENV: production
+  APP_DEBUG: "false"
+  LOG_CHANNEL: stderr
+  LOG_LEVEL: info
+  DB_CONNECTION: pgsql
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_DATABASE: mavioh
+  DB_USERNAME: mavioh
+  CACHE_DRIVER: file
+  QUEUE_CONNECTION: sync
+  LLM_PROVIDER: ollama
+  OLLAMA_ENABLED: "true"
+  OLLAMA_BASE_URL: http://ollama:11434
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+
+x-backend: &backend
+  <<: *hardening
+  image: mavioh-api:latest
+  env_file: .env
+  volumes:
+    - storage:/var/www/html/storage/app
+  networks: [app, data]
+  restart: unless-stopped
+
+services:
+  db:
+    <<: *hardening
+    image: postgres:16-alpine
+    networks: [data]
+    environment:
+      POSTGRES_DB: mavioh
+      POSTGRES_USER: mavioh
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans docker/.env}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mavioh -d mavioh"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    <<: *backend
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+      target: api
+    environment:
+      <<: *backend-env
+      MAVIOH_ROLE: api
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      MAVIOH_ROLE: scheduler
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  api-nginx:
+    <<: *hardening
+    image: mavioh-api-nginx:latest
+    networks: [front, app]
+    build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
+      target: api-nginx
+    ports:
+      - "127.0.0.1:${API_PORT:-8100}:80"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  web:
+    <<: *hardening
+    image: mavioh-web:latest
+    networks: [front]
+    build:
+      context: ..
+      dockerfile: docker/web/Dockerfile
+    environment:
+      # Porte interne de l'API : la seule qui serve l'administration.
+      API_URL: http://api-nginx:8080/api
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3100}:3000"
+    depends_on:
+      - api-nginx
+    restart: unless-stopped
+
+  # Modèle local, sur le GPU de l'hôte. Non publié : seule l'API le joint, par le réseau interne.
+  ollama:
+    <<: *hardening
+    image: ollama/ollama:latest
+    networks: [app]
+    environment:
+      # Générations menées de front par Ollama : doit valoir OLLAMA_SLOTS côté API.
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_SLOTS:-2}
+      # Un seul modèle en mémoire : texte et vision passent par le même, rien n'est déchargé.
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_KEEP_ALIVE: "-1"
+      OLLAMA_FLASH_ATTENTION: "1"
+      OLLAMA_KV_CACHE_TYPE: q8_0
+      OLLAMA_MAX_QUEUE: "32"
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Télécharge le modèle au premier démarrage, puis le charge pour que la première personne
+  # n'attende pas le chargement. Sans effet s'il est déjà présent.
+  ollama-init:
+    <<: *hardening
+    image: ollama/ollama:latest
+    networks: [app]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        ollama pull "$${OLLAMA_MODEL}" &&
+        ollama run "$${OLLAMA_MODEL}" "" >/dev/null
+    env_file: .env
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+# front : le site et Nginx. app : Nginx, l'API, le planificateur et le modèle.
+# data  : la base, sans aucune sortie vers Internet, joignable par l'API seule.
+networks:
+  front:
+  app:
+  data:
+    internal: true
+
+volumes:
+  db:
+  storage:
+  ollama:
+    name: mavioh_ollama
