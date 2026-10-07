@@ -28,9 +28,40 @@ class VerrouOffreTest extends TestCase
         '/planner' => 'planificateur',
         '/recommendations' => 'coach',
         '/diets' => 'regimes',
-        // Le catalogue des magasins est public (routes/api_public) : seules les promotions, qui
-        // pèsent sur la liste et sur les propositions de repas, sont authentifiées.
+        // Le catalogue des magasins ne relève d'aucune offre (voir CATALOGUES_SANS_OFFRE) : seules
+        // les promotions, qui pèsent sur la liste et sur les propositions de repas, sont payantes.
         '/magasins' => 'courses',
+    ];
+
+    /**
+     * Routes d'un module payant dont le verrou est posé par le contrôleur, faute de pouvoir l'être
+     * par la route : c'est l'offre du PROPRIÉTAIRE du foyer visé qui décide si l'invité entre.
+     */
+    private const VERROU_DANS_LE_CONTROLEUR = [
+        '/household/preview',
+        '/household/join',
+    ];
+
+    /**
+     * Sorties du foyer, par méthode : voir son foyer, le quitter, le dissoudre, retirer le
+     * partage de son profil. Jamais derrière une offre — quand l'offre Foyer du propriétaire
+     * expire, chacun doit pouvoir reprendre la main sur ses données.
+     */
+    private const SORTIES_DU_FOYER = [
+        'GET /household',
+        'POST /household/leave',
+        'DELETE /household',
+        'PUT /household/members/me',
+    ];
+
+    /**
+     * Catalogues de référence : réservés aux comptes (auth:sanctum), mais sans offre requise.
+     */
+    private const CATALOGUES_SANS_OFFRE = [
+        '/diets',
+        '/diets/{key}',
+        '/magasins',
+        '/magasins/{magasin}/produits',
     ];
 
     public function test_toute_route_d_un_module_payant_porte_son_verrou(): void
@@ -46,11 +77,20 @@ class VerrouOffreTest extends TestCase
             }
 
             $chemin = substr($uri, 4);
+
+            if (in_array($chemin, self::VERROU_DANS_LE_CONTROLEUR, true)
+                || in_array($chemin, self::CATALOGUES_SANS_OFFRE, true)) {
+                continue;
+            }
+
+            $methodes = array_diff($route->methods(), ['HEAD']);
+            if (array_diff(array_map(fn ($m) => $m.' '.$chemin, $methodes), self::SORTIES_DU_FOYER) === []) {
+                continue;
+            }
+
             $middlewares = $route->gatherMiddleware();
 
-            // Les routes publiques sont hors sujet : le catalogue des régimes, comme celui des
-            // portions, est une donnée de référence consultable sans compte. Seules les routes
-            // authentifiées peuvent relever d'une offre.
+            // Seules les routes authentifiées peuvent relever d'une offre.
             if (! in_array('auth:sanctum', $middlewares, true)) {
                 continue;
             }
@@ -82,12 +122,12 @@ class VerrouOffreTest extends TestCase
     public static function routesPayantes(): array
     {
         return [
-            'foyer' => ['get', '/api/household'],
+            'foyer' => ['post', '/api/household/regenerate-code'],
             'stock' => ['get', '/api/stocks'],
             'alertes de stock' => ['get', '/api/stocks/alerts'],
             'courses' => ['get', '/api/shopping-list'],
             'planificateur' => ['get', '/api/planner'],
-            // Le catalogue /api/diets est public ; c'est l'évaluation personnelle qui est payante.
+            // Le catalogue /api/diets ne relève d'aucune offre ; c'est l'évaluation qui est payante.
             'régimes' => ['get', '/api/diets/evaluate'],
         ];
     }
@@ -116,7 +156,8 @@ class VerrouOffreTest extends TestCase
         $user->forceFill(['offre' => Offre::Foyer])->save();
         Sanctum::actingAs($user, ['*']);
 
-        $this->{$verbe.'Json'}($route)->assertSuccessful();
+        // Le verrou d'offre laisse passer ; la suite (foyer absent, corps vide) est une autre affaire.
+        $this->assertNotSame(402, $this->{$verbe.'Json'}($route)->status());
     }
 
     public function test_l_offre_complete_ouvre_tout_sauf_le_foyer(): void
@@ -128,8 +169,8 @@ class VerrouOffreTest extends TestCase
 
         $this->getJson('/api/stocks')->assertSuccessful();
         $this->getJson('/api/planner')->assertSuccessful();
-        // Le foyer est la seule chose que l'offre Complet ne donne pas.
-        $this->getJson('/api/household')->assertStatus(402);
+        // Le foyer est la seule chose que l'offre Complet ne donne pas : on ne peut pas en créer.
+        $this->postJson('/api/household', ['name' => 'Chez nous'])->assertStatus(402);
     }
 
     public function test_le_suivi_normal_reste_ouvert_au_compte_gratuit(): void
@@ -177,6 +218,98 @@ class VerrouOffreTest extends TestCase
 
         Sanctum::actingAs($membre, ['*']);
         $this->getJson('/api/stocks')->assertSuccessful();
+    }
+
+    public function test_seule_l_offre_foyer_du_proprietaire_se_partage(): void
+    {
+        // Un propriétaire en offre Complet (individuelle) ne la fait pas profiter à ses membres.
+        $proprietaire = User::factory()->create();
+        $proprietaire->forceFill(['offre' => Offre::Complet])->save();
+        $foyer = \App\Models\Household::factory()->create(['owner_id' => $proprietaire->id]);
+
+        $membre = User::factory()->gratuit()->create(['household_id' => $foyer->id]);
+        $this->assertSame(Offre::Gratuit, $membre->offreEffective());
+        $this->assertFalse($membre->peut('stock'));
+
+        // Un membre qui paie lui-même garde son offre, quel que soit celle du propriétaire.
+        $complet = User::factory()->create(['household_id' => $foyer->id]);
+        $complet->forceFill(['offre' => Offre::Complet])->save();
+        $this->assertSame(Offre::Complet, $complet->fresh()->offreEffective());
+
+        // Offre Foyer expirée chez le propriétaire : plus rien ne se partage.
+        $proprietaire->forceFill(['offre' => Offre::Foyer, 'offre_expire_le' => now()->subDay()])->save();
+        $this->assertSame(Offre::Gratuit, $membre->fresh()->offreEffective());
+    }
+
+    public function test_un_invite_gratuit_rejoint_un_foyer_dont_le_proprietaire_a_l_offre_foyer(): void
+    {
+        $proprietaire = User::factory()->create(); // offre Foyer par défaut
+        $foyer = app(\App\Services\Household\HouseholdService::class)->create($proprietaire, 'Les Martin')['household'];
+
+        $invite = User::factory()->gratuit()->create();
+        Sanctum::actingAs($invite, ['*']);
+
+        $this->getJson('/api/household/preview?invite_code='.$foyer->invite_code)
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Les Martin');
+
+        $this->postJson('/api/household/join', ['invite_code' => $foyer->invite_code])->assertOk();
+
+        $this->assertSame(Offre::Foyer, $invite->fresh()->offreEffective());
+        // Une fois membre, le reste du module lui est ouvert.
+        $this->getJson('/api/household')->assertOk()->assertJsonPath('data.id', $foyer->id);
+    }
+
+    public function test_un_invite_gratuit_ne_rejoint_pas_un_foyer_sans_offre_foyer(): void
+    {
+        $proprietaire = User::factory()->create();
+        $foyer = app(\App\Services\Household\HouseholdService::class)->create($proprietaire, 'Les Martin')['household'];
+        // L'offre du propriétaire retombe ensuite sur Complet.
+        $proprietaire->forceFill(['offre' => Offre::Complet])->save();
+
+        $invite = User::factory()->gratuit()->create();
+        Sanctum::actingAs($invite, ['*']);
+
+        $this->getJson('/api/household/preview?invite_code='.$foyer->invite_code)
+            ->assertStatus(402)
+            ->assertJsonPath('capacite_requise', 'foyer')
+            ->assertJsonPath('offre_actuelle', 'gratuit');
+
+        $this->postJson('/api/household/join', ['invite_code' => $foyer->invite_code])
+            ->assertStatus(402)
+            ->assertJsonPath('capacite_requise', 'foyer');
+
+        $this->assertNull($invite->fresh()->household_id);
+    }
+
+    public function test_offre_foyer_expiree_le_membre_reprend_la_main_sur_ses_donnees(): void
+    {
+        $proprietaire = User::factory()->create(); // offre Foyer par défaut
+        $foyer = app(\App\Services\Household\HouseholdService::class)->create($proprietaire, 'Les Martin')['household'];
+        $membre = User::factory()->gratuit()->create();
+        Sanctum::actingAs($membre, ['*']);
+        $this->postJson('/api/household/join', ['invite_code' => $foyer->invite_code])->assertOk();
+        $this->putJson('/api/household/members/me', ['share_profile' => true])->assertOk();
+
+        $proprietaire->forceFill(['offre_expire_le' => now()->subDay()])->save();
+        $this->assertFalse($membre->fresh()->peut('foyer'));
+
+        // Ce qui fait vivre le foyer se ferme…
+        $this->postJson('/api/household/common-meal/preview', [])->assertStatus(402);
+        // … mais le membre voit toujours où il est, retire son partage et s'en va.
+        $this->getJson('/api/household')->assertOk()->assertJsonPath('data.id', $foyer->id);
+        $this->putJson('/api/household/members/me', ['share_profile' => false])->assertOk();
+        $this->postJson('/api/household/leave')->assertOk();
+        $this->assertNull($membre->fresh()->household_id);
+    }
+
+    public function test_creer_un_foyer_exige_toujours_l_offre_foyer(): void
+    {
+        Sanctum::actingAs(User::factory()->gratuit()->create(), ['*']);
+
+        $this->postJson('/api/household', ['name' => 'Chez moi'])
+            ->assertStatus(402)
+            ->assertJsonPath('capacite_requise', 'foyer');
     }
 
     public function test_l_offre_est_annoncee_au_client(): void

@@ -84,6 +84,35 @@ class ProfileRythmeIntenseTest extends TestCase
         $this->assertNotNull($profile->rythme_intense_consenti_le);
     }
 
+    public function test_le_rythme_libre_s_enregistre_avec_le_deficit_presente(): void
+    {
+        $user = $this->actingAsUser();
+        // Très actif, 90 kg : marge jusqu'au plancher 1 720 kcal/j ; 12 kg en 60 jours = 1 540.
+        $sportif = $this->presse([
+            'taille' => 185,
+            'poids' => 90,
+            'poids_souhaite_kg' => 78,
+            'niveau_activite' => 'tres_eleve',
+        ]);
+
+        $this->putJson('/api/profile', $sportif + ['rythme_libre' => true] + $this->accord(1720))
+            ->assertOk()
+            ->assertJsonPath('besoins.rythme_libre_accepte', true)
+            ->assertJsonPath('besoins.ajustement_kcal', -1540);
+
+        $profile = $user->fresh()->profile;
+        $this->assertTrue((bool) $profile->rythme_libre);
+        $this->assertSame(1540, $profile->rythme_intense_deficit_kcal);
+        $this->assertDatabaseHas('consentements_rythme', ['user_id' => $user->id, 'deficit_kcal' => 1540]);
+
+        // Décocher l'option ramène au plafond intense, et la colonne suit.
+        $this->putJson('/api/profile', $sportif + ['rythme_libre' => false] + $this->accord(1000))
+            ->assertOk()
+            ->assertJsonPath('besoins.rythme_libre_accepte', false)
+            ->assertJsonPath('besoins.ajustement_kcal', -1000);
+        $this->assertFalse((bool) $user->fresh()->profile->rythme_libre);
+    }
+
     public function test_retirer_le_consentement_redonne_le_rythme_conseille(): void
     {
         $user = $this->actingAsUser();

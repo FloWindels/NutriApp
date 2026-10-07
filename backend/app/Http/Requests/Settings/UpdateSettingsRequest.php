@@ -40,6 +40,10 @@ class UpdateSettingsRequest extends FormRequest
             // à estimer son panier sur des prix qu'on ne met plus à jour.
             'magasin_prefere_id' => ['sometimes', 'nullable', 'integer', Rule::exists('magasins', 'id')->where('actif', true)],
             'partage_profil_foyer' => ['sometimes', 'boolean'],
+            // L'accueil se déclare, il ne se date pas : le serveur pose l'heure lui-même. Vrai
+            // marque l'étape comme faite, faux la rouvre (revoir le questionnaire, par exemple).
+            'onboarding_termine' => ['sometimes', 'boolean'],
+            'visite_vue' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -61,6 +65,8 @@ class UpdateSettingsRequest extends FormRequest
             'ia_seances' => 'séances proposées par l’IA',
             'magasin_prefere_id' => 'magasin préféré',
             'partage_profil_foyer' => 'partage du profil avec le foyer',
+            'onboarding_termine' => 'questionnaire de bienvenue',
+            'visite_vue' => 'visite guidée',
         ];
     }
 }

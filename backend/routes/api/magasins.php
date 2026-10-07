@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\MagasinController;
 use App\Http\Controllers\Api\PromotionController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,6 +23,10 @@ use Illuminate\Support\Facades\Route;
 | le reste de ce qui s'administre — ce qui règle du même coup le cas de l'administrateur resté en
 | offre gratuite, qui doit pouvoir tenir le catalogue sans souscrire quoi que ce soit.
 */
+
+// Catalogue des enseignes : données de référence, sans offre requise, mais réservé aux comptes.
+Route::get('/magasins', [MagasinController::class, 'index']);
+Route::get('/magasins/{magasin}/produits', [MagasinController::class, 'produits'])->whereNumber('magasin');
 
 Route::get('/magasins/{magasin}/promotions', [PromotionController::class, 'index'])->whereNumber('magasin')->middleware('offre:courses');
 Route::post('/magasins/{magasin}/promotions/recherche', [PromotionController::class, 'rechercher'])->whereNumber('magasin')->middleware('offre:courses');

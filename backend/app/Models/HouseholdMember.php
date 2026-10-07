@@ -28,7 +28,8 @@ class HouseholdMember extends Model
 
     protected $attributes = [
         'role' => 'membre',
-        'share_profile' => true,
+        // Opt-in : le profil n'est partagé avec le foyer que si le membre le décide.
+        'share_profile' => false,
     ];
 
     public function household(): BelongsTo

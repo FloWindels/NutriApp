@@ -181,8 +181,8 @@ class AdminAccessTest extends TestCase
         // partirait sur le réseau, ce que les tests interdisent, et rendrait 502 au lieu de 404.
         Http::fake([config('services.off.base_url').'/*' => Http::response(['status' => 0], 200)]);
 
-        // Les deux routes publiques, interrogées sans aucun jeton.
-        $this->app['auth']->forgetGuards();
+        // Les deux routes de lecture du catalogue, interrogées par un compte tiers ordinaire.
+        Sanctum::actingAs(User::factory()->create());
         $recherche = $this->getJson('/api/foods/search?q=fantaisiste')->assertOk()->json('data');
         $this->assertSame([], $recherche, 'Un aliment masqué ne doit plus ressortir de la recherche.');
 

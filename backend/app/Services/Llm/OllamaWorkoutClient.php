@@ -3,6 +3,7 @@
 namespace App\Services\Llm;
 
 use App\Contracts\LlmWorkoutClient;
+use App\Exceptions\LlmBusyException;
 use App\Exceptions\LlmUnavailableException;
 use App\Services\Sport\WorkoutProposalSchema;
 use Illuminate\Support\Facades\Http;
@@ -28,7 +29,8 @@ class OllamaWorkoutClient implements LlmWorkoutClient
         return $this->call(
             AnthropicWorkoutClient::SYSTEM_PROMPT,
             $context + ['demande' => $request, 'catalogue' => $catalog],
-            WorkoutProposalSchema::json(),
+            // Schéma resserré : ce que le serveur reprend du catalogue, le modèle ne l'écrit pas.
+            WorkoutProposalSchema::compactJson(),
         );
     }
 
@@ -57,7 +59,7 @@ class OllamaWorkoutClient implements LlmWorkoutClient
         LlmExecutionTime::allow($timeout);
 
         try {
-            $response = Http::timeout($timeout)
+            $response = OllamaGate::run($timeout, fn () => Http::timeout($timeout)
                 ->acceptJson()
                 ->asJson()
                 ->post($base.'/api/chat', [
@@ -67,16 +69,24 @@ class OllamaWorkoutClient implements LlmWorkoutClient
                     'options' => [
                         'temperature' => (float) config('services.ollama.temperature', 0.3),
                         'num_ctx' => (int) config('services.ollama.num_ctx', 8192),
+                        // Une génération qui s'emballe s'arrête là, au lieu d'occuper le GPU
+                        // jusqu'au délai et de faire attendre toute la file.
+                        'num_predict' => (int) config('services.ollama.num_predict', 1500),
                     ],
                     'messages' => [
                         ['role' => 'system', 'content' => $systemPrompt],
                         [
                             'role' => 'user',
                             'content' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-                                ."\n\n".AnthropicWorkoutClient::CLOSING_SENTENCE,
+                                ."\n\n".AnthropicWorkoutClient::CLOSING_SENTENCE
+                                // Un JSON indenté coûte un tiers de tokens en espaces : sur le GPU
+                                // du serveur, c'est ce qui fait déborder une séance de 60 min.
+                                .' Écris le JSON compact, sur une seule ligne, sans indentation.',
                         ],
                     ],
-                ]);
+                ]));
+        } catch (LlmBusyException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->fail('Ollama injoignable', $e);
         }
@@ -98,7 +108,8 @@ class OllamaWorkoutClient implements LlmWorkoutClient
         if (! is_array($decoded)) {
             Log::warning('Coach IA (Ollama) : JSON illisible.', [
                 'model' => $model,
-                'extrait' => mb_substr($content, 0, 200),
+                // Jamais la sortie du modèle : elle reprend des données de santé de l'utilisateur.
+                'longueur' => mb_strlen($content),
             ]);
 
             throw new LlmUnavailableException('Ollama a renvoyé un JSON illisible.');

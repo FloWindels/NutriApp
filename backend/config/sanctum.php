@@ -33,7 +33,11 @@ return [
     |
     */
 
-    'guard' => ['web'],
+    // Jetons Bearer uniquement : la route /sanctum/csrf-cookie (SPA par cookie) n'est pas montée.
+    'routes' => false,
+
+    // Aucun garde de session : seuls les jetons Bearer authentifient (pas de SPA par cookie).
+    'guard' => [],
 
     /*
     |--------------------------------------------------------------------------

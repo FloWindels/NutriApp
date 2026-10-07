@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
  * Modération des contenus visibles par autrui.
  *
  * Deux seulement le sont réellement : les aliments créés par les utilisateurs, qui entrent
- * directement dans le catalogue commun — consultable sans compte, y compris par code-barres —
+ * directement dans le catalogue commun — consultable par tout compte, y compris par code-barres —
  * et les recettes publiées. Les sports personnels sont hors périmètre : le catalogue force
  * `is_public = false` à leur création, aucun n'est visible par un tiers.
  *

@@ -27,7 +27,7 @@ class FoodController extends Controller
     }
 
     /**
-     * GET /foods/search?q=&barcode=&page=&per_page=&off=1 (public, throttle 30/min).
+     * GET /foods/search?q=&barcode=&page=&per_page=&off=1 (auth, throttle 30/min).
      * Réponse : {data:[FoodResource], meta:{current_page,last_page,per_page,total,off_queried}}.
      */
     public function search(SearchFoodsRequest $request): JsonResponse
@@ -69,7 +69,7 @@ class FoodController extends Controller
     }
 
     /**
-     * GET /foods/barcode/{barcode} (public, throttle 30/min).
+     * GET /foods/barcode/{barcode} (auth, throttle 30/min).
      * Local (rafraîchi si fiche OFF > 90 jours) sinon import Open Food Facts.
      */
     public function showByBarcode(Request $request, string $barcode): JsonResponse

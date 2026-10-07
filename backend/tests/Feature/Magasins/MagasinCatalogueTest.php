@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Magasins;
 
+use App\Models\User;
 use Database\Seeders\MagasinSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
- * Catalogue public des enseignes.
+ * Catalogue des enseignes : réservé aux comptes, sans offre requise.
  *
  * Le fil de ces tests est le mot « indicatif ». Un prix affiché sans réserve et sans date serait
  * lu comme le prix du jour ; il ne l'est pas, et l'API doit le dire elle-même — pas seulement
@@ -18,7 +20,15 @@ class MagasinCatalogueTest extends TestCase
     use MagasinsHelpers;
     use RefreshDatabase;
 
-    public function test_le_catalogue_est_consultable_sans_compte_et_annonce_ses_rayons(): void
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Un compte gratuit suffit : le catalogue ne relève d'aucune offre.
+        Sanctum::actingAs(User::factory()->create());
+    }
+
+    public function test_le_catalogue_est_consultable_par_tout_compte_et_annonce_ses_rayons(): void
     {
         $this->magasin('lidl');
         $this->magasin('colruyt');

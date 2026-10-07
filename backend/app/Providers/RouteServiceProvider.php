@@ -37,8 +37,29 @@ class RouteServiceProvider extends ServiceProvider
             return Limit::perMinute(6)->by($request->user()?->id ?: $request->ip());
         });
 
-        // Codes d'accès : un plafond serré rend le tirage au hasard sans espoir.
+        // Codes d'accès : un plafond serré rend le tirage au hasard sans espoir. Deux compteurs :
+        // par compte, et par adresse IP pour qu'une rafale de comptes jetables n'y échappe pas.
         RateLimiter::for('code', function (Request $request) {
+            return [
+                Limit::perMinute(5)->by('code-u|'.($request->user()?->id ?: $request->ip())),
+                Limit::perHour(30)->by('code-ip|'.$request->ip()),
+            ];
+        });
+
+        // Connexion : 5 essais par minute pour un couple (e-mail, IP), et 20 par heure pour un
+        // même e-mail quelle que soit l'IP — deviner un mot de passe devient sans espoir.
+        RateLimiter::for('login', function (Request $request) {
+            $email = mb_strtolower(trim((string) $request->input('email')));
+
+            return [
+                Limit::perMinute(5)->by('login|'.$email.'|'.$request->ip()),
+                Limit::perHour(20)->by('login-email|'.$email),
+            ];
+        });
+
+        // Changement de mot de passe et suppression du compte : chacun exige le mot de passe
+        // actuel, un jeton volé ne doit pas pouvoir le deviner à loisir.
+        RateLimiter::for('compte-sensible', function (Request $request) {
             return Limit::perMinute(5)->by($request->user()?->id ?: $request->ip());
         });
 

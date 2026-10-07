@@ -15,9 +15,10 @@ use Illuminate\Support\Facades\Route;
 Route::post('/logout', [AuthController::class, 'logout']);
 
 Route::get('/account/export', [AccountController::class, 'export']);
-Route::put('/account/password', [AccountController::class, 'updatePassword']);
-Route::put('/account', [AccountController::class, 'update']);
-Route::delete('/account', [AccountController::class, 'destroy']);
+// Gestes qui exigent le mot de passe actuel : plafond serré (throttle:compte-sensible).
+Route::put('/account/password', [AccountController::class, 'updatePassword'])->middleware('throttle:compte-sensible');
+Route::put('/account', [AccountController::class, 'update'])->middleware('throttle:compte-sensible');
+Route::delete('/account', [AccountController::class, 'destroy'])->middleware('throttle:compte-sensible');
 
 // Consommation d'un code d'accès offert par l'éditeur.
 Route::post('/account/code', [AccountController::class, 'redeemCode'])->middleware('throttle:code');

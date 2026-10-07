@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\Offre;
 use App\Models\Exercise;
 use App\Models\Food;
 use App\Models\Meal;
@@ -83,6 +84,12 @@ class DemoSeeder extends Seeder
         // Rejouable : le consentement santé est requis pour calculer des cibles.
         if ($user->consentement_sante_at === null) {
             $user->forceFill(['consentement_sante_at' => now()])->save();
+        }
+
+        // La démonstration remplit le stock et le planning : sans offre qui les ouvre, le compte
+        // n'en verrait rien. L'offre ne se pose jamais en masse, d'où le forceFill.
+        if ($user->offreValide() === Offre::Gratuit) {
+            $user->forceFill(['offre' => Offre::Complet, 'offre_expire_le' => null])->save();
         }
 
         return $user;

@@ -9,8 +9,8 @@ use App\Models\Exercise;
 use Illuminate\Http\JsonResponse;
 
 /**
- * GET /sport/exercises (brief §13.2) — catalogue **public** d'exercices, sans authentification,
- * sous `throttle:30,1`. Pagination construite à la main : `{data, meta}` plafonné à 50 par page.
+ * GET /sport/exercises (brief §13.2) — catalogue d'exercices, réservé aux comptes, sans offre
+ * requise. Pagination construite à la main : `{data, meta}` plafonné à 50 par page.
  */
 class ExerciseController extends Controller
 {

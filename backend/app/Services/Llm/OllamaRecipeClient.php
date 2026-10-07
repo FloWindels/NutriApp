@@ -3,6 +3,7 @@
 namespace App\Services\Llm;
 
 use App\Contracts\LlmRecipeClient;
+use App\Exceptions\LlmBusyException;
 use App\Exceptions\LlmUnavailableException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -20,7 +21,7 @@ class OllamaRecipeClient implements LlmRecipeClient
         LlmExecutionTime::allow($timeout);
 
         try {
-            $response = Http::timeout($timeout)->acceptJson()->asJson()->post($base.'/api/chat', [
+            $response = OllamaGate::run($timeout, fn () => Http::timeout($timeout)->acceptJson()->asJson()->post($base.'/api/chat', [
                 'model' => $model,
                 'stream' => false,
                 'format' => $schema,
@@ -36,7 +37,9 @@ class OllamaRecipeClient implements LlmRecipeClient
                             ."\n\n".RecipePrompt::CLOSING,
                     ],
                 ],
-            ]);
+            ]));
+        } catch (LlmBusyException $e) {
+            throw $e;
         } catch (Throwable $e) {
             Log::warning('Recette IA (Ollama) injoignable.', ['exception' => get_class($e)]);
 

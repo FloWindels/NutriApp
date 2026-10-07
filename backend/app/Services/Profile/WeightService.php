@@ -143,12 +143,13 @@ class WeightService
             // Un poids repris élargit les plafonds : sans ce garde-fou, une pesée suffirait à
             // creuser le déficit au-delà de ce qui a été consenti.
             if ($besoins['rythme_intense_accepte'] && ! RythmeIntenseConsentement::couvre($profile, $besoins)) {
-                $besoins = $this->nutrition->compute(array_replace($entree, ['rythme_intense' => false]));
+                $besoins = $this->nutrition->compute(array_replace($entree, ['rythme_intense' => false, 'rythme_libre' => false]));
             }
 
             foreach (RythmeIntenseConsentement::trace($profile, $besoins) as $colonne => $valeur) {
                 $profile->{$colonne} = $valeur;
             }
+            $profile->rythme_libre = (bool) ($besoins['rythme_libre_accepte'] ?? false);
 
             $profile->calories_cibles = (int) $besoins['calories_recommandees'];
             $profile->proteines_cibles = (int) $besoins['proteines_g'];

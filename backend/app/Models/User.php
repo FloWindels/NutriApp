@@ -51,9 +51,11 @@ class User extends Authenticatable
     /**
      * Offre réellement applicable.
      *
-     * C'est la meilleure des deux entre celle du compte et celle du propriétaire de son foyer :
-     * sans cela l'offre Foyer ne servirait qu'à celui qui la paie, alors qu'elle est faite pour
-     * couvrir le ménage. Une offre expirée retombe sur la gratuite, sans rien détruire.
+     * Celle du compte, sauf si le propriétaire de son foyer détient une offre Foyer valide : sans
+     * cela l'offre Foyer ne servirait qu'à celui qui la paie, alors qu'elle est faite pour couvrir
+     * le ménage. Seule l'offre Foyer se partage : un propriétaire en offre Complet ne fait pas
+     * profiter ses membres de son abonnement individuel. Une offre expirée retombe sur la
+     * gratuite, sans rien détruire.
      */
     public function offreEffective(): Offre
     {
@@ -70,9 +72,7 @@ class User extends Authenticatable
             })
             ->first();
 
-        $celleDuFoyer = $proprietaire?->offreValide() ?? Offre::Gratuit;
-
-        return $celleDuFoyer->rang() > $sienne->rang() ? $celleDuFoyer : $sienne;
+        return $proprietaire?->offreValide() === Offre::Foyer ? Offre::Foyer : $sienne;
     }
 
     /** Offre du compte lui-même, ramenée à la gratuite si elle a expiré. */

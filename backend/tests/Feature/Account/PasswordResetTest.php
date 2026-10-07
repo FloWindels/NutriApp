@@ -90,7 +90,21 @@ class PasswordResetTest extends TestCase
         ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors(['email']);
-        $this->assertSame('Ce lien de réinitialisation n’est plus valide.', $response->json('errors.email.0'));
+        $this->assertSame('Ce lien de réinitialisation n’est pas valide ou a expiré.', $response->json('errors.email.0'));
+    }
+
+    public function test_reset_password_ne_revele_pas_si_l_adresse_a_un_compte(): void
+    {
+        User::factory()->create(['email' => 'lea@example.com']);
+
+        $corps = ['token' => 'jeton-invalide', 'password' => 'nouveau-mdp-1', 'password_confirmation' => 'nouveau-mdp-1'];
+
+        $connue = $this->postJson('/api/reset-password', ['email' => 'lea@example.com'] + $corps);
+        $inconnue = $this->postJson('/api/reset-password', ['email' => 'personne@example.com'] + $corps);
+
+        $connue->assertStatus(422);
+        $inconnue->assertStatus(422);
+        $this->assertSame($connue->json(), $inconnue->json());
     }
 
     public function test_reset_password_validation_requires_confirmed_password(): void

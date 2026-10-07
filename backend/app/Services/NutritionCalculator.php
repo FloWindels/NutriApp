@@ -40,6 +40,8 @@ class NutritionCalculator
     public const JOURS_MIN = 28;
     public const AJUSTEMENT_MIN = 250;
     public const PRISE_MAX = 500;
+    /** Délai le plus long accepté par le profil (UpdateProfileRequest). */
+    public const DELAI_MAX_JOURS = 2000;
     public const DEFICIT_MAX_ABSOLU = 1000;
     public const DEFICIT_MAX_SENIOR = 500;
 
@@ -53,7 +55,7 @@ class NutritionCalculator
      * Toute réécriture de ce texte doit changer cette valeur, sinon les traces enregistrées
      * désignent un avertissement qui n'existe plus.
      */
-    public const AVERTISSEMENT_RYTHME_VERSION = 'rythme-intense-2026-09';
+    public const AVERTISSEMENT_RYTHME_VERSION = 'rythme-intense-2026-10-07';
 
     public const IMC_MIN = 18.5;
     public const IMC_MAX_PRISE = 30.0;
@@ -98,6 +100,9 @@ class NutritionCalculator
         $situation = (string) ($input['situation_particuliere'] ?? 'aucune');
         $sportJours = (int) ($input['sport_jours_semaine'] ?? 0);
         $rythmeIntenseDemande = filter_var($input['rythme_intense'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        // Rythme libre : plus de plafond de vitesse, seul le plancher de sécurité tient. Ne vaut
+        // qu'avec le consentement au rythme intense, dont il prolonge l'accord.
+        $rythmeLibreDemande = filter_var($input['rythme_libre'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $today = $this->dateOrNull($input['today'] ?? null) ?? CarbonImmutable::now('UTC');
 
         $mineur = $age < 18;
@@ -126,11 +131,14 @@ class NutritionCalculator
         $tdee = $bmr * $facteur;
         $etapes[] = sprintf('Dépense quotidienne (× %s, activité %s) : %s kcal.', $this->fr($facteur, 3), $this->niveauLabel($niveau), $this->fr($tdee));
 
-        // 3. Plancher de sécurité. Il ne dépend que du profil, et aucun consentement ne le déplace :
-        // il est calculé avant l'ajustement pour savoir quelle marge un rythme intense pourrait ouvrir.
+        // 3. Plancher de sécurité. Il est calculé avant l'ajustement pour savoir quelle marge un
+        // rythme plus rapide pourrait ouvrir. Pendant une perte, il ne descend pas sous le
+        // métabolisme de base — sauf rythme libre consenti, qui le ramène au seuil absolu
+        // (1 200 / 1 500 kcal). Ce seuil absolu, aucun consentement ne le déplace.
+        $plancherAbsolu = $femme ? 1200.0 : 1500.0;
         $plancher = 0.0;
         if (! $mineur) {
-            $plancher = max($femme ? 1200.0 : 1500.0, $objectifEffectif === 'perdre' ? $bmr : 0.0);
+            $plancher = max($plancherAbsolu, $objectifEffectif === 'perdre' ? $bmr : 0.0);
         }
 
         // 4. IMC
@@ -158,6 +166,9 @@ class NutritionCalculator
 
         // 6. Ajustement calorique
         $ajustement = 0.0;
+        // Durée qui tiendrait au rythme conseillé, proposée quand le délai demandé va plus vite.
+        $delaiConseille = null;
+        $delaiConseilleFin = null;
         $rythme = $this->rythmeAbsent();
         if ($objectifEffectif !== 'maintenir' && $poidsSouhaite !== null && $joursRestants !== null) {
             $demande = abs($poids - $poidsSouhaite) * self::KCAL_PAR_KG / $joursRestants;
@@ -173,13 +184,29 @@ class NutritionCalculator
                 $conseilleAtteignable = min($conseille, $marge);
                 $intenseAtteignable = min($intense, $marge);
 
-                $consentementUtile = $demande > $conseille + 0.001
-                    && $intenseAtteignable > $conseilleAtteignable + 0.5
-                    && ($imc === null || $imc >= self::IMC_MIN)
+                $imcPermis = ($imc === null || $imc >= self::IMC_MIN)
                     && ($imcCible === null || $imcCible >= self::IMC_MIN);
 
+                // Sans plafond de vitesse, la seule borne est la marge jusqu'au seuil absolu. Jamais
+                // proposé aux 65 ans et plus : leurs plafonds protègent la masse musculaire.
+                $libreAtteignable = max(0.0, $tdee - $plancherAbsolu);
+                $libreUtile = ! $senior
+                    && $imcPermis
+                    && $demande > $intenseAtteignable + 0.001
+                    && $libreAtteignable > max($conseilleAtteignable, $intenseAtteignable) + 0.5;
+
+                $consentementUtile = $demande > $conseille + 0.001
+                    && $imcPermis
+                    && ($intenseAtteignable > $conseilleAtteignable + 0.5 || $libreUtile);
+
                 $rythmeIntenseAccepte = $consentementUtile && $rythmeIntenseDemande;
-                $deficitMax = $rythmeIntenseAccepte ? $intense : $conseille;
+                $rythmeLibreAccepte = $rythmeIntenseAccepte && $libreUtile && $rythmeLibreDemande;
+                $deficitMax = $rythmeLibreAccepte
+                    ? $libreAtteignable
+                    : ($rythmeIntenseAccepte ? $intense : $conseille);
+                if ($rythmeLibreAccepte) {
+                    $plancher = $plancherAbsolu;
+                }
 
                 $rythme = [
                     'rythme_intense_possible' => $consentementUtile,
@@ -190,29 +217,68 @@ class NutritionCalculator
                     'rythme_demande_kg_semaine' => $this->kgParSemaine($demande),
                     'rythme_intense_kcal' => (int) round($intenseAtteignable),
                     'rythme_intense_kg_semaine' => $this->kgParSemaine($intenseAtteignable),
+                    'rythme_libre_possible' => $libreUtile,
+                    'rythme_libre_accepte' => $rythmeLibreAccepte,
+                    'rythme_libre_kcal' => (int) round($libreAtteignable),
+                    'rythme_libre_kg_semaine' => $this->kgParSemaine($libreAtteignable),
+                    'rythme_libre_plancher_kcal' => (int) round($plancherAbsolu),
                 ];
 
                 $applique = $this->clamp($demande, self::AJUSTEMENT_MIN, $deficitMax);
                 $ajustement = -$applique;
                 $signe = '−';
+                // Le rythme sain : 1 % du poids par semaine, sans jamais passer sous le métabolisme.
+                $rythmeSain = $conseilleAtteignable;
             } else {
                 $deficitMax = self::PRISE_MAX;
                 $applique = $this->clamp($demande, self::AJUSTEMENT_MIN, $deficitMax);
                 $ajustement = $applique;
                 $signe = '+';
+                $rythmeSain = (float) self::PRISE_MAX;
             }
 
-            if ($demande > $deficitMax + 0.001) {
+            // Ce qui s'appliquera vraiment, une fois la cible remontée au plancher si besoin : c'est
+            // ce chiffre qu'il faut annoncer, pas le plafond théorique.
+            $effectif = $objectifEffectif === 'perdre'
+                ? min($applique, max(0.0, $tdee - $plancher))
+                : $applique;
+
+            if ($demande > $deficitMax + 0.001 && ($rythmeLibreAccepte ?? false)) {
+                $avertissements[] = sprintf(
+                    'Même sans plafond de vitesse, ton objectif est ramené à %s%s kcal/j (~%s kg/semaine) pour ne pas descendre sous ton plancher de sécurité de %s kcal.',
+                    $signe,
+                    $this->fr(round($effectif)),
+                    $this->fr(round($effectif * 7 / self::KCAL_PAR_KG, 2), 2),
+                    $this->fr(round($plancher))
+                );
+            } elseif ($demande > $deficitMax + 0.001) {
                 $avertissements[] = sprintf(
                     'Délai trop court : objectif ramené à %s%s kcal/j, soit ~%s kg/semaine.',
                     $signe,
-                    $this->fr(round($applique)),
-                    $this->fr(round($applique * 7 / self::KCAL_PAR_KG, 2), 2)
+                    $this->fr(round($effectif)),
+                    $this->fr(round($effectif * 7 / self::KCAL_PAR_KG, 2), 2)
                 );
             } elseif ($demande < self::AJUSTEMENT_MIN - 0.001) {
                 $avertissements[] = sprintf(
                     'Délai très long : ajustement porté au minimum de %s kcal/j.',
                     $this->fr(self::AJUSTEMENT_MIN)
+                );
+            }
+
+            // Trop rapide pour le rythme sain : quelle durée le respecterait ? Sans marge du tout
+            // (dépense au niveau du métabolisme), aucune durée ne suffit et rien n'est proposé.
+            if ($demande > $rythmeSain + 0.5 && $rythmeSain >= 50) {
+                $kg = abs($poids - $poidsSouhaite);
+                $delaiConseille = min(self::DELAI_MAX_JOURS, (int) ceil($kg * self::KCAL_PAR_KG / $rythmeSain));
+                $fin = $today->startOfDay()->addDays($delaiConseille);
+                $delaiConseilleFin = $fin->toDateString();
+                $avertissements[] = sprintf(
+                    'Pour %s %s kg en respectant ton métabolisme, compte environ %d semaines (%d jours, jusqu’au %s).',
+                    $objectifEffectif === 'perdre' ? 'perdre' : 'prendre',
+                    $this->fr($kg, fmod($kg, 1.0) === 0.0 ? 0 : 1),
+                    (int) round($delaiConseille / 7),
+                    $delaiConseille,
+                    $fin->locale('fr')->isoFormat('D MMMM YYYY')
                 );
             }
 
@@ -372,6 +438,8 @@ class NutritionCalculator
             'ajustement_kcal' => (int) round($ajustementAffiche),
             'variation_hebdo_kg' => $variation,
             'plancher_kcal' => (int) round($plancher),
+            'delai_conseille_jours' => $delaiConseille,
+            'delai_conseille_fin' => $delaiConseilleFin,
             'rythme_avertissement_version' => self::AVERTISSEMENT_RYTHME_VERSION,
             ...$rythme,
             'poids_reference' => $poids,
@@ -589,6 +657,7 @@ class NutritionCalculator
             'sport_jours_semaine' => $profile->sport_jours_semaine,
             'consentement_parental' => (bool) ($profile->consentement_parental ?? false),
             'rythme_intense' => (bool) ($profile->rythme_intense ?? false),
+            'rythme_libre' => (bool) ($profile->rythme_libre ?? false),
             'today' => $today,
         ];
     }
@@ -697,6 +766,10 @@ class NutritionCalculator
             'rythme_demande_kg_semaine' => null,
             'rythme_intense_kcal' => null,
             'rythme_intense_kg_semaine' => null,
+            'rythme_libre_possible' => false,
+            'rythme_libre_accepte' => false,
+            'rythme_libre_kcal' => null,
+            'rythme_libre_kg_semaine' => null,
         ];
     }
 

@@ -23,8 +23,8 @@ class LegacyAuthContractTest extends TestCase
         $response = $this->postJson('/api/register', [
             'name' => 'Léa Martin',
             'email' => 'lea@example.com',
-            'password' => 'secret123',
-            'password_confirmation' => 'secret123',
+            'password' => 'secret-1234',
+            'password_confirmation' => 'secret-1234',
             'accept_conditions' => true,
             'cgu_version' => '2026-09-25',
             'confidentialite_version' => '2026-09-25',
@@ -41,9 +41,9 @@ class LegacyAuthContractTest extends TestCase
 
     public function test_login_returns_exact_legacy_keys(): void
     {
-        User::factory()->create(['email' => 'lea@example.com', 'password' => bcrypt('secret123')]);
+        User::factory()->create(['email' => 'lea@example.com', 'password' => bcrypt('secret-1234')]);
 
-        $response = $this->postJson('/api/login', ['email' => 'lea@example.com', 'password' => 'secret123']);
+        $response = $this->postJson('/api/login', ['email' => 'lea@example.com', 'password' => 'secret-1234']);
 
         $response->assertOk();
         $this->assertSame(['token', 'user'], array_keys($response->json()));
@@ -52,7 +52,7 @@ class LegacyAuthContractTest extends TestCase
 
     public function test_bad_credentials_return_422_on_email(): void
     {
-        User::factory()->create(['email' => 'lea@example.com', 'password' => bcrypt('secret123')]);
+        User::factory()->create(['email' => 'lea@example.com', 'password' => bcrypt('secret-1234')]);
 
         $response = $this->postJson('/api/login', ['email' => 'lea@example.com', 'password' => 'wrong-one']);
 

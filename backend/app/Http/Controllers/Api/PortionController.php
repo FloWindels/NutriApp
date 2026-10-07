@@ -9,7 +9,7 @@ use Illuminate\Http\JsonResponse;
 class PortionController extends Controller
 {
     /**
-     * GET /portions — catalogue public des unités de portion (mis en cache côté client).
+     * GET /portions — catalogue des unités de portion (mis en cache côté client).
      *
      * Réponse : {data:[{unit, label, label_short, grams|null, step, is_estimate}], aliases:{alias: unit}}
      */
@@ -18,6 +18,6 @@ class PortionController extends Controller
         return response()->json([
             'data' => Portions::catalog(),
             'aliases' => Portions::aliases(),
-        ])->header('Cache-Control', 'public, max-age=86400');
+        ])->header('Cache-Control', 'private, max-age=86400');
     }
 }

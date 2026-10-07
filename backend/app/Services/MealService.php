@@ -70,6 +70,9 @@ class MealService
 
             $created = [];
             $decrements = [];
+            // Lier un article du stock et le décompter relève de l'offre « stock » : sans elle,
+            // `stock_item_id` est ignoré (le repas s'enregistre, le stock ne bouge pas).
+            $stockPermis = $user->peut('stock');
 
             foreach ($items as $input) {
                 $food = null;
@@ -86,7 +89,7 @@ class MealService
                 }
 
                 $stockItem = null;
-                if (! empty($input['stock_item_id'])) {
+                if ($stockPermis && ! empty($input['stock_item_id'])) {
                     $stockItem = StockScope::items($user)->findOrFail((int) $input['stock_item_id']);
                 }
 

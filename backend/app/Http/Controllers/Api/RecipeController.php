@@ -55,8 +55,8 @@ class RecipeController extends Controller
         if ($term !== '') {
             $like = FoodCatalog::likePattern($term);
             $query->where(function (Builder $builder) use ($like) {
-                $builder->whereRaw("LOWER(title) LIKE ? ESCAPE '\\'", [$like])
-                    ->orWhereRaw("LOWER(COALESCE(description, '')) LIKE ? ESCAPE '\\'", [$like]);
+                $builder->whereRaw("LOWER(title) LIKE ? ".FoodCatalog::LIKE_ESCAPE, [$like])
+                    ->orWhereRaw("LOWER(COALESCE(description, '')) LIKE ? ".FoodCatalog::LIKE_ESCAPE, [$like]);
             });
         }
 

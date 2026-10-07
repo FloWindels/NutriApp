@@ -60,6 +60,7 @@ class Profile extends Model
         'rythme_intense_avertissement_version',
         'rythme_intense_deficit_kcal',
         'rythme_intense_kg_semaine',
+        'rythme_libre',
     ];
 
     protected $casts = [
@@ -93,6 +94,7 @@ class Profile extends Model
         'rythme_intense_consenti_le' => 'datetime',
         'rythme_intense_deficit_kcal' => 'integer',
         'rythme_intense_kg_semaine' => 'float',
+        'rythme_libre' => 'boolean',
     ];
 
     protected $attributes = [
@@ -101,6 +103,7 @@ class Profile extends Model
         'consentement_parental' => false,
         'sport_coef_calories' => 100,
         'rythme_intense' => false,
+        'rythme_libre' => false,
     ];
 
     public function user(): BelongsTo

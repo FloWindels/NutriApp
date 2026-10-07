@@ -66,7 +66,11 @@ class DashboardController extends Controller
             ->get();
 
         // --- Stock --------------------------------------------------------------------------
-        $stockItems = StockScope::items($user)->with(['stock', 'food'])->get();
+        // Le stock est payant : une offre échue ne le montre plus (ni bloc, ni alertes, ni
+        // conseils anti-gaspillage), sans rien effacer.
+        $stockItems = $user->peut('stock')
+            ? StockScope::items($user)->with(['stock', 'food'])->get()
+            : new \Illuminate\Database\Eloquent\Collection();
         $joursAlerte = max(1, (int) ($settings?->jours_alerte_peremption ?? 3));
 
         // --- Sport (une requête : du jour et des 60 derniers jours) --------------------------

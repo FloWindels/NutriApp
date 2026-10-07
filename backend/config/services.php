@@ -71,10 +71,17 @@ return [
         'timeout' => (int) env('OLLAMA_TIMEOUT', 180),
         'temperature' => (float) env('OLLAMA_TEMPERATURE', 0.3),
         'num_ctx' => (int) env('OLLAMA_NUM_CTX', 8192),
+        // Tokens générés au plus par réponse (séances) : borne la durée d'un appel.
+        'num_predict' => (int) env('OLLAMA_NUM_PREDICT', 1500),
         // Reconnaissance de photo d'assiette : exige un modele multimodal (llava, moondream).
         // Vide = pas de vision locale, la saisie reste manuelle.
         'vision_model' => env('OLLAMA_VISION_MODEL', ''),
         'vision_timeout' => (int) env('OLLAMA_VISION_TIMEOUT', 180),
+        // File d'attente partagée par tous les comptes (App\Services\Llm\OllamaGate) :
+        // generations simultanees, demandes en attente au-dela, attente maximale en secondes.
+        'slots' => (int) env('OLLAMA_SLOTS', 2),
+        'queue' => (int) env('OLLAMA_QUEUE', 6),
+        'queue_wait' => (int) env('OLLAMA_QUEUE_WAIT', 25),
     ],
 
     // Recherche web pour l'IA. Vide = desactivee, aucune requete ne sort.

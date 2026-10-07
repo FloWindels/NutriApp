@@ -9,6 +9,7 @@ use App\Http\Resources\PromotionResource;
 use App\Models\Magasin;
 use App\Models\MagasinProduit;
 use App\Models\Promotion;
+use App\Services\Admin\AdminJournal;
 use App\Services\Magasins\LibelleProduit;
 use App\Services\Magasins\PromotionsActives;
 use App\Services\Magasins\RecherchePromotions;
@@ -32,6 +33,7 @@ class PromotionController extends Controller
     public function __construct(
         private readonly PromotionsActives $actives,
         private readonly RecherchePromotions $recherche,
+        private readonly AdminJournal $journal,
     ) {
     }
 
@@ -68,6 +70,15 @@ class PromotionController extends Controller
         ]);
 
         $promotion->load('produit:id,libelle,rayon,prix_indicatif,unite,quantite_reference');
+
+        $this->journal->enregistrer(
+            $request->user(),
+            'creer_promotion',
+            'promotion',
+            $promotion->id,
+            $this->libelle($enseigne, $promotion),
+            'Promotion saisie à la main ('.$promotion->debut?->format('Y-m-d').' → '.$promotion->fin?->format('Y-m-d').').',
+        );
 
         return response()->json([
             'message' => 'Promotion enregistrée.',
@@ -107,6 +118,15 @@ class PromotionController extends Controller
 
         if ($changes !== []) {
             $model->forceFill($changes)->save();
+
+            $this->journal->enregistrer(
+                $request->user(),
+                'modifier_promotion',
+                'promotion',
+                $model->id,
+                $this->libelle($model->magasin()->first(), $model),
+                'Champs modifiés : '.implode(', ', array_diff(array_keys($changes), ['libelle_normalise'])).'.',
+            );
         }
 
         $model->load('produit:id,libelle,rayon,prix_indicatif,unite,quantite_reference');
@@ -117,9 +137,20 @@ class PromotionController extends Controller
         ], 200, [], JSON_PRESERVE_ZERO_FRACTION);
     }
 
-    public function destroy(int $promotion): JsonResponse
+    public function destroy(Request $request, int $promotion): JsonResponse
     {
-        Promotion::query()->findOrFail($promotion)->delete();
+        $model = Promotion::query()->findOrFail($promotion);
+        $libelle = $this->libelle($model->magasin()->first(), $model);
+        $model->delete();
+
+        $this->journal->enregistrer(
+            $request->user(),
+            'supprimer_promotion',
+            'promotion',
+            $promotion,
+            $libelle,
+            'Promotion retirée du catalogue partagé.',
+        );
 
         return response()->json(['message' => 'Promotion supprimée.']);
     }
@@ -153,6 +184,14 @@ class PromotionController extends Controller
     private function magasin(int $id): Magasin
     {
         return Magasin::query()->where('actif', true)->findOrFail($id);
+    }
+
+    /** « Lidl — Pâtes 500 g » : lisible dans le journal même après suppression de la ligne. */
+    private function libelle(?Magasin $magasin, Promotion $promotion): string
+    {
+        $enseigne = $magasin?->enseigne?->label();
+
+        return ($enseigne !== null ? $enseigne.' — ' : '').$promotion->libelle;
     }
 
     /**

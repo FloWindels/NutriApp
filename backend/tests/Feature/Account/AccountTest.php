@@ -26,13 +26,54 @@ class AccountTest extends TestCase
         $user = User::factory()->create();
         Sanctum::actingAs($user);
 
-        $response = $this->putJson('/api/account', ['name' => '  Léa Martin ', 'email' => ' LEA.M@Example.com ']);
+        $response = $this->putJson('/api/account', [
+            'name' => '  Léa Martin ',
+            'email' => ' LEA.M@Example.com ',
+            'current_password' => 'password',
+        ]);
 
         $response->assertOk()->assertExactJson([
             'message' => 'Compte mis à jour.',
             'data' => ['id' => $user->id, 'name' => 'Léa Martin', 'email' => 'lea.m@example.com'],
         ]);
         $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => 'lea.m@example.com', 'name' => 'Léa Martin']);
+        // La nouvelle adresse n'a jamais été vérifiée.
+        $this->assertNull($user->refresh()->email_verified_at);
+    }
+
+    public function test_changer_d_email_exige_le_mot_de_passe_actuel(): void
+    {
+        $user = User::factory()->create(['email' => 'lea@example.com', 'name' => 'Léa Martin']);
+        Sanctum::actingAs($user);
+
+        $sans = $this->putJson('/api/account', ['name' => 'Léa', 'email' => 'pirate@example.com']);
+        $sans->assertStatus(422)->assertJsonValidationErrors(['current_password']);
+        $this->assertSame('Confirme ton mot de passe actuel pour changer d’adresse e-mail.', $sans->json('errors.current_password.0'));
+
+        $faux = $this->putJson('/api/account', ['name' => 'Léa', 'email' => 'pirate@example.com', 'current_password' => 'mauvais']);
+        $faux->assertStatus(422)->assertJsonValidationErrors(['current_password']);
+        $this->assertSame('Le mot de passe actuel est incorrect.', $faux->json('errors.current_password.0'));
+
+        $user->refresh();
+        $this->assertSame('lea@example.com', $user->email);
+        $this->assertSame('Léa Martin', $user->name, 'Le nom ne doit pas non plus avoir changé.');
+        $this->assertNotNull($user->email_verified_at);
+    }
+
+    public function test_changer_seulement_le_nom_ne_demande_pas_le_mot_de_passe(): void
+    {
+        $user = User::factory()->create(['email' => 'lea@example.com', 'name' => 'Léa']);
+        Sanctum::actingAs($user);
+
+        // Même adresse, casse différente : ce n'est pas un changement d'adresse.
+        $this->putJson('/api/account', ['name' => 'Léa Martin', 'email' => 'LEA@example.com'])
+            ->assertOk()
+            ->assertExactJson([
+                'message' => 'Compte mis à jour.',
+                'data' => ['id' => $user->id, 'name' => 'Léa Martin', 'email' => 'lea@example.com'],
+            ]);
+
+        $this->assertNotNull($user->refresh()->email_verified_at);
     }
 
     public function test_update_account_rejects_email_taken_by_someone_else_but_accepts_own(): void
@@ -41,7 +82,7 @@ class AccountTest extends TestCase
         $user = User::factory()->create(['email' => 'moi@example.com']);
         Sanctum::actingAs($user);
 
-        $this->putJson('/api/account', ['name' => 'Moi', 'email' => 'PRIS@example.com'])
+        $this->putJson('/api/account', ['name' => 'Moi', 'email' => 'PRIS@example.com', 'current_password' => 'password'])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['email']);
 
@@ -64,7 +105,7 @@ class AccountTest extends TestCase
         $this->assertTrue(Hash::check('ancien-mdp', $user->refresh()->password));
     }
 
-    public function test_update_password_validation_min_8_and_confirmed(): void
+    public function test_update_password_validation_min_10_and_confirmed(): void
     {
         $user = User::factory()->create(['password' => bcrypt('ancien-mdp')]);
         Sanctum::actingAs($user);
@@ -76,7 +117,7 @@ class AccountTest extends TestCase
         ]);
 
         $response->assertStatus(422)->assertJsonValidationErrors(['password']);
-        $this->assertStringContainsString('8', implode(' ', $response->json('errors.password')));
+        $this->assertStringContainsString('10', implode(' ', $response->json('errors.password')));
     }
 
     public function test_update_password_revokes_other_tokens_but_keeps_current(): void

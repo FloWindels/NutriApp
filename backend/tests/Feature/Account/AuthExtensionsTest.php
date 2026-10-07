@@ -20,8 +20,8 @@ class AuthExtensionsTest extends TestCase
         $response = $this->postJson('/api/register', [
             'name' => 'Léa',
             'email' => '  LEA@Example.COM ',
-            'password' => 'secret123',
-            'password_confirmation' => 'secret123',
+            'password' => 'secret-1234',
+            'password_confirmation' => 'secret-1234',
             'accept_conditions' => true,
             'cgu_version' => '2026-09-25',
             'confidentialite_version' => '2026-09-25',
@@ -43,8 +43,8 @@ class AuthExtensionsTest extends TestCase
         $response = $this->postJson('/api/register', [
             'name' => 'Léa',
             'email' => 'LEA@example.com',
-            'password' => 'secret123',
-            'password_confirmation' => 'secret123',
+            'password' => 'secret-1234',
+            'password_confirmation' => 'secret-1234',
             'accept_conditions' => true,
             'cgu_version' => '2026-09-25',
             'confidentialite_version' => '2026-09-25',
@@ -70,19 +70,19 @@ class AuthExtensionsTest extends TestCase
 
     public function test_login_normalises_email(): void
     {
-        User::factory()->create(['email' => 'lea@example.com', 'password' => bcrypt('secret123')]);
+        User::factory()->create(['email' => 'lea@example.com', 'password' => bcrypt('secret-1234')]);
 
-        $this->postJson('/api/login', ['email' => '  Lea@EXAMPLE.com', 'password' => 'secret123'])
+        $this->postJson('/api/login', ['email' => '  Lea@EXAMPLE.com', 'password' => 'secret-1234'])
             ->assertOk()
             ->assertJsonPath('user.email', 'lea@example.com');
     }
 
     public function test_logout_deletes_the_current_token_only(): void
     {
-        $user = User::factory()->create(['password' => bcrypt('secret123')]);
+        $user = User::factory()->create(['password' => bcrypt('secret-1234')]);
 
-        $first = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'secret123'])->json('token');
-        $second = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'secret123'])->json('token');
+        $first = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'secret-1234'])->json('token');
+        $second = $this->postJson('/api/login', ['email' => $user->email, 'password' => 'secret-1234'])->json('token');
 
         $this->assertSame(2, $user->tokens()->count());
 

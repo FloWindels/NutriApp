@@ -3,6 +3,7 @@
 namespace App\Services\Llm;
 
 use App\Contracts\LlmVisionClient;
+use App\Exceptions\LlmBusyException;
 use App\Exceptions\LlmUnavailableException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -30,7 +31,7 @@ class OllamaVisionClient implements LlmVisionClient
         LlmExecutionTime::allow($timeout);
 
         try {
-            $response = Http::timeout($timeout)
+            $response = OllamaGate::run($timeout, fn () => Http::timeout($timeout)
                 ->acceptJson()
                 ->asJson()
                 ->post($base.'/api/chat', [
@@ -49,7 +50,9 @@ class OllamaVisionClient implements LlmVisionClient
                             'images' => [$base64Image],
                         ],
                     ],
-                ]);
+                ]));
+        } catch (LlmBusyException $e) {
+            throw $e;
         } catch (Throwable $e) {
             $this->fail('Ollama injoignable', $e);
         }
@@ -71,7 +74,8 @@ class OllamaVisionClient implements LlmVisionClient
         if (! is_array($decoded)) {
             Log::warning('Reconnaissance photo (Ollama) : JSON illisible.', [
                 'model' => $model,
-                'extrait' => mb_substr($content, 0, 200),
+                // Jamais la sortie du modèle : elle reprend des données de santé de l'utilisateur.
+                'longueur' => mb_strlen($content),
             ]);
 
             throw new LlmUnavailableException('Ollama a renvoyé un JSON illisible.');

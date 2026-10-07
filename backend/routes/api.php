@@ -14,11 +14,13 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 |
 | Ce fichier est monté deux fois par RouteServiceProvider (`/api` et `/api/v1`).
-| Il ne contient que le socle : routes publiques + groupe `auth:sanctum`.
+| Il ne contient que le socle : authentification + groupe `auth:sanctum`.
 |
-| Chaque module possède exactement un fichier :
-|   - routes/api_public/{module}.php → routes publiques (catalogues), chargées hors auth ;
-|   - routes/api/{module}.php        → routes authentifiées, chargées dans le groupe auth.
+| Un visiteur sans compte n'atteint RIEN d'autre que l'inscription, la connexion et la
+| réinitialisation du mot de passe : catalogues compris, tout le reste exige un jeton.
+|
+| Chaque module possède exactement un fichier : routes/api/{module}.php, chargé dans le
+| groupe auth.
 |
 | Règles : routes littérales avant les routes paramétrées, paramètres contraints
 | (`->whereNumber('meal')`), aucune route nommée utilisée via `route()`.
@@ -28,26 +30,22 @@ use Illuminate\Support\Facades\Route;
 // --- Authentification (publique, limitée à 10 requêtes/minute) -----------------------
 Route::middleware('throttle:10,1')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login', [AuthController::class, 'login']);
+    // Plafond dédié en plus : par couple (e-mail, IP) et par e-mail (RouteServiceProvider).
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-});
-
-// --- Catalogues publics (limités à 30 requêtes/minute) --------------------------------
-Route::middleware('throttle:30,1')->group(function () {
-    Route::get('/foods/search', [FoodController::class, 'search']);
-    Route::get('/foods/barcode/{barcode}', [FoodController::class, 'showByBarcode']);
-    Route::get('/portions', [PortionController::class, 'index']);
-
-    // Routes publiques des modules (routes/api_public/*.php), un fichier par module.
-    foreach (glob(__DIR__.'/api_public/*.php') ?: [] as $publicRouteFile) {
-        require $publicRouteFile;
-    }
 });
 
 // --- Routes authentifiées ---------------------------------------------------------------
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
+
+    // Recherche d'aliments : peut interroger Open Food Facts, plafond dédié (30/min).
+    Route::middleware('throttle:30,1')->group(function () {
+        Route::get('/foods/search', [FoodController::class, 'search']);
+        Route::get('/foods/barcode/{barcode}', [FoodController::class, 'showByBarcode']);
+    });
+    Route::get('/portions', [PortionController::class, 'index']);
 
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::put('/profile', [ProfileController::class, 'update']);

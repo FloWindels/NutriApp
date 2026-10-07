@@ -14,6 +14,14 @@ class FoodBarcodeTest extends TestCase
     use OffFixtures;
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Le catalogue n'est plus public : chaque test lit en tant que compte connecté.
+        Sanctum::actingAs(User::factory()->create());
+    }
+
     public function test_aliment_local_renvoye_sans_appel_off(): void
     {
         Http::fake();

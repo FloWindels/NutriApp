@@ -24,6 +24,37 @@ class WorkoutProposalSchema
     }
 
     /**
+     * Variante resserrée pour un modèle local : le même document, sans ce que le serveur sait déjà.
+     *
+     * Catégorie, groupe musculaire, matériel et consignes se reprennent du catalogue par
+     * l'identifiant (voir normalizeExercise) ; les écrire fait produire au modèle des centaines
+     * de tokens que normalize() remplacerait de toute façon. Sur le GPU du serveur, c'est la
+     * différence entre une séance en 30 s et un délai dépassé.
+     *
+     * @return array<string, mixed>
+     */
+    public static function compactJson(): array
+    {
+        $schema = self::json();
+
+        $exercise = &$schema['properties']['blocks']['items']['properties']['exercises']['items'];
+        $garder = ['exercise_id', 'name', 'sets', 'reps', 'duration_sec', 'rest_sec'];
+        $exercise['required'] = $garder;
+        $exercise['properties'] = array_intersect_key($exercise['properties'], array_flip($garder));
+        unset($exercise);
+
+        // Au plus 5 exercices par bloc : séries et répétitions remplissent le temps demandé, et
+        // la réponse tient dans le budget de tokens d'un modèle local.
+        $schema['properties']['blocks']['maxItems'] = 3;
+        $schema['properties']['blocks']['items']['properties']['exercises']['maxItems'] = 5;
+        $schema['properties']['explication']['maxItems'] = 3;
+        $schema['properties']['explication']['description'] = '2 ou 3 phrases courtes en tutoiement, la dernière étant la phrase de sécurité.';
+        $schema['properties']['warnings']['maxItems'] = 2;
+
+        return $schema;
+    }
+
+    /**
      * Schéma JSON de la proposition de séance (toutes les propriétés requises, nullable via types multiples).
      *
      * @return array<string, mixed>

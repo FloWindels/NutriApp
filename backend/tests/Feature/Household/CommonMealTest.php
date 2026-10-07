@@ -37,7 +37,7 @@ class CommonMealTest extends HouseholdTestCase
         $owner = $this->login($this->userWithProfile(['calories_cibles' => 2000, 'regime_alimentaire' => 'omnivore'], ['name' => 'Alice']));
         $household = $this->householdOwnedBy($owner);
 
-        // Membre profil non partagé : cibles 1 600 → 1600 × 0,35 = 560 → 1,12 → 1,0 (estimation).
+        // Membre profil non partagé : rien n'est déduit de son profil → portion standard 1,0.
         $bob = $this->userWithProfile(['calories_cibles' => 1600, 'regime_alimentaire' => 'omnivore'], ['name' => 'Bob']);
         $this->joinHousehold($bob, $household);
         $this->service->updateShareProfile($this->service->membershipOf($bob), false);
@@ -45,14 +45,17 @@ class CommonMealTest extends HouseholdTestCase
         // Gros budget : 4 000 × 0,35 = 1 400 → 2,8 → 3,0 → borné à 2,0.
         $carl = $this->userWithProfile(['calories_cibles' => 4000, 'regime_alimentaire' => 'omnivore'], ['name' => 'Carl']);
         $this->joinHousehold($carl, $household);
+        $this->service->updateShareProfile($this->service->membershipOf($carl), true);
 
         // Petit budget : 300 × 0,35 = 105 → plancher 150 → 0,3 → 0,5.
         $dina = $this->userWithProfile(['calories_cibles' => 300, 'regime_alimentaire' => 'omnivore'], ['name' => 'Dina']);
         $this->joinHousehold($dina, $household);
+        $this->service->updateShareProfile($this->service->membershipOf($dina), true);
 
         // Mineur (15 ans) : label « portion indicative ».
         $emma = $this->userWithProfile(['calories_cibles' => 2000, 'age' => 15, 'regime_alimentaire' => 'omnivore'], ['name' => 'Emma']);
         $this->joinHousehold($emma, $household);
+        $this->service->updateShareProfile($this->service->membershipOf($emma), true);
 
         $recipe = $this->recipe();
 
@@ -85,7 +88,8 @@ class CommonMealTest extends HouseholdTestCase
 
         $b = $members[$bob->id];
         $this->assertFalse($b['share_profile']);
-        $this->assertEquals(560.0, $b['target_kcal']);
+        $this->assertNull($b['target_kcal']);
+        $this->assertNull($b['is_minor']);
         $this->assertEquals(1.0, $b['portions']);
         $this->assertEquals(500.0, $b['calories']);
         $this->assertTrue($b['is_estimate']);
@@ -149,6 +153,7 @@ class CommonMealTest extends HouseholdTestCase
         $household = $this->householdOwnedBy($owner);
         $noProfile = User::factory()->create();
         $this->joinHousehold($noProfile, $household);
+        $this->service->updateShareProfile($this->service->membershipOf($noProfile), true);
 
         $m = collect($this->postJson('/api/household/common-meal/preview', [
             'recipe_id' => $this->recipe()->id,
@@ -199,6 +204,7 @@ class CommonMealTest extends HouseholdTestCase
         $household = $this->householdOwnedBy($owner);
         $bob = $this->userWithProfile(['calories_cibles' => 1800], ['name' => 'Bob']);
         $this->joinHousehold($bob, $household);
+        $this->service->updateShareProfile($this->service->membershipOf($bob), true);
         $recipe = $this->recipe();
         $date = '2026-09-16';
 
@@ -270,6 +276,48 @@ class CommonMealTest extends HouseholdTestCase
         $this->assertEquals(1, MealItem::query()->count());
     }
 
+    public function test_un_nouveau_membre_ne_partage_rien_tant_qu_il_ne_l_a_pas_choisi(): void
+    {
+        $owner = $this->login($this->userWithProfile(['calories_cibles' => 2000]));
+        $household = $this->householdOwnedBy($owner);
+        // Mineur au profil complet : ni sa cible, ni son âge ne doivent transparaître.
+        $emma = $this->userWithProfile(['calories_cibles' => 4000, 'age' => 15], ['name' => 'Emma']);
+        $this->joinHousehold($emma, $household);
+        $recipe = $this->recipe();
+
+        $m = collect($this->postJson('/api/household/common-meal/preview', [
+            'recipe_id' => $recipe->id,
+            'meal_type' => 'dejeuner',
+        ])->assertOk()->json('data.members'))->firstWhere('user_id', $emma->id);
+
+        $this->assertFalse($m['share_profile']);
+        $this->assertNull($m['target_kcal']);
+        $this->assertNull($m['is_minor']);
+        $this->assertEquals(1.0, $m['portions']);
+        $this->assertEquals(500.0, $m['calories']);
+        $this->assertEquals([CommonMealService::FACTEUR_NON_PARTAGE], $m['factors']);
+        $this->assertEquals(CommonMealService::LABEL_ESTIMATION, $m['label']);
+
+        // Pas d'écriture dans son journal sans son accord…
+        $this->postJson('/api/household/common-meal', [
+            'recipe_id' => $recipe->id,
+            'meal_type' => 'dejeuner',
+            'date' => '2026-09-16',
+            'portions' => [(string) $emma->id => 1],
+        ])->assertStatus(422)->assertJsonValidationErrors(['portions.'.$emma->id]);
+        $this->assertEquals(0, MealItem::query()->count());
+
+        // …mais dès qu'elle partage son profil, c'est permis.
+        $this->service->updateShareProfile($this->service->membershipOf($emma), true);
+        $this->postJson('/api/household/common-meal', [
+            'recipe_id' => $recipe->id,
+            'meal_type' => 'dejeuner',
+            'date' => '2026-09-16',
+            'portions' => [(string) $emma->id => 1],
+        ])->assertCreated();
+        $this->assertEquals(1, MealItem::query()->where('meal_id', Meal::query()->where('user_id', $emma->id)->value('id'))->count());
+    }
+
     public function test_create_refuse_un_non_membre_et_ne_cree_rien(): void
     {
         $owner = $this->login($this->userWithProfile());
@@ -297,6 +345,7 @@ class CommonMealTest extends HouseholdTestCase
         $household = $this->householdOwnedBy($owner);
         $bob = $this->userWithProfile();
         $this->joinHousehold($bob, $household);
+        $this->service->updateShareProfile($this->service->membershipOf($bob), true);
         $private = $this->recipe(['is_public' => false, 'created_by_user_id' => $owner->id]);
 
         $this->postJson('/api/household/common-meal', [

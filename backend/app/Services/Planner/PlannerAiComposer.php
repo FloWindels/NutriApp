@@ -4,6 +4,7 @@ namespace App\Services\Planner;
 
 use App\Contracts\LlmPlannerClient;
 use App\Enums\MealType;
+use App\Exceptions\LlmBusyException;
 use App\Models\Recipe;
 use App\Models\User;
 use App\Support\LlmProvider;
@@ -26,6 +27,8 @@ use Throwable;
 class PlannerAiComposer
 {
     public const WARNING_FALLBACK = 'Organisation par l’IA indisponible : semaine composée par les règles Mavi’oh.';
+
+    public const WARNING_BUSY = 'L’IA est très demandée en ce moment : semaine composée par les règles Mavi’oh. Réessaie dans une minute pour une semaine organisée par l’IA.';
 
     public const WARNING_SANS_IA = 'Ta demande n’a pas été interprétée : la semaine a été composée par les règles Mavi’oh, sans IA.';
 
@@ -93,7 +96,7 @@ class PlannerAiComposer
                 'message' => mb_substr($e->getMessage(), 0, 200),
             ]);
 
-            return $this->parRegles([self::WARNING_FALLBACK]);
+            return $this->parRegles([$e instanceof LlmBusyException ? self::WARNING_BUSY : self::WARNING_FALLBACK]);
         }
 
         // Le modèle a pu proposer des plats qu'on a écartés — recette d'un autre compte, allergène,

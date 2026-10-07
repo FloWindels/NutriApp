@@ -5,11 +5,13 @@ namespace App\Exceptions;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -79,6 +81,20 @@ class Handler extends ExceptionHandler
             if ($request->is('api/*')) {
                 return new JsonResponse(['message' => 'Introuvable.'], 404);
             }
+        });
+
+        // PostgreSQL refuse ce que SQLite laissait passer : un identifiant au-delà d'un bigint
+        // (22003), une date impossible comme 2026-09-99 (22007, 22008), un texte là où un nombre
+        // est attendu (22P02). Ces valeurs ne désignent aucune ressource : c'est un « Introuvable »,
+        // pas une erreur interne. Toute la classe 22 (« donnée invalide ») est traitée ainsi.
+        $this->renderable(function (QueryException $e, Request $request) {
+            $etat = (string) ($e->errorInfo[0] ?? $e->getCode());
+            if (! str_starts_with($etat, '22') || ! $request->is('api/*')) {
+                return null;
+            }
+            Log::notice('Valeur refusée par la base, réponse 404.', ['sqlstate' => $etat, 'route' => $request->path()]);
+
+            return new JsonResponse(['message' => 'Introuvable.'], 404);
         });
 
         $this->renderable(function (AuthorizationException|AccessDeniedHttpException $e, Request $request) {

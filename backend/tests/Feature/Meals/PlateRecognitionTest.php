@@ -83,6 +83,34 @@ class PlateRecognitionTest extends TestCase
         $this->assertSame(320.0, (float) $ligne['valeurs_proposees']['calories']);
     }
 
+    /**
+     * Le cas vécu : un aliment absent du catalogue, et un modèle qui ne chiffre pas ses calories.
+     * La ligne se serait enregistrée à 0 kcal sans que personne ne le voie.
+     */
+    public function test_une_ligne_sans_aucune_valeur_est_signalee_avant_l_enregistrement(): void
+    {
+        $this->actingAsUser();
+        Http::fake(['*' => Http::response(['products' => []], 200)]);
+        $this->app->instance(LlmVisionClient::class, FakePlateVisionClient::canned([
+            'aliments' => [[
+                'nom' => 'Crème fouettée maison',
+                'marque' => null, 'quantite' => 120, 'unite' => 'g', 'confiance' => 0.6,
+                'calories' => null, 'proteines' => null, 'glucides' => null, 'lipides' => null,
+            ]],
+            'description' => '', 'confiance_globale' => 0.6, 'avertissements' => [],
+        ]));
+
+        $data = $this->postJson('/api/meals/analyze-photo', ['image' => $this->photo()])
+            ->assertOk()
+            ->json('data');
+
+        $this->assertNull($data['aliments'][0]['food']);
+        $this->assertContains(
+            'Aucune valeur nutritionnelle pour « Crème fouettée maison » : retire la ligne et ajoute l’aliment par la recherche, sinon il comptera pour 0 kcal.',
+            $data['avertissements'],
+        );
+    }
+
     public function test_reconnaissance_indisponible_repond_200_avec_une_liste_vide(): void
     {
         $this->actingAsUser();

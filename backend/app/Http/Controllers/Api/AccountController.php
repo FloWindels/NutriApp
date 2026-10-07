@@ -30,7 +30,20 @@ class AccountController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
-        $user->update($request->validated());
+        $validated = $request->validated();
+
+        if ($request->changeEmail()) {
+            if (! Hash::check((string) ($validated['current_password'] ?? ''), (string) $user->password)) {
+                throw ValidationException::withMessages([
+                    'current_password' => [self::MSG_MOT_DE_PASSE_ACTUEL],
+                ]);
+            }
+
+            // La nouvelle adresse n'a jamais été vérifiée.
+            $user->forceFill(['email_verified_at' => null]);
+        }
+
+        $user->fill(['name' => $validated['name'], 'email' => $validated['email']])->save();
 
         return response()->json([
             'message' => self::MSG_COMPTE_MIS_A_JOUR,

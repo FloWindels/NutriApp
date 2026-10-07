@@ -277,6 +277,35 @@ class PromotionsTest extends TestCase
         $reponse->assertJsonPath('data.remise_pourcent', 30);
     }
 
+    /** Écrire dans le catalogue partagé est un geste d'administration : il se journalise. */
+    public function test_chaque_ecriture_de_promotion_est_journalisee(): void
+    {
+        $admin = $this->admin();
+        $magasin = $this->magasin('lidl');
+
+        $id = $this->postJson('/api/admin/magasins/'.$magasin->id.'/promotions', [
+            'libelle' => 'Filet de poulet',
+            'prix_promotionnel' => 6.99,
+            'debut' => now()->toDateString(),
+            'fin' => now()->addDays(3)->toDateString(),
+        ])->assertCreated()->json('data.id');
+
+        $this->putJson('/api/admin/magasins/promotions/'.$id, ['prix_promotionnel' => 5.99])->assertOk();
+        $this->deleteJson('/api/admin/magasins/promotions/'.$id)->assertOk();
+
+        $lignes = \App\Models\AdminAction::query()->where('cible_type', 'promotion')->orderBy('id')->get();
+        $this->assertSame(['creer_promotion', 'modifier_promotion', 'supprimer_promotion'], $lignes->pluck('action')->all());
+
+        foreach ($lignes as $ligne) {
+            $this->assertSame($admin->id, (int) $ligne->admin_id);
+            $this->assertSame($admin->email, $ligne->admin_email);
+            $this->assertSame((int) $id, (int) $ligne->cible_id);
+            $this->assertStringContainsString('Filet de poulet', (string) $ligne->cible_libelle);
+            $this->assertNotSame('', (string) $ligne->motif);
+        }
+        $this->assertStringContainsString('prix_promotionnel', (string) $lignes[1]->motif);
+    }
+
     public function test_un_produit_d_une_autre_enseigne_ne_peut_pas_etre_rattache_a_une_promotion(): void
     {
         $this->admin();

@@ -22,8 +22,8 @@ use Illuminate\Validation\ValidationException;
  * à chaque membre.
  *
  * - `share_profile` vrai (ou soi-même) → `target_kcal = MealBudget::forMeal(membre)` ;
- * - `share_profile` faux → `cibles × part(type)` avec le facteur « profil non partagé —
- *   estimation sur les cibles » ;
+ * - `share_profile` faux → rien n'est déduit du profil : `target_kcal` et `is_minor` à null,
+ *   une portion standard (1,0) avec le facteur « profil non partagé » ;
  * - portions par pas de 0,5 bornées à [0,5 ; 2,0] ; mineurs : label « portion indicative ».
  */
 class CommonMealService
@@ -216,6 +216,30 @@ class CommonMealService
 
         $isSelf = (int) $user->id === (int) $viewer->id;
         $shared = $isSelf || (bool) $member->share_profile;
+
+        // Profil non partagé : rien de ce qui en découle ne sort (ni cible, ni portion ajustée,
+        // ni âge), comme dans HouseholdMemberResource. Une portion standard, signalée comme telle.
+        if (! $shared) {
+            $factors = [self::FACTEUR_NON_PARTAGE];
+            if ((bool) ($recipe->is_estimate ?? false) || ! $recipe->hasMacros()) {
+                $factors[] = self::FACTEUR_RECETTE_ESTIMEE;
+            }
+
+            return [
+                'user_id' => (int) $user->id,
+                'name' => (string) $user->name,
+                'is_me' => false,
+                'share_profile' => false,
+                'is_minor' => null,
+                'target_kcal' => null,
+                'portions' => 1.0,
+                'calories' => (float) round($kcalPerServing, 1),
+                'is_estimate' => true,
+                'label' => self::LABEL_ESTIMATION,
+                'factors' => $factors,
+            ];
+        }
+
         $isMinor = $profile !== null && $profile->isMinor();
         $complete = $profile !== null && $this->nutrition->isComplete($profile);
 
@@ -227,17 +251,10 @@ class CommonMealService
             $factors[] = self::FACTEUR_PROFIL_INCOMPLET;
             $isEstimate = true;
             $portions = 1.0;
-        } elseif ($shared) {
+        } else {
             $memberDate = $date !== '' ? $date : Clock::today($user);
             $target = $this->budgetFor($user, $memberDate, $mealType);
             $factors[] = self::FACTEUR_BUDGET;
-            $portions = $this->portionsFor($target, $kcalPerServing);
-        } else {
-            $cibles = $this->nutrition->ciblesEffectives($profile, $date);
-            $calories = (float) ($cibles['calories'] ?? 0);
-            $target = round($calories * $this->budget->share($mealType, $profile->regime_alimentaire));
-            $factors[] = self::FACTEUR_NON_PARTAGE;
-            $isEstimate = true;
             $portions = $this->portionsFor($target, $kcalPerServing);
         }
 
@@ -254,7 +271,6 @@ class CommonMealService
         $label = match (true) {
             $isMinor => self::LABEL_MINEUR,
             ! $complete => self::LABEL_PROFIL_INCOMPLET,
-            ! $shared => self::LABEL_ESTIMATION,
             default => self::LABEL_ADAPTEE,
         };
 

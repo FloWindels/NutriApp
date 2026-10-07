@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureOffreAllows;
 use App\Http\Requests\Household\CommonMealPreviewRequest;
 use App\Http\Requests\Household\CommonMealStoreRequest;
 use App\Http\Requests\Household\JoinHouseholdRequest;
@@ -55,6 +56,9 @@ class HouseholdController extends Controller
 
     /**
      * GET /household/preview?invite_code= → {data:{name, members_count}} / 404 « Code introuvable. ».
+     *
+     * Sans verrou d'offre sur la route : c'est l'offre du propriétaire qui ouvre la porte
+     * (HouseholdService::peutRejoindre), 402 sinon.
      */
     public function preview(JoinHouseholdRequest $request): JsonResponse
     {
@@ -62,6 +66,10 @@ class HouseholdController extends Controller
 
         if ($household === null) {
             return $this->codeIntrouvable();
+        }
+
+        if (! $this->households->peutRejoindre($request->user(), $household)) {
+            return EnsureOffreAllows::refus($request->user(), 'foyer');
         }
 
         return response()->json([
@@ -98,8 +106,14 @@ class HouseholdController extends Controller
     {
         $user = $request->user();
 
-        if ($this->households->findByInviteCode($request->inviteCode()) === null) {
+        $household = $this->households->findByInviteCode($request->inviteCode());
+
+        if ($household === null) {
             return $this->codeIntrouvable();
+        }
+
+        if (! $this->households->peutRejoindre($user, $household)) {
+            return EnsureOffreAllows::refus($user, 'foyer');
         }
 
         $result = $this->households->join($user, $request->inviteCode());

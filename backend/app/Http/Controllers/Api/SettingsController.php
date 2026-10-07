@@ -57,8 +57,16 @@ class SettingsController extends Controller
                 : $validated['heure_rappel'];
         }
 
+        // Vrai garde la première date : revalider l'accueil depuis un autre appareil ne la
+        // réécrit pas. Faux l'efface.
+        foreach (['onboarding_termine' => 'onboarding_termine_le', 'visite_vue' => 'visite_vue_le'] as $champ => $colonne) {
+            if (array_key_exists($champ, $validated)) {
+                $validated[$colonne] = $validated[$champ] ? ($settings->{$colonne} ?? now()) : null;
+            }
+        }
+
         DB::transaction(function () use ($settings, $membership, $validated): void {
-            $settings->fill(Arr::except($validated, ['partage_profil_foyer']))->save();
+            $settings->fill(Arr::except($validated, ['partage_profil_foyer', 'onboarding_termine', 'visite_vue']))->save();
 
             if ($membership && array_key_exists('partage_profil_foyer', $validated)) {
                 $membership->update(['share_profile' => (bool) $validated['partage_profil_foyer']]);

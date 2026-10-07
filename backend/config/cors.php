@@ -15,11 +15,13 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    // Seul le site web peut appeler l'API depuis un navigateur (il passe d'ailleurs par son propre
+    // proxy côté serveur) ; l'application mobile est native et n'a pas besoin de CORS.
+    'allowed_origins' => array_values(array_filter([env('FRONTEND_URL')])),
 
     'allowed_origins_patterns' => [],
 

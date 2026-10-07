@@ -40,10 +40,12 @@ class PlateRecognitionSchema
                             'quantite' => ['type' => 'number', 'description' => 'Quantité estimée pour la portion visible'],
                             'unite' => ['type' => 'string', 'enum' => self::UNITES],
                             'confiance' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
-                            'calories' => ['type' => ['number', 'null'], 'description' => 'Pour la portion visible, kcal'],
-                            'proteines' => ['type' => ['number', 'null']],
-                            'glucides' => ['type' => ['number', 'null']],
-                            'lipides' => ['type' => ['number', 'null']],
+                            // Toujours une estimation chiffrée : laissées vides, ces valeurs donnaient
+                            // une ligne à 0 kcal pour tout aliment absent du catalogue.
+                            'calories' => ['type' => 'number', 'minimum' => 0, 'description' => 'Estimation en kcal pour la portion visible, jamais nulle pour un aliment'],
+                            'proteines' => ['type' => 'number', 'minimum' => 0, 'description' => 'g pour la portion visible'],
+                            'glucides' => ['type' => 'number', 'minimum' => 0, 'description' => 'g pour la portion visible'],
+                            'lipides' => ['type' => 'number', 'minimum' => 0, 'description' => 'g pour la portion visible'],
                         ],
                     ],
                 ],

@@ -7,6 +7,7 @@ use App\Contracts\WebSearchClient;
 use App\Enums\Equipment;
 use App\Enums\ExerciseLevel;
 use App\Enums\Lieu;
+use App\Exceptions\LlmBusyException;
 use App\Models\Profile;
 use App\Models\Sport;
 use App\Models\SportPlan;
@@ -26,6 +27,8 @@ use Throwable;
 class WorkoutAiGenerator
 {
     public const WARNING_FALLBACK = 'Génération IA indisponible : séance proposée par les règles Mavi’oh.';
+
+    public const WARNING_BUSY = 'L’IA est très demandée en ce moment : séance proposée par les règles Mavi’oh. Réessaie dans une minute pour une séance par l’IA.';
 
     /** Matériel présumé en salle quand le profil n'en précise pas. */
     public const GYM_EQUIPMENT = ['machine', 'barre', 'halteres', 'banc', 'tapis', 'velo', 'barre_traction', 'kettlebell', 'elastiques', 'aucun'];
@@ -170,7 +173,7 @@ class WorkoutAiGenerator
                     'exception' => get_class($e),
                     'message' => mb_substr($e->getMessage(), 0, 200),
                 ]);
-                $warning = self::WARNING_FALLBACK;
+                $warning = $e instanceof LlmBusyException ? self::WARNING_BUSY : self::WARNING_FALLBACK;
             }
         }
 

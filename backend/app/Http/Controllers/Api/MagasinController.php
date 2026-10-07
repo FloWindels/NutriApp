@@ -13,10 +13,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Catalogue **public** des magasins et de leurs assortiments, sans authentification, sous
- * `throttle:30,1` — comme le catalogue des exercices et celui des régimes.
+ * Catalogue des magasins et de leurs assortiments : réservé aux comptes, mais sans offre
+ * requise — comme le catalogue des exercices et celui des régimes.
  *
- * Public parce que ce sont des données de référence : savoir que Lidl vend du riz basmati autour
+ * Sans offre parce que ce sont des données de référence : savoir que Lidl vend du riz basmati autour
  * de 1,79 € n'engage personne et ne révèle rien. Ce qui est payant, c'est ce qu'on en fait —
  * rattacher sa liste de courses, estimer son panier, relever les promotions.
  */

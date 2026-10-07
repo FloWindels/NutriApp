@@ -18,7 +18,7 @@ class SettingsTest extends TestCase
     private const KEYS = [
         'notif_peremption', 'notif_rappel_repas', 'notif_rappel_sport', 'heure_rappel',
         'jours_alerte_peremption', 'unites', 'theme', 'langue', 'timezone', 'ia_seances',
-        'magasin_prefere_id', 'partage_profil_foyer', 'updated_at',
+        'magasin_prefere_id', 'onboarding_termine_le', 'visite_vue_le', 'partage_profil_foyer', 'updated_at',
     ];
 
     public function test_get_settings_creates_defaults_lazily(): void
@@ -41,6 +41,8 @@ class SettingsTest extends TestCase
             ->assertJsonPath('data.langue', 'fr')
             ->assertJsonPath('data.timezone', 'Europe/Paris')
             ->assertJsonPath('data.ia_seances', true)
+            ->assertJsonPath('data.onboarding_termine_le', null)
+            ->assertJsonPath('data.visite_vue_le', null)
             ->assertJsonPath('data.partage_profil_foyer', null);
 
         $this->assertIsBool($response->json('data.notif_peremption'));

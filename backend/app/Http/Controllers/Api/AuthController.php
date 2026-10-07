@@ -34,6 +34,7 @@ class AuthController extends Controller
     public const MSG_DECONNECTE = 'Déconnecté.';
     public const MSG_LIEN_ENVOYE = 'Si un compte existe, un lien de réinitialisation a été envoyé.';
     public const MSG_MOT_DE_PASSE_REINITIALISE = 'Mot de passe réinitialisé.';
+    public const MSG_LIEN_INVALIDE = 'Ce lien de réinitialisation n’est pas valide ou a expiré.';
 
     public function __construct()
     {
@@ -76,7 +77,11 @@ class AuthController extends Controller
 
         $user = User::query()->where('email', $validated['email'])->first();
 
-        if (! $user || ! Hash::check($validated['password'], (string) $user->password)) {
+        // Adresse inconnue : on vérifie quand même un mot de passe, contre une empreinte factice,
+        // pour que la durée de la réponse ne trahisse pas quelles adresses ont un compte.
+        $empreinte = $user?->password ?? self::empreinteFactice();
+
+        if (! Hash::check($validated['password'], (string) $empreinte) || ! $user) {
             throw ValidationException::withMessages([
                 'email' => [self::MSG_IDENTIFIANTS],
             ]);
@@ -98,7 +103,15 @@ class AuthController extends Controller
         ]);
     }
 
-    public function logout(Request $request): JsonResponse
+    /** Empreinte bcrypt calculée une fois par processus, au même coût que les vraies. */
+    private static function empreinteFactice(): string
+    {
+        static $empreinte = null;
+
+        return $empreinte ??= Hash::make(Str::random(32));
+    }
+
+        public function logout(Request $request): JsonResponse
     {
         $token = $request->user()->currentAccessToken();
 
@@ -173,8 +186,14 @@ class AuthController extends Controller
         );
 
         if ($status !== Password::PASSWORD_RESET) {
+            // Adresse inconnue et jeton invalide donnent le MÊME message : sinon ce formulaire
+            // dirait à n'importe qui quelles adresses ont un compte.
+            $message = in_array($status, [Password::INVALID_USER, Password::INVALID_TOKEN], true)
+                ? self::MSG_LIEN_INVALIDE
+                : __($status);
+
             throw ValidationException::withMessages([
-                'email' => [__($status)],
+                'email' => [$message],
             ]);
         }
 

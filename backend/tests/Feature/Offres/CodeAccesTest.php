@@ -207,4 +207,67 @@ class CodeAccesTest extends TestCase
         // Le sixième essai dans la minute est refusé : deviner un code devient sans espoir.
         $this->postJson('/api/account/code', ['code' => 'BBBBBBBB'])->assertStatus(429);
     }
+
+    /**
+     * Un seul message de refus, quelle qu'en soit la raison : sinon la réponse dirait qu'un code
+     * existe (déjà utilisé, épuisé, expiré, moins bon que l'offre actuelle).
+     */
+    public function test_tous_les_refus_portent_le_meme_message(): void
+    {
+        $this->admin();
+        $epuise = $this->postJson('/api/admin/codes', ['offre' => 'foyer', 'utilisations_max' => 1])->json('data.code');
+        $complet = $this->postJson('/api/admin/codes', ['offre' => 'complet', 'utilisations_max' => 5])->json('data.code');
+        $expire = $this->postJson('/api/admin/codes', ['offre' => 'foyer', 'utilisations_max' => 5, 'expire_le' => now()->addDay()->toDateString()])->json('data.code');
+        $reutilise = $this->postJson('/api/admin/codes', ['offre' => 'foyer', 'utilisations_max' => 5])->json('data.code');
+
+        $messages = [];
+        $essai = function (User $user, string $code) use (&$messages) {
+            Sanctum::actingAs($user, ['*']);
+            $messages[] = $this->postJson('/api/account/code', ['code' => $code])
+                ->assertStatus(422)
+                ->json('errors.code.0');
+        };
+
+        // Inconnu.
+        $essai(User::factory()->gratuit()->create(), 'ZZZZZZZZ');
+
+        // Épuisé.
+        Sanctum::actingAs(User::factory()->gratuit()->create(), ['*']);
+        $this->postJson('/api/account/code', ['code' => $epuise])->assertOk();
+        $essai(User::factory()->gratuit()->create(), $epuise);
+
+        // Déjà utilisé par la même personne.
+        $ami = User::factory()->gratuit()->create();
+        Sanctum::actingAs($ami, ['*']);
+        $this->postJson('/api/account/code', ['code' => $reutilise])->assertOk();
+        $essai($ami, $reutilise);
+
+        // Offre actuelle déjà supérieure.
+        $foyer = User::factory()->create();
+        $foyer->forceFill(['offre' => Offre::Foyer, 'offre_expire_le' => null])->save();
+        $essai($foyer, $complet);
+
+        // Expiré.
+        $this->travel(3)->days();
+        $essai(User::factory()->gratuit()->create(), $expire);
+
+        $this->assertCount(5, $messages);
+        $this->assertSame([\App\Services\Offres\CodeAccesService::MSG_REFUS], array_values(array_unique($messages)));
+    }
+
+    public function test_les_essais_sont_aussi_limites_par_adresse_ip(): void
+    {
+        // Six comptes, cinq essais chacun : aucun n'atteint son plafond personnel, mais l'adresse
+        // a épuisé ses 30 essais de l'heure.
+        for ($compte = 0; $compte < 6; $compte++) {
+            Sanctum::actingAs(User::factory()->gratuit()->create(), ['*']);
+
+            for ($i = 0; $i < 5; $i++) {
+                $this->postJson('/api/account/code', ['code' => 'AAAAAAA'.$i])->assertStatus(422);
+            }
+        }
+
+        Sanctum::actingAs(User::factory()->gratuit()->create(), ['*']);
+        $this->postJson('/api/account/code', ['code' => 'BBBBBBBB'])->assertStatus(429);
+    }
 }

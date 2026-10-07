@@ -17,7 +17,7 @@ class DietController extends Controller
     }
 
     /**
-     * GET /diets — catalogue public (résumés).
+     * GET /diets — catalogue (résumés), réservé aux comptes.
      */
     public function index(): JsonResponse
     {
@@ -27,7 +27,7 @@ class DietController extends Controller
         }
 
         return response()->json(['data' => $data])
-            ->header('Cache-Control', 'public, max-age=86400');
+            ->header('Cache-Control', 'private, max-age=86400');
     }
 
     /**
@@ -42,7 +42,7 @@ class DietController extends Controller
 
         return response()->json([
             'data' => (new DietResource(['key' => $key] + $diet))->resolve(),
-        ])->header('Cache-Control', 'public, max-age=86400');
+        ])->header('Cache-Control', 'private, max-age=86400');
     }
 
     /**

@@ -76,7 +76,8 @@ class HouseholdLifecycleTest extends HouseholdTestCase
         $this->assertSame($user->id, $member['user_id']);
         $this->assertSame('proprietaire', $member['role']);
         $this->assertTrue($member['is_me']);
-        $this->assertTrue($member['share_profile']);
+        // Partage opt-in, mais on voit toujours ses propres cibles.
+        $this->assertFalse($member['share_profile']);
         $this->assertSame(2100, $member['calories_cibles']);
         $this->assertSame('vegetarien', $member['regime']);
         $this->assertFalse($member['is_minor']);
@@ -184,8 +185,30 @@ class HouseholdLifecycleTest extends HouseholdTestCase
             'household_id' => $household->id,
             'user_id' => $user->id,
             'role' => 'membre',
-            'share_profile' => 1,
+            // Partage du profil : opt-in, jamais imposé à l'adhésion.
+            'share_profile' => 0,
         ]);
+        $this->assertHouseholdInvariant();
+    }
+
+    public function test_join_refuse_au_dela_du_plafond_de_membres(): void
+    {
+        config(['offres.foyer_membres_max' => 3]);
+
+        $owner = User::factory()->create();
+        $household = $this->householdOwnedBy($owner);
+        $this->joinHousehold(User::factory()->create(), $household);
+        $this->joinHousehold(User::factory()->create(), $household);
+
+        $user = $this->login(User::factory()->create());
+
+        $this->postJson('/api/household/join', ['invite_code' => $household->invite_code])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['invite_code'])
+            ->assertJsonPath('errors.invite_code.0', 'Ce foyer est complet : il réunit déjà 3 membres.');
+
+        $this->assertNull($user->fresh()->household_id);
+        $this->assertSame(3, $household->members()->count());
         $this->assertHouseholdInvariant();
     }
 

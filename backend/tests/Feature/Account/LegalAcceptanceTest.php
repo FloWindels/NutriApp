@@ -23,8 +23,8 @@ class LegalAcceptanceTest extends TestCase
         return array_replace([
             'name' => 'Léa Martin',
             'email' => 'lea@example.com',
-            'password' => 'secret123',
-            'password_confirmation' => 'secret123',
+            'password' => 'secret-1234',
+            'password_confirmation' => 'secret-1234',
             'accept_conditions' => true,
             'cgu_version' => '2026-09-25',
             'confidentialite_version' => '2026-09-25',

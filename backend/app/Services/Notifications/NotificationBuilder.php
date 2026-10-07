@@ -51,10 +51,12 @@ class NotificationBuilder
         $settings = UserSetting::query()->firstOrCreate(['user_id' => $user->id]);
         $today = Clock::today($user);
 
+        // Stock et planificateur sont payants : une offre échue ou rétrogradée n'en reçoit plus
+        // les rappels (les données restent, seules les notifications s'éteignent).
         $items = [
-            ...$this->stockNotifications($user, $settings, $today),
+            ...($user->peut('stock') ? $this->stockNotifications($user, $settings, $today) : []),
             ...$this->recommendationNotifications($user, $today),
-            ...$this->mealNotifications($user, $settings, $today),
+            ...($user->peut('planificateur') ? $this->mealNotifications($user, $settings, $today) : []),
             ...$this->sportNotifications($user, $settings, $today),
         ];
 

@@ -25,6 +25,8 @@ class UserSetting extends Model
         'timezone',
         'ia_seances',
         'magasin_prefere_id',
+        'onboarding_termine_le',
+        'visite_vue_le',
     ];
 
     protected $casts = [
@@ -35,6 +37,8 @@ class UserSetting extends Model
         'jours_alerte_peremption' => 'integer',
         'ia_seances' => 'boolean',
         'magasin_prefere_id' => 'integer',
+        'onboarding_termine_le' => 'datetime',
+        'visite_vue_le' => 'datetime',
     ];
 
     protected $attributes = [

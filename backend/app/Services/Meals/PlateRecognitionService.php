@@ -62,6 +62,15 @@ class PlateRecognitionService
             }
 
             $lignes[] = $this->ligne($ligne, $food);
+
+            // Ni fiche du catalogue, ni estimation du modèle : la ligne compterait pour 0 kcal.
+            // On le dit avant que la personne n'enregistre, au lieu de fausser son budget en silence.
+            if ($food === null && ! ((float) ($ligne['calories'] ?? 0) > 0)) {
+                $propre['avertissements'][] = sprintf(
+                    'Aucune valeur nutritionnelle pour « %s » : retire la ligne et ajoute l’aliment par la recherche, sinon il comptera pour 0 kcal.',
+                    $ligne['nom']
+                );
+            }
         }
 
         // array_merge et non l'union `+` : celle-ci conserverait les lignes brutes de $propre.

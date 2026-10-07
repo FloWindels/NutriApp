@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\UserRole;
 use App\Models\User;
+use App\Services\Admin\AdminJournal;
 use Illuminate\Console\Command;
 
 /**
@@ -22,7 +23,7 @@ class PromouvoirAdministrateur extends Command
 
     protected $description = 'Accorde ou retire le rôle d’administrateur à un compte existant';
 
-    public function handle(): int
+    public function handle(AdminJournal $journal): int
     {
         $email = mb_strtolower(trim((string) $this->argument('email')));
         $user = User::query()->where('email', $email)->first();
@@ -42,6 +43,17 @@ class PromouvoirAdministrateur extends Command
         }
 
         $user->forceFill(['role' => $role])->save();
+
+        // Le pouvoir le plus large de l'application ne s'accorde pas sans trace.
+        $journal->enregistrerSysteme(
+            $role === UserRole::Administrateur ? 'promouvoir_administrateur' : 'retirer_administrateur',
+            'user',
+            $user->id,
+            $user->email,
+            $role === UserRole::Administrateur
+                ? 'Rôle d’administrateur accordé en ligne de commande (mavioh:promouvoir).'
+                : 'Rôle d’administrateur retiré en ligne de commande (mavioh:promouvoir --retirer).',
+        );
 
         $this->info("{$email} est désormais « {$role->label()} ».");
 

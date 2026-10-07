@@ -15,6 +15,14 @@ class FoodSearchTest extends TestCase
     use OffFixtures;
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Le catalogue n'est plus public : chaque test lit en tant que compte connecté.
+        Sanctum::actingAs(User::factory()->create());
+    }
+
     public function test_search_renvoie_data_et_meta_avec_20_par_page_par_defaut(): void
     {
         Food::factory()->count(23)->create(['name' => 'Yaourt nature', 'brand' => null]);
@@ -64,6 +72,12 @@ class FoodSearchTest extends TestCase
 
         $underscore = $this->getJson('/api/foods/search?q='.urlencode('riz_'));
         $underscore->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.name', 'Riz_complet');
+
+        // Le caractère d'échappement lui-même, et la barre oblique inverse, restent littéraux.
+        Food::factory()->create(['name' => 'Soda ! intense', 'brand' => null, 'barcode' => null]);
+        Food::factory()->create(['name' => 'Sauce \\ maison', 'brand' => null, 'barcode' => null]);
+        $this->getJson('/api/foods/search?q='.urlencode('! int'))->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/foods/search?q='.urlencode('\\ mai'))->assertOk()->assertJsonCount(1, 'data');
     }
 
     public function test_recherche_insensible_a_la_casse_sur_nom_marque_et_code_barres(): void
@@ -97,18 +111,6 @@ class FoodSearchTest extends TestCase
         $response = $this->getJson('/api/foods/search?q=lentilles');
 
         $response->assertOk()->assertJsonPath('data.0.id', $old->id)->assertJsonPath('data.0.is_verified', true);
-    }
-
-    public function test_off_est_ignore_pour_un_visiteur_anonyme(): void
-    {
-        Http::fake();
-
-        $this->getJson('/api/foods/search?q=nutella&off=1')
-            ->assertOk()
-            ->assertJsonCount(0, 'data')
-            ->assertJsonPath('meta.off_queried', false);
-
-        Http::assertNothingSent();
     }
 
     public function test_off_complete_la_recherche_et_upsert_les_fiches_a_code_numerique(): void

@@ -178,13 +178,17 @@ class ProfileService
         // à défaut, seul un accord déjà enregistré et suffisant peut se reconduire.
         if ($attributes['rythme_intense'] && ! RythmeIntenseConsentement::accepte($data, $existing, $besoins)) {
             $attributes['rythme_intense'] = false;
+            $attributes['rythme_libre'] = false;
             $input['rythme_intense'] = false;
+            $input['rythme_libre'] = false;
             $besoins = $this->nutrition->compute($input);
             $besoins['avertissements'][] = 'Tes chiffres ont changé depuis que les risques t’ont été présentés : '
                 .'le rythme conseillé s’applique. Relis l’encadré et coche à nouveau si tu veux ce rythme.';
         }
 
         $attributes = array_replace($attributes, RythmeIntenseConsentement::trace($existing, $besoins));
+        // L'option « sans plafond » n'est conservée que si elle s'applique vraiment à ce calcul.
+        $attributes['rythme_libre'] = (bool) ($besoins['rythme_libre_accepte'] ?? false);
         $attributes['objectif_calcul_auto'] = $auto;
 
         if ($auto) {
@@ -243,6 +247,10 @@ class ProfileService
         // c'est plan() qui le réexamine, une fois les besoins calculés.
         $attributes['rythme_intense'] = filter_var(
             array_key_exists('rythme_intense', $data) ? $data['rythme_intense'] : ($existing?->rythme_intense ?? false),
+            FILTER_VALIDATE_BOOLEAN
+        );
+        $attributes['rythme_libre'] = filter_var(
+            array_key_exists('rythme_libre', $data) ? $data['rythme_libre'] : ($existing?->rythme_libre ?? false),
             FILTER_VALIDATE_BOOLEAN
         );
 
@@ -321,6 +329,7 @@ class ProfileService
             'sport_jours_semaine' => $attributes['sport_jours_semaine'],
             'consentement_parental' => $attributes['consentement_parental'],
             'rythme_intense' => $attributes['rythme_intense'],
+            'rythme_libre' => $attributes['rythme_libre'] ?? false,
             'today' => $today,
         ];
     }

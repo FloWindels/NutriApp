@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Closure;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -23,13 +25,22 @@ class EnsureOffreAllows
         $user = $request->user();
 
         if ($user === null || ! $user->peut($capacite)) {
-            return response()->json([
-                'message' => 'Cette fonctionnalité fait partie d’une offre payante.',
-                'capacite_requise' => $capacite,
-                'offre_actuelle' => $user?->offreEffective()->value ?? 'gratuit',
-            ], 402);
+            return self::refus($user, $capacite);
         }
 
         return $next($request);
+    }
+
+    /**
+     * La réponse 402, partagée avec les contrôleurs qui vérifient une offre eux-mêmes (adhésion
+     * à un foyer : c'est l'offre du propriétaire qui compte, pas celle du visiteur).
+     */
+    public static function refus(?User $user, string $capacite): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Cette fonctionnalité fait partie d’une offre payante.',
+            'capacite_requise' => $capacite,
+            'offre_actuelle' => $user?->offreEffective()->value ?? 'gratuit',
+        ], 402);
     }
 }

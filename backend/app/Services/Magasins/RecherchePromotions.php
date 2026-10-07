@@ -4,6 +4,7 @@ namespace App\Services\Magasins;
 
 use App\Contracts\LlmPromotionsClient;
 use App\Contracts\WebSearchClient;
+use App\Exceptions\LlmBusyException;
 use App\Exceptions\LlmUnavailableException;
 use App\Http\Resources\PromotionResource;
 use App\Models\Magasin;
@@ -66,6 +67,8 @@ class RecherchePromotions
 
         try {
             $brut = $this->modele->extractPromotions($this->contexte($magasin, $semaine, $sources), PromotionsSchema::json());
+        } catch (LlmBusyException) {
+            return $this->repli($semaine, LlmBusyException::MESSAGE, $sources);
         } catch (LlmUnavailableException) {
             return $this->repli($semaine, 'Le modèle est indisponible : aucune promotion relevée cette fois-ci.', $sources);
         }

@@ -17,22 +17,26 @@ Chaque module possède **exactement un fichier** ici (créé seulement si néces
 Ces fichiers sont `require`s **à l'intérieur** du groupe `auth:sanctum` de `routes/api.php`
 (et donc montés sous `/api` et `/api/v1`). Ne pas y redéclarer `Route::middleware('auth:sanctum')`.
 
+Il n'y a pas de route publique de module : catalogues compris (régimes, magasins, exercices,
+aliments, portions), tout exige un compte. Seules l'inscription, la connexion et la
+réinitialisation du mot de passe restent anonymes (`routes/api.php`).
+
 Règles : routes littérales avant les routes paramétrées, paramètres contraints
 (`->whereNumber('meal')`, `->where('key', '[a-z_]+')`), jamais de `route('nom')`.
 
-## M7 Magasins — `magasins.php` (+ `../api_public/magasins.php`)
+## M7 Magasins — `magasins.php`
 
 | Méthode | Chemin | Contrôleur | Rôle |
 |---|---|---|---|
-| GET | `/magasins` | `MagasinController@index` | **public** : enseignes actives + catalogue des rayons |
-| GET | `/magasins/{magasin}/produits` | `MagasinController@produits` | **public** : assortiment paginé `{data, meta}`, filtres `q` et `rayon` |
+| GET | `/magasins` | `MagasinController@index` | enseignes actives + catalogue des rayons (compte requis, sans offre) |
+| GET | `/magasins/{magasin}/produits` | `MagasinController@produits` | assortiment paginé (compte requis, sans offre) `{data, meta}`, filtres `q` et `rayon` |
 | GET | `/magasins/{magasin}/promotions` | `PromotionController@index` | promotions en cours (capacité `courses`) |
 | POST | `/magasins/{magasin}/promotions` | `PromotionController@store` | saisie manuelle, enregistrée vérifiée |
 | POST | `/magasins/{magasin}/promotions/recherche` | `PromotionController@rechercher` | relevé web + IA (`courses` **et** `ia`) |
 | PUT | `/magasins/promotions/{promotion}` | `PromotionController@update` | corriger, ou passer `verifiee` à vrai |
 | DELETE | `/magasins/promotions/{promotion}` | `PromotionController@destroy` | supprimer |
 
-## M8 Sport — `sport.php` (+ `../api_public/sport.php`)
+## M8 Sport — `sport.php`
 
 | Méthode | Chemin | Contrôleur | Rôle |
 |---|---|---|---|
@@ -61,4 +65,4 @@ Règles : routes littérales avant les routes paramétrées, paramètres contrai
 | GET | `/sport/sessions/{session}` | `Sport\WorkoutSessionController@show` | détail |
 | PUT | `/sport/sessions/{session}` | `Sport\WorkoutSessionController@update` | modifier (`calories_burned: null` ⇒ recalcul auto) |
 | DELETE | `/sport/sessions/{session}` | `Sport\WorkoutSessionController@destroy` | supprimer (le plan lié repasse à « prévu ») |
-| GET | `/sport/exercises` | `Sport\ExerciseController@index` | **public** (`routes/api_public/sport.php`), `{data, meta}` |
+| GET | `/sport/exercises` | `Sport\ExerciseController@index` | catalogue d'exercices (compte requis, sans offre), `{data, meta}` |

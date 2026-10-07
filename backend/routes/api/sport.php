@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Sport\ExerciseController;
 use App\Http\Controllers\Api\Sport\SportActivityController;
 use App\Http\Controllers\Api\Sport\SportCalendarController;
 use App\Http\Controllers\Api\Sport\SportCatalogController;
@@ -13,13 +14,16 @@ use Illuminate\Support\Facades\Route;
 | Module M8 — Sport (routes authentifiées, chargées dans le groupe auth:sanctum)
 |--------------------------------------------------------------------------
 |
-| Le catalogue public d'exercices vit dans routes/api_public/sport.php.
+| Le catalogue d'exercices (GET /sport/exercises) est réservé aux comptes, sans offre requise.
 | Règle de déclaration : routes littérales AVANT les routes paramétrées
 | (/sport/sessions/generate avant /sport/sessions/{session}), identifiants contraints
 | par ->whereNumber(). Chaque ressource est chargée à travers l'utilisateur : un
 | identifiant étranger donne 404 « Introuvable. ».
 |
 */
+
+// --- Catalogue d'exercices : {data, meta} plafonné à 50 exercices par page -------------
+Route::get('/sport/exercises', [ExerciseController::class, 'index']);
 
 // --- Configuration et vocabulaires ----------------------------------------------------
 Route::get('/sport/config', SportConfigController::class);

@@ -49,11 +49,19 @@ class FoodCatalog
     }
 
     /**
-     * Motif LIKE échappé (`%`, `_` et `\` deviennent littéraux) : `%terme%`.
+     * Clause d'échappement à placer après `LIKE ?`. Le point d'exclamation plutôt que la barre
+     * oblique inverse : dans `ESCAPE '\'`, le pilote PDO de PostgreSQL lit `\'` comme une
+     * apostrophe échappée, la chaîne ne se referme plus et les paramètres de la requête
+     * disparaissent (SQLSTATE HY093) — toute recherche échouait en production.
+     */
+    public const LIKE_ESCAPE = "ESCAPE '!'";
+
+    /**
+     * Motif LIKE échappé (`%`, `_` et `!` deviennent littéraux) : `%terme%`.
      */
     public static function likePattern(string $term): string
     {
-        return '%'.addcslashes($term, '%_\\').'%';
+        return '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $term).'%';
     }
 
     /**
@@ -67,9 +75,9 @@ class FoodCatalog
         $like = self::likePattern($term);
 
         return $query->where(function (Builder $builder) use ($like) {
-            $builder->whereRaw("LOWER(name) LIKE ? ESCAPE '\\'", [$like])
-                ->orWhereRaw("LOWER(brand) LIKE ? ESCAPE '\\'", [$like])
-                ->orWhereRaw("barcode LIKE ? ESCAPE '\\'", [$like]);
+            $builder->whereRaw("LOWER(name) LIKE ? ".self::LIKE_ESCAPE, [$like])
+                ->orWhereRaw("LOWER(brand) LIKE ? ".self::LIKE_ESCAPE, [$like])
+                ->orWhereRaw("barcode LIKE ? ".self::LIKE_ESCAPE, [$like]);
         });
     }
 
@@ -379,7 +387,7 @@ class FoodCatalog
         $like = self::likePattern($term);
 
         return Food::query()
-            ->whereRaw("LOWER(name) LIKE ? ESCAPE '\\'", [$like])
+            ->whereRaw("LOWER(name) LIKE ? ".self::LIKE_ESCAPE, [$like])
             ->orderByDesc('is_verified')
             ->orderByRaw('LENGTH(name) ASC')
             ->orderByDesc('updated_at')

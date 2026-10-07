@@ -22,6 +22,12 @@ class CodeAccesService
 
     private const LONGUEUR = 8;
 
+    /**
+     * Refus unique, quelle qu'en soit la raison (inconnu, inactif, expiré, épuisé, déjà utilisé,
+     * offre déjà supérieure) : un message par cas permettrait de sonder quels codes existent.
+     */
+    public const MSG_REFUS = 'Ce code n’est pas valide ou n’est plus utilisable.';
+
     public function creer(
         User $admin,
         Offre $offre,
@@ -58,11 +64,7 @@ class CodeAccesService
             $code = CodeAcces::query()->where('code', $normalise)->lockForUpdate()->first();
 
             if ($code === null || ! $code->estUtilisable()) {
-                // Même message dans les deux cas : inutile d'indiquer qu'un code existe mais
-                // qu'il est épuisé, cela aiderait seulement à deviner.
-                throw ValidationException::withMessages([
-                    'code' => ['Ce code n’est pas valide ou n’est plus utilisable.'],
-                ]);
+                $this->refuser();
             }
 
             $dejaUtilise = CodeAccesUtilisation::query()
@@ -71,9 +73,7 @@ class CodeAccesService
                 ->exists();
 
             if ($dejaUtilise) {
-                throw ValidationException::withMessages([
-                    'code' => ['Tu as déjà utilisé ce code.'],
-                ]);
+                $this->refuser();
             }
 
             // Un code ouvre, il ne referme jamais. Sans cette garde, quelqu'un à qui un
@@ -82,9 +82,7 @@ class CodeAccesService
             $actuelle = $user->offreValide();
 
             if ($code->offre->rang() < $actuelle->rang()) {
-                throw ValidationException::withMessages([
-                    'code' => ['Ton offre actuelle est déjà plus complète que ce code.'],
-                ]);
+                $this->refuser();
             }
 
             CodeAccesUtilisation::query()->create(['code_acces_id' => $code->id, 'user_id' => $user->id]);
@@ -107,6 +105,12 @@ class CodeAccesService
 
             return $code;
         });
+    }
+
+    /** @throws ValidationException toujours (422), avec le message unique. */
+    private function refuser(): never
+    {
+        throw ValidationException::withMessages(['code' => [self::MSG_REFUS]]);
     }
 
     /** Boucle jusqu'à obtenir un code libre ; la collision est très improbable mais possible. */

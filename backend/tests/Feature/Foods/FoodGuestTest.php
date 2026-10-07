@@ -4,7 +4,10 @@ namespace Tests\Feature\Foods;
 
 use App\Models\Food;
 use App\Models\Recipe;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -34,12 +37,31 @@ class FoodGuestTest extends TestCase
         $this->postJson('/api/recipes', ['title' => 'X', 'calories' => 1])->assertStatus(401);
     }
 
-    public function test_les_catalogues_publics_restent_accessibles_sans_jeton(): void
+    public function test_les_catalogues_exigent_un_jeton(): void
     {
+        Http::fake();
+        Food::factory()->create(['name' => 'Pomme', 'barcode' => '3000000000001']);
+
+        $expected = ['message' => 'Non authentifié.'];
+
+        foreach (['/api', '/api/v1'] as $prefix) {
+            $this->getJson($prefix.'/foods/search?q=pomme&off=1')->assertStatus(401)->assertExactJson($expected);
+            $this->getJson($prefix.'/foods/barcode/3000000000001')->assertStatus(401)->assertExactJson($expected);
+            $this->getJson($prefix.'/portions')->assertStatus(401)->assertExactJson($expected);
+        }
+
+        // Aucun appel à Open Food Facts pour un visiteur anonyme.
+        Http::assertNothingSent();
+    }
+
+    public function test_les_catalogues_restent_accessibles_avec_un_jeton(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
         Food::factory()->create(['name' => 'Pomme', 'barcode' => '3000000000001']);
 
         $this->getJson('/api/foods/search?q=pomme')->assertOk()->assertJsonCount(1, 'data');
         $this->getJson('/api/foods/barcode/3000000000001')->assertOk()->assertJsonPath('data.is_owner', false);
         $this->getJson('/api/v1/foods/search?q=pomme')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/portions')->assertOk();
     }
 }

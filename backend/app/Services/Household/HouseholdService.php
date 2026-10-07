@@ -3,6 +3,7 @@
 namespace App\Services\Household;
 
 use App\Enums\HouseholdRole;
+use App\Enums\Offre;
 use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\MealPlan;
@@ -32,6 +33,7 @@ class HouseholdService
     public const MSG_RETIRER_SOI_MEME = 'Utilise « Quitter le foyer » pour te retirer toi-même.';
     public const MSG_TRANSFERT_SOI_MEME = 'Tu es déjà propriétaire de ce foyer.';
     public const MSG_TRANSFERT_NON_MEMBRE = 'Cette personne ne fait pas partie du foyer.';
+    public const MSG_FOYER_COMPLET = 'Ce foyer est complet : il réunit déjà :max membres.';
 
     public const SUFFIXE_FOYER = ' (foyer)';
 
@@ -72,6 +74,22 @@ class HouseholdService
         }
 
         return Household::query()->where('invite_code', $normalized)->first();
+    }
+
+    /**
+     * Un compte peut-il rejoindre (ou prévisualiser) ce foyer ? L'offre Foyer du propriétaire
+     * couvre le ménage : un invité gratuit peut donc entrer dans un foyer dont le propriétaire
+     * la détient. À défaut, il faut porter soi-même l'offre Foyer.
+     */
+    public function peutRejoindre(User $user, Household $household): bool
+    {
+        if ($user->peut('foyer')) {
+            return true;
+        }
+
+        $proprietaire = User::query()->select(['id', 'offre', 'offre_expire_le'])->find($household->owner_id);
+
+        return $proprietaire?->offreValide() === Offre::Foyer;
     }
 
     public static function normalizeCode(string $code): string
@@ -125,6 +143,12 @@ class HouseholdService
         return DB::transaction(function () use ($user, $household) {
             // Verrou sur la ligne du foyer : deux adhésions simultanées se sérialisent.
             $household = Household::query()->lockForUpdate()->findOrFail($household->id);
+
+            // Plafond de l'offre Foyer, vérifié sous le verrou : deux invités ne passent pas ensemble.
+            $max = (int) config('offres.foyer_membres_max');
+            if ($max > 0 && $household->members()->count() >= $max) {
+                $this->fail('invite_code', str_replace(':max', (string) $max, self::MSG_FOYER_COMPLET));
+            }
 
             $this->addMember($household, $user, HouseholdRole::Membre);
             $merged = $this->attachPersonalScopes($user, $household);
@@ -384,7 +408,9 @@ class HouseholdService
             'household_id' => $household->id,
             'user_id' => $user->id,
             'role' => $role->value,
-            'share_profile' => true,
+            // Partage du profil : opt-in. Les cibles caloriques et l'âge d'un membre ne sont pas
+            // montrés aux autres tant qu'il ne l'a pas choisi.
+            'share_profile' => false,
             'joined_at' => now(),
         ]);
 
